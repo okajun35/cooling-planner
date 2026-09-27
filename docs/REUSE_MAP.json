@@ -1,0 +1,155 @@
+{
+  "original_upload": "dairy_cooling_simulator_v0_4_preview(1).zip",
+  "original_zip_sha256": "2ccf72eafb031877283fcfa6cc127573723becb9b2921d5c591ac4946c505086",
+  "files": [
+    {
+      "path": "src/data/defaults.ts",
+      "status": "modified",
+      "old_sha256": "9ed08c937126a7860edc71c65eaf2a918bdbdd523e8cc9385ba560f89564e1c3",
+      "sha256": "45bc7ecd6481fa6252b48a37738ddce8985b076e8ae9ea5b3be472ac4c27b61c"
+    },
+    {
+      "path": "src/domain/project.ts",
+      "status": "modified",
+      "old_sha256": "1d0acd04b6213a061c3642ff530213dab4b4a6f95c044ec456e0f15a15aeffe5",
+      "sha256": "c2a4027920f5e38650d7e7c428920bd0dcddf25e423b1f3213ed3c1d24e54131"
+    },
+    {
+      "path": "src/domain/validation.ts",
+      "status": "modified",
+      "old_sha256": "a7f93a956e8c05987aa2c1d2e83460b91207b1c5066b8f0a41026991a5f5856d",
+      "sha256": "b3091d95d6f4799de5b291baf3f27ebd4a0cc30e9b4ebbf332673cb2beab9bc8"
+    },
+    {
+      "path": "src/main.ts",
+      "status": "modified",
+      "old_sha256": "1aa8050a6be7701d0d6292abe076dfc3779d3f6d427b6283e52c97a39de89661",
+      "sha256": "3abbc83678c469ce35ec9891a0d308ba5ba01d44635fae97d061d511607bc985"
+    },
+    {
+      "path": "src/model/geometry.ts",
+      "status": "unchanged",
+      "old_sha256": "44a5fa512f5e444f4d77fa35ac48b2f9e066187ef6d2b0677857b19f1f3de817",
+      "sha256": "44a5fa512f5e444f4d77fa35ac48b2f9e066187ef6d2b0677857b19f1f3de817"
+    },
+    {
+      "path": "src/model/physics.ts",
+      "status": "unchanged",
+      "old_sha256": "a5bbf883a7309523363bb9d731679f6b16ed2ea87dadc9d56a2d46cc5d772192",
+      "sha256": "a5bbf883a7309523363bb9d731679f6b16ed2ea87dadc9d56a2d46cc5d772192"
+    },
+    {
+      "path": "src/model/references.ts",
+      "status": "new",
+      "old_sha256": null,
+      "sha256": "7cfe3c7bcea703416ec5ec76ed818fdde3397c4be1537a3159ce2a1046def616"
+    },
+    {
+      "path": "src/model/roof.ts",
+      "status": "new",
+      "old_sha256": null,
+      "sha256": "7f3829b85fbe88e5997093bc2fe15d3b1499b51ece4281615507ea579ccc5e55"
+    },
+    {
+      "path": "src/model/simulation.ts",
+      "status": "modified",
+      "old_sha256": "27e3d5111440d6da465c47172a518168faff92a075514f2ef9d61c79fad7cd35",
+      "sha256": "6c25b59372d3e22fa2bbd0d9a43d715f297c50d38762e5d46a70b8c9ae006bf7"
+    },
+    {
+      "path": "src/state/store.ts",
+      "status": "modified",
+      "old_sha256": "0874300d2caa53afffe4ec1fcb07eba06e26a783cc1eff5b7575a017ab214654",
+      "sha256": "d5a6a72a2eaa992e63d19e264501a0fa1236b85f873cbf2779c10db8a951ec22"
+    },
+    {
+      "path": "src/styles.css",
+      "status": "modified",
+      "old_sha256": "d4f7c67647782cab0400804640ebdee1c442789bc0f57897b26535984914eed3",
+      "sha256": "70a5f9a80a528971613ea6229fabeb846b26334d14d3ab5882afc8ee7bd4e340"
+    },
+    {
+      "path": "src/template/layout.ts",
+      "status": "unchanged",
+      "old_sha256": "c376cd319ebd2e98c80be7223e6c65b506131a94aab196cf0e51fb4abf249048",
+      "sha256": "c376cd319ebd2e98c80be7223e6c65b506131a94aab196cf0e51fb4abf249048"
+    },
+    {
+      "path": "src/ui/dom.ts",
+      "status": "new",
+      "old_sha256": null,
+      "sha256": "c37417653dc01b2e797b440369da4325f0e2ea03f162a914d3039d9b4ff3dbb5"
+    },
+    {
+      "path": "src/ui/layout.ts",
+      "status": "new",
+      "old_sha256": null,
+      "sha256": "fc45af642a3585744a8caa62dccdf44028355882bd0453ca7bec66cc3ac47583"
+    },
+    {
+      "path": "src/ui/panels.ts",
+      "status": "new",
+      "old_sha256": null,
+      "sha256": "fa6bd2f4cd7a46df5917b6f40b9f1406aff06ea72e0ffbc9ebfe9c10bbab07a9"
+    },
+    {
+      "path": "src/ui/timeline.ts",
+      "status": "new",
+      "old_sha256": null,
+      "sha256": "33ce124cd334c57bd9d21f798eac442a6b6789464c4a1cd01bc156e8deebd94e"
+    },
+    {
+      "path": "src/views/common.ts",
+      "status": "modified",
+      "old_sha256": "eb7f34dfdbbc84d257c6e5b5c720a4d88afd07a5d56a62b9ffa9ab2ba91a47b6",
+      "sha256": "6669ead590da01fb773bb047384820f722c49fbf69156f40a18b1528f5e6a527"
+    },
+    {
+      "path": "src/views/math3d.ts",
+      "status": "unchanged",
+      "old_sha256": "1467d656aba122a1d6bfb805dfa16a56d70f1bbbf2f502f08849c96e3380b5b9",
+      "sha256": "1467d656aba122a1d6bfb805dfa16a56d70f1bbbf2f502f08849c96e3380b5b9"
+    },
+    {
+      "path": "src/views/sceneGeometry.ts",
+      "status": "modified",
+      "old_sha256": "2837e17ebf8298c62c79df782b5ae54ade32af3a7965846472ec496dfdd1391b",
+      "sha256": "12381fa849a501f811052f8bb159bf8baeb39ddc59d99ddef24dcb8fcac9e075"
+    },
+    {
+      "path": "src/views/svg2d.ts",
+      "status": "modified",
+      "old_sha256": "bc76961a69b568697c51f15018386dfdff0ef590b9c681ef8e1161a36d7b17b8",
+      "sha256": "1c7e0eda38c06666fa0f0c18cb9463e34f6f1f57bc8b4a1b5d72625fdbba4a01"
+    },
+    {
+      "path": "src/views/viewport3d.ts",
+      "status": "modified",
+      "old_sha256": "7da8e8257ba123555c866dc90f31c5b0cdce387c7b61f8f112b68fa6901855bb",
+      "sha256": "bab9d9bc61cbb3f51b7d62fa2691d89abde17db55c8167f39990c1f5beb0c72e"
+    },
+    {
+      "path": "src/views/webglBackend.ts",
+      "status": "modified",
+      "old_sha256": "89e81127939bca91e3a6f42309c2e6c93ae4bd2cb330a33c3e2951d5fceedc91",
+      "sha256": "7de74ed575b6685bb4a8908fe983bc5bde8745cfe96d319b0c838044c6076d3b"
+    },
+    {
+      "path": "src/worker/protocol.ts",
+      "status": "unchanged",
+      "old_sha256": "72c199e6411a9a8f0088cd00d77b10c53bb942f83d7c3adb468caf514d9ce8ca",
+      "sha256": "72c199e6411a9a8f0088cd00d77b10c53bb942f83d7c3adb468caf514d9ce8ca"
+    },
+    {
+      "path": "src/worker/simulation.worker.ts",
+      "status": "unchanged",
+      "old_sha256": "b8b3f8f7d5ae8166078a79c6a949823d0ee9f71d13d53c9b49edff147ab51de8",
+      "sha256": "b8b3f8f7d5ae8166078a79c6a949823d0ee9f71d13d53c9b49edff147ab51de8"
+    }
+  ],
+  "counts": {
+    "unchanged": 6,
+    "modified": 12,
+    "new": 6
+  }
+}

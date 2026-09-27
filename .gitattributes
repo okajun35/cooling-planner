@@ -1,0 +1,3 @@
+# Preserve Markdown hard line breaks and the reference CSV's CRLF records.
+*.md whitespace=-blank-at-eol
+*.csv whitespace=cr-at-eol

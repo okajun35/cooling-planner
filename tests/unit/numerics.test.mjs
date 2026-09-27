@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {thi,onTotalSeconds,saturationPressure,convectiveHeat,mistAir} from '../../.compiled/model/physics.js';
+import {direction} from '../../.compiled/model/geometry.js';
+const near=(actual,expected,tolerance=1e-8)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
+test('UT01: 32 C / 70% THI = 84.32',()=>near(thi(32,70),84.32));
+test('UT02: saved yaw and pitch use X/elevation/Y',()=>{assert.deepEqual(direction(0,0),[1,-0,0]);near(direction(90,0)[2],1);near(direction(0,90)[1],-1)});
+test('UT07: convection stays negative above surface temperature',()=>assert.ok(convectiveHeat(4.5,35,38,2)<0));
+test('UT08: convection zero and independent difference fixture',()=>{near(convectiveHeat(4.5,35,35,2),0);near(convectiveHeat(4.5,35,32,2)-convectiveHeat(4.5,35,32,.2),52.2179982111,1e-8)});
+test('UT13: saturated mist causes no cooling or evaporation',()=>{const a=mistAir(32,100,101325,.06,.002,.6);near(a.temperatureC,32,1e-7);near(a.rhPct,100,1e-7);near(a.evaporatedKgs,0)});
+test('UT18: finite-cycle endpoints, not daily average duty',()=>{near(onTotalSeconds(13/60,120,600),180);near(onTotalSeconds(8,120,600),4800);near(onTotalSeconds(8,0,600),0);near(onTotalSeconds(8,120,0),28800);assert.throws(()=>onTotalSeconds(8,0,0))});
+test('pws independent 25 C ASHRAE reference',()=>near(saturationPressure(25),3169.2164701436277,1e-6));

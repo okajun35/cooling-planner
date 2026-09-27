@@ -1,0 +1,2072 @@
+{
+  "schemaVersion": 8,
+  "references": {
+    "milkModel": "milk-table-cowbell178-v1",
+    "baselineMilkKgPerDay": 35,
+    "fertility": {
+      "model": "fertility-thi-period-or-baccouri2025-v1",
+      "p0": 0.4,
+      "mode": "manual",
+      "exposureAssumed": true,
+      "temperatureC": 26,
+      "relativeHumidityPct": 70,
+      "profileVersion": 1
+    }
+  },
+  "appVersion": "0.8.0-preview.1",
+  "template": {
+    "id": "fs-amr1-50-guided-reference",
+    "version": 1,
+    "lengthM": 36.4,
+    "widthM": 23.5,
+    "eaveHeightM": 4,
+    "ridgeHeightM": 8.7
+  },
+  "environment": {
+    "temperatureC": 32,
+    "relativeHumidityPct": 70,
+    "pressurePa": 101325,
+    "backgroundSpeedMps": 0.2,
+    "ventilationM3sPerM2": 0.015,
+    "solarRoofWm2": 800
+  },
+  "model": {
+    "version": "cooling-integrated-v0.8",
+    "roof": {
+      "version": "cooling-thermal-v0.5-assumptions-1",
+      "backgroundSensibleW": 10000,
+      "bareResistance": 0.02,
+      "conductivity": 0.035,
+      "hOutConv": 10,
+      "hOutRad": 5,
+      "hInConv": 3,
+      "hInRad": 5,
+      "viewFactor": 0.35,
+      "waterCapacityKgM2": 0.05
+    },
+    "surfaceTemperatureC": 35,
+    "areaM2": 4.5,
+    "wetAreaM2": 2,
+    "patchLengthM": 2,
+    "patchWidthM": 0.6,
+    "baseWetFraction": 0.06,
+    "emissivity": 0.95,
+    "radiantOffsetC": 2,
+    "kSpread": 0.1,
+    "kDecay": 4,
+    "latentHeatJkg": 2430000,
+    "airDensityKgM3": 1.2,
+    "airCpJkgK": 1006,
+    "vaporGasConstant": 461.5,
+    "hcIntercept": 3.5,
+    "hcSlope": 4,
+    "profiles": [
+      {
+        "id": "low",
+        "name": "低値側の仮定",
+        "outletMultiplier": 0.8,
+        "hcMultiplier": 0.8,
+        "mistEfficiency": 0.4,
+        "maxFilmKg": 0.15
+      },
+      {
+        "id": "reference",
+        "name": "基準の仮定",
+        "outletMultiplier": 1,
+        "hcMultiplier": 1,
+        "mistEfficiency": 0.6,
+        "maxFilmKg": 0.3
+      },
+      {
+        "id": "high",
+        "name": "高値側の仮定",
+        "outletMultiplier": 1.2,
+        "hcMultiplier": 1.2,
+        "mistEfficiency": 0.8,
+        "maxFilmKg": 0.45
+      }
+    ]
+  },
+  "baselineScenarioId": "baseline",
+  "activeScenarioId": "working-soaker",
+  "scenarios": [
+    {
+      "id": "baseline",
+      "name": "基準案",
+      "readOnly": true,
+      "roof": {
+        "reflectance": 0.2,
+        "insulationM": 0,
+        "sprayEnabled": false,
+        "flowLpmM2": 0.05,
+        "onSec": 120,
+        "offSec": 480,
+        "hoursPerDay": 8,
+        "pumpPowerKw": 0.25
+      },
+      "fans": [
+        {
+          "id": "fan-feeding-1",
+          "label": "採食帯 ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 6,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "feeding",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-feeding-2",
+          "label": "採食帯 ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 6,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "feeding",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-A-1",
+          "label": "牛床 A ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 9.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-A",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-A-2",
+          "label": "牛床 A ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 9.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-A",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-B-1",
+          "label": "牛床 B ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 14.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-B",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-B-2",
+          "label": "牛床 B ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 14.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-B",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-C-1",
+          "label": "牛床 C ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 16.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-C",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-C-2",
+          "label": "牛床 C ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 16.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-C",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-D-1",
+          "label": "牛床 D ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 21.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-D",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-D-2",
+          "label": "牛床 D ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 21.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-D",
+            "u": 0.6,
+            "v": 0.5
+          }
+        }
+      ],
+      "waterSystems": [
+        {
+          "id": "water-soaker",
+          "kind": "soaker",
+          "enabled": true,
+          "onSec": 120,
+          "offSec": 600,
+          "hoursPerDay": 8,
+          "pumpPowerKw": 0.25,
+          "nozzles": [
+            {
+              "id": "soaker-1",
+              "label": "ソーカー 1",
+              "enabled": true,
+              "x": 3.5583333333333336,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.04166666666666668,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-2",
+              "label": "ソーカー 2",
+              "enabled": true,
+              "x": 5.674999999999999,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.12499999999999996,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-3",
+              "label": "ソーカー 3",
+              "enabled": true,
+              "x": 7.791666666666667,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.20833333333333337,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-4",
+              "label": "ソーカー 4",
+              "enabled": true,
+              "x": 9.908333333333331,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.29166666666666663,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-5",
+              "label": "ソーカー 5",
+              "enabled": true,
+              "x": 12.025,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.37500000000000006,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-6",
+              "label": "ソーカー 6",
+              "enabled": true,
+              "x": 14.141666666666666,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.4583333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-7",
+              "label": "ソーカー 7",
+              "enabled": true,
+              "x": 16.258333333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.5416666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-8",
+              "label": "ソーカー 8",
+              "enabled": true,
+              "x": 18.375,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.625,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-9",
+              "label": "ソーカー 9",
+              "enabled": true,
+              "x": 20.491666666666664,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7083333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-10",
+              "label": "ソーカー 10",
+              "enabled": true,
+              "x": 22.60833333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7916666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-11",
+              "label": "ソーカー 11",
+              "enabled": true,
+              "x": 24.724999999999998,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.875,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-12",
+              "label": "ソーカー 12",
+              "enabled": true,
+              "x": 26.841666666666665,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.9583333333333334,
+                "v": 0.4375
+              }
+            }
+          ]
+        },
+        {
+          "id": "water-mist",
+          "kind": "mist",
+          "enabled": false,
+          "onSec": 60,
+          "offSec": 240,
+          "hoursPerDay": 8,
+          "pumpPowerKw": 1,
+          "nozzles": [
+            {
+              "id": "mist-1",
+              "label": "ミスト 1",
+              "enabled": true,
+              "x": 3.5583333333333336,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.04166666666666668,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-2",
+              "label": "ミスト 2",
+              "enabled": true,
+              "x": 5.674999999999999,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.12499999999999996,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-3",
+              "label": "ミスト 3",
+              "enabled": true,
+              "x": 7.791666666666667,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.20833333333333337,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-4",
+              "label": "ミスト 4",
+              "enabled": true,
+              "x": 9.908333333333331,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.29166666666666663,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-5",
+              "label": "ミスト 5",
+              "enabled": true,
+              "x": 12.025,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.37500000000000006,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-6",
+              "label": "ミスト 6",
+              "enabled": true,
+              "x": 14.141666666666666,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.4583333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-7",
+              "label": "ミスト 7",
+              "enabled": true,
+              "x": 16.258333333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.5416666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-8",
+              "label": "ミスト 8",
+              "enabled": true,
+              "x": 18.375,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.625,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-9",
+              "label": "ミスト 9",
+              "enabled": true,
+              "x": 20.491666666666664,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7083333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-10",
+              "label": "ミスト 10",
+              "enabled": true,
+              "x": 22.60833333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7916666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-11",
+              "label": "ミスト 11",
+              "enabled": true,
+              "x": 24.724999999999998,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.875,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-12",
+              "label": "ミスト 12",
+              "enabled": true,
+              "x": 26.841666666666665,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.9583333333333334,
+                "v": 0.4375
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "working-soaker",
+      "name": "編集案 A",
+      "readOnly": false,
+      "roof": {
+        "reflectance": 0.2,
+        "insulationM": 0,
+        "sprayEnabled": false,
+        "flowLpmM2": 0.05,
+        "onSec": 120,
+        "offSec": 480,
+        "hoursPerDay": 8,
+        "pumpPowerKw": 0.25
+      },
+      "fans": [
+        {
+          "id": "fan-feeding-1",
+          "label": "採食帯 ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 6,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "feeding",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-feeding-2",
+          "label": "採食帯 ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 6,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "feeding",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-A-1",
+          "label": "牛床 A ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 9.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-A",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-A-2",
+          "label": "牛床 A ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 9.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-A",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-B-1",
+          "label": "牛床 B ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 14.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-B",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-B-2",
+          "label": "牛床 B ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 14.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-B",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-C-1",
+          "label": "牛床 C ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 16.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-C",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-C-2",
+          "label": "牛床 C ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 16.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-C",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-D-1",
+          "label": "牛床 D ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 21.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-D",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-D-2",
+          "label": "牛床 D ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 21.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-D",
+            "u": 0.6,
+            "v": 0.5
+          }
+        }
+      ],
+      "waterSystems": [
+        {
+          "id": "water-soaker",
+          "kind": "soaker",
+          "enabled": true,
+          "onSec": 120,
+          "offSec": 600,
+          "hoursPerDay": 8,
+          "pumpPowerKw": 0.25,
+          "nozzles": [
+            {
+              "id": "soaker-1",
+              "label": "ソーカー 1",
+              "enabled": true,
+              "x": 3.5583333333333336,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.04166666666666668,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-2",
+              "label": "ソーカー 2",
+              "enabled": true,
+              "x": 5.674999999999999,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.12499999999999996,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-3",
+              "label": "ソーカー 3",
+              "enabled": true,
+              "x": 7.791666666666667,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.20833333333333337,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-4",
+              "label": "ソーカー 4",
+              "enabled": true,
+              "x": 9.908333333333331,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.29166666666666663,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-5",
+              "label": "ソーカー 5",
+              "enabled": true,
+              "x": 12.025,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.37500000000000006,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-6",
+              "label": "ソーカー 6",
+              "enabled": true,
+              "x": 14.141666666666666,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.4583333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-7",
+              "label": "ソーカー 7",
+              "enabled": true,
+              "x": 16.258333333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.5416666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-8",
+              "label": "ソーカー 8",
+              "enabled": true,
+              "x": 18.375,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.625,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-9",
+              "label": "ソーカー 9",
+              "enabled": true,
+              "x": 20.491666666666664,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7083333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-10",
+              "label": "ソーカー 10",
+              "enabled": true,
+              "x": 22.60833333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7916666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-11",
+              "label": "ソーカー 11",
+              "enabled": true,
+              "x": 24.724999999999998,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.875,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-12",
+              "label": "ソーカー 12",
+              "enabled": true,
+              "x": 26.841666666666665,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.9583333333333334,
+                "v": 0.4375
+              }
+            }
+          ]
+        },
+        {
+          "id": "water-mist",
+          "kind": "mist",
+          "enabled": false,
+          "onSec": 60,
+          "offSec": 240,
+          "hoursPerDay": 8,
+          "pumpPowerKw": 1,
+          "nozzles": [
+            {
+              "id": "mist-1",
+              "label": "ミスト 1",
+              "enabled": true,
+              "x": 3.5583333333333336,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.04166666666666668,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-2",
+              "label": "ミスト 2",
+              "enabled": true,
+              "x": 5.674999999999999,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.12499999999999996,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-3",
+              "label": "ミスト 3",
+              "enabled": true,
+              "x": 7.791666666666667,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.20833333333333337,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-4",
+              "label": "ミスト 4",
+              "enabled": true,
+              "x": 9.908333333333331,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.29166666666666663,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-5",
+              "label": "ミスト 5",
+              "enabled": true,
+              "x": 12.025,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.37500000000000006,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-6",
+              "label": "ミスト 6",
+              "enabled": true,
+              "x": 14.141666666666666,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.4583333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-7",
+              "label": "ミスト 7",
+              "enabled": true,
+              "x": 16.258333333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.5416666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-8",
+              "label": "ミスト 8",
+              "enabled": true,
+              "x": 18.375,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.625,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-9",
+              "label": "ミスト 9",
+              "enabled": true,
+              "x": 20.491666666666664,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7083333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-10",
+              "label": "ミスト 10",
+              "enabled": true,
+              "x": 22.60833333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7916666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-11",
+              "label": "ミスト 11",
+              "enabled": true,
+              "x": 24.724999999999998,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.875,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-12",
+              "label": "ミスト 12",
+              "enabled": true,
+              "x": 26.841666666666665,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.9583333333333334,
+                "v": 0.4375
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "working-mist",
+      "name": "編集案 B",
+      "readOnly": false,
+      "roof": {
+        "reflectance": 0.2,
+        "insulationM": 0,
+        "sprayEnabled": false,
+        "flowLpmM2": 0.05,
+        "onSec": 120,
+        "offSec": 480,
+        "hoursPerDay": 8,
+        "pumpPowerKw": 0.25
+      },
+      "fans": [
+        {
+          "id": "fan-feeding-1",
+          "label": "採食帯 ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 6,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "feeding",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-feeding-2",
+          "label": "採食帯 ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 6,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "feeding",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-A-1",
+          "label": "牛床 A ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 9.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-A",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-A-2",
+          "label": "牛床 A ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 9.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-A",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-B-1",
+          "label": "牛床 B ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 14.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-B",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-B-2",
+          "label": "牛床 B ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 14.25,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-B",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-C-1",
+          "label": "牛床 C ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 16.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-C",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-C-2",
+          "label": "牛床 C ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 16.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-C",
+            "u": 0.6,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-D-1",
+          "label": "牛床 D ファン 1",
+          "enabled": true,
+          "x": 5.04,
+          "y": 21.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-D",
+            "u": 0.1,
+            "v": 0.5
+          }
+        },
+        {
+          "id": "fan-stall-D-2",
+          "label": "牛床 D ファン 2",
+          "enabled": true,
+          "x": 17.74,
+          "y": 21.75,
+          "heightM": 3,
+          "yawDeg": 0,
+          "pitchDownDeg": 10,
+          "diameterM": 1,
+          "outletSpeedMps": 5,
+          "powerKw": 0.4,
+          "hoursPerDay": 16,
+          "anchor": {
+            "zoneId": "stall-D",
+            "u": 0.6,
+            "v": 0.5
+          }
+        }
+      ],
+      "waterSystems": [
+        {
+          "id": "water-soaker",
+          "kind": "soaker",
+          "enabled": false,
+          "onSec": 120,
+          "offSec": 600,
+          "hoursPerDay": 8,
+          "pumpPowerKw": 0.25,
+          "nozzles": [
+            {
+              "id": "soaker-1",
+              "label": "ソーカー 1",
+              "enabled": true,
+              "x": 3.5583333333333336,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.04166666666666668,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-2",
+              "label": "ソーカー 2",
+              "enabled": true,
+              "x": 5.674999999999999,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.12499999999999996,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-3",
+              "label": "ソーカー 3",
+              "enabled": true,
+              "x": 7.791666666666667,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.20833333333333337,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-4",
+              "label": "ソーカー 4",
+              "enabled": true,
+              "x": 9.908333333333331,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.29166666666666663,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-5",
+              "label": "ソーカー 5",
+              "enabled": true,
+              "x": 12.025,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.37500000000000006,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-6",
+              "label": "ソーカー 6",
+              "enabled": true,
+              "x": 14.141666666666666,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.4583333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-7",
+              "label": "ソーカー 7",
+              "enabled": true,
+              "x": 16.258333333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.5416666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-8",
+              "label": "ソーカー 8",
+              "enabled": true,
+              "x": 18.375,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.625,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-9",
+              "label": "ソーカー 9",
+              "enabled": true,
+              "x": 20.491666666666664,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7083333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-10",
+              "label": "ソーカー 10",
+              "enabled": true,
+              "x": 22.60833333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7916666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-11",
+              "label": "ソーカー 11",
+              "enabled": true,
+              "x": 24.724999999999998,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.875,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "soaker-12",
+              "label": "ソーカー 12",
+              "enabled": true,
+              "x": 26.841666666666665,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 25,
+              "flowLpm": 1.3,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.9583333333333334,
+                "v": 0.4375
+              }
+            }
+          ]
+        },
+        {
+          "id": "water-mist",
+          "kind": "mist",
+          "enabled": true,
+          "onSec": 60,
+          "offSec": 240,
+          "hoursPerDay": 8,
+          "pumpPowerKw": 1,
+          "nozzles": [
+            {
+              "id": "mist-1",
+              "label": "ミスト 1",
+              "enabled": true,
+              "x": 3.5583333333333336,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.04166666666666668,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-2",
+              "label": "ミスト 2",
+              "enabled": true,
+              "x": 5.674999999999999,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.12499999999999996,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-3",
+              "label": "ミスト 3",
+              "enabled": true,
+              "x": 7.791666666666667,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.20833333333333337,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-4",
+              "label": "ミスト 4",
+              "enabled": true,
+              "x": 9.908333333333331,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.29166666666666663,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-5",
+              "label": "ミスト 5",
+              "enabled": true,
+              "x": 12.025,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.37500000000000006,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-6",
+              "label": "ミスト 6",
+              "enabled": true,
+              "x": 14.141666666666666,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.4583333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-7",
+              "label": "ミスト 7",
+              "enabled": true,
+              "x": 16.258333333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.5416666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-8",
+              "label": "ミスト 8",
+              "enabled": true,
+              "x": 18.375,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.625,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-9",
+              "label": "ミスト 9",
+              "enabled": true,
+              "x": 20.491666666666664,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7083333333333333,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-10",
+              "label": "ミスト 10",
+              "enabled": true,
+              "x": 22.60833333333333,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.7916666666666666,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-11",
+              "label": "ミスト 11",
+              "enabled": true,
+              "x": 24.724999999999998,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.875,
+                "v": 0.4375
+              }
+            },
+            {
+              "id": "mist-12",
+              "label": "ミスト 12",
+              "enabled": true,
+              "x": 26.841666666666665,
+              "y": 5.75,
+              "heightM": 2.5,
+              "yawDeg": 0,
+              "pitchDownDeg": 90,
+              "halfAngleDeg": 60,
+              "flowLpm": 0.1,
+              "anchor": {
+                "zoneId": "feeding",
+                "u": 0.9583333333333334,
+                "v": 0.4375
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "view": {
+    "mode": "3d",
+    "metric": "delta",
+    "timeSec": 0,
+    "selectedProbeId": "feed-07",
+    "selectedDeviceId": null,
+    "roof": false,
+    "flow": true,
+    "particles": true,
+    "camera": null
+  },
+  "prices": {
+    "electricityYenKwh": 27,
+    "waterYenM3": 300
+  },
+  "provenance": [
+    {
+      "id": "dimensions",
+      "classification": "adapted-reference",
+      "note": "原事例36.4×23.5m・70頭の外形を参考に、内部を50床の独自配置へ変更。設計推奨ではない。",
+      "url": "https://holstein.pl/nowoczesna-obora-w-gospodarstwie-rodzinnym/"
+    },
+    {
+      "id": "layout",
+      "classification": "adapted-reference",
+      "note": "採食・休息・搾乳の区画関係を参考にした独自配置。原図やメーカー3Dデータは同梱しない。",
+      "url": "https://www.orionkikai.co.jp/rakuno/how_to/auto-milking-system/"
+    },
+    {
+      "id": "psychrometrics",
+      "classification": "source-based",
+      "note": "SIの飽和蒸気圧・湿度比・エンタルピー・比体積の関係。仮換気量の妥当性を保証するものではない。",
+      "url": "https://psychrometrics.github.io/psychrolib/api_docs.html"
+    },
+    {
+      "id": "milk",
+      "classification": "source-based",
+      "note": "全酪連COWBELL No.178（2025年10月）p.6の送風体感温度式、p.8の乳量表。日本飼養標準2017・柴田ら1984の抜粋。乳量は掲載6条件・RH60〜70%のみ。"
+    },
+    {
+      "id": "roof",
+      "classification": "design-assumption",
+      "note": "屋根の係数と背景熱は熱モデルv0.5の固定仮定。遮熱反射率0.7・断熱20mm。放射・風・散水の効果を乳量やTHIへ換算しない。"
+    },
+    {
+      "id": "fertility",
+      "classification": "source-based",
+      "note": "Baccouri et al. (2025) Table 2の5期間OR。仮の基準確率40%。屋外THIから局所THIへの適用はアプリの追加仮定。",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12249091/"
+    },
+    {
+      "id": "model",
+      "classification": "design-assumption",
+      "note": "風速曲線、熱伝達係数、体表35℃、面積4.5m²、換気量、蒸発率、保持水量は仕様v0.4の実装仮定。現場未検証。"
+    },
+    {
+      "id": "calculation",
+      "classification": "derived",
+      "note": "70地点は独立試行。放熱Wを牛群へ合算しない。乳量は表の6条件、受胎は別の52日代表シナリオ。"
+    }
+  ]
+}

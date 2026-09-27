@@ -1,0 +1,130 @@
+[
+  {
+    "model_id": "fertility-thi-period-or-baccouri2025-v1-proposal",
+    "status": "available_reference",
+    "reference_probability": 0.4,
+    "relative_odds": 1.0,
+    "baseline_probability": 0.4,
+    "categories": {
+      "P1": "none",
+      "P2": "none",
+      "P3": "none",
+      "P4": "none",
+      "P5": "none"
+    },
+    "period_odds_ratios": {
+      "P1": 1.0,
+      "P2": 1.0,
+      "P3": 1.0,
+      "P4": 1.0,
+      "P5": 1.0
+    },
+    "interpretation": "Synthetic baseline plus published categorical associations; not a causal cooling forecast",
+    "period_mean_thi": {
+      "P1": 58.835,
+      "P2": 58.835,
+      "P3": 58.835,
+      "P4": 58.835,
+      "P5": 58.835
+    },
+    "scenario_assumption": "same representative temperature and RH on every day -21..+30; not a forecast",
+    "temperature_c": 15,
+    "relative_humidity_pct": 70
+  },
+  {
+    "model_id": "fertility-thi-period-or-baccouri2025-v1-proposal",
+    "status": "available_reference",
+    "reference_probability": 0.3298312837763398,
+    "relative_odds": 0.7382423465726119,
+    "baseline_probability": 0.4,
+    "categories": {
+      "P1": "small",
+      "P2": "small",
+      "P3": "small",
+      "P4": "small",
+      "P5": "small"
+    },
+    "period_odds_ratios": {
+      "P1": 0.823,
+      "P2": 0.973,
+      "P3": 0.926,
+      "P4": 0.941,
+      "P5": 1.058
+    },
+    "interpretation": "Synthetic baseline plus published categorical associations; not a causal cooling forecast",
+    "period_mean_thi": {
+      "P1": 66.35,
+      "P2": 66.35,
+      "P3": 66.35,
+      "P4": 66.35,
+      "P5": 66.35
+    },
+    "scenario_assumption": "same representative temperature and RH on every day -21..+30; not a forecast",
+    "temperature_c": 20,
+    "relative_humidity_pct": 70
+  },
+  {
+    "model_id": "fertility-thi-period-or-baccouri2025-v1-proposal",
+    "status": "available_reference",
+    "reference_probability": 0.24873216323314762,
+    "relative_odds": 0.496624807545845,
+    "baseline_probability": 0.4,
+    "categories": {
+      "P1": "medium",
+      "P2": "medium",
+      "P3": "medium",
+      "P4": "medium",
+      "P5": "medium"
+    },
+    "period_odds_ratios": {
+      "P1": 0.697,
+      "P2": 0.913,
+      "P3": 0.887,
+      "P4": 0.935,
+      "P5": 0.941
+    },
+    "interpretation": "Synthetic baseline plus published categorical associations; not a causal cooling forecast",
+    "period_mean_thi": {
+      "P1": 69.356,
+      "P2": 69.356,
+      "P3": 69.356,
+      "P4": 69.356,
+      "P5": 69.356
+    },
+    "scenario_assumption": "same representative temperature and RH on every day -21..+30; not a forecast",
+    "temperature_c": 22,
+    "relative_humidity_pct": 70
+  },
+  {
+    "model_id": "fertility-thi-period-or-baccouri2025-v1-proposal",
+    "status": "available_reference",
+    "reference_probability": 0.22033534484527012,
+    "relative_odds": 0.4239040657836599,
+    "baseline_probability": 0.4,
+    "categories": {
+      "P1": "severe",
+      "P2": "severe",
+      "P3": "severe",
+      "P4": "severe",
+      "P5": "severe"
+    },
+    "period_odds_ratios": {
+      "P1": 0.773,
+      "P2": 1.005,
+      "P3": 0.693,
+      "P4": 0.922,
+      "P5": 0.854
+    },
+    "interpretation": "Synthetic baseline plus published categorical associations; not a causal cooling forecast",
+    "period_mean_thi": {
+      "P1": 75.36800000000001,
+      "P2": 75.36800000000001,
+      "P3": 75.36800000000001,
+      "P4": 75.36800000000001,
+      "P5": 75.36800000000001
+    },
+    "scenario_assumption": "same representative temperature and RH on every day -21..+30; not a forecast",
+    "temperature_c": 26,
+    "relative_humidity_pct": 70
+  }
+]

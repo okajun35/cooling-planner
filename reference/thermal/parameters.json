@@ -1,0 +1,115 @@
+{
+  "model_version": "cooling-thermal-v0.5-assumptions-1",
+  "note": "Initial simulation assumptions; not field measurements.",
+  "model": {
+    "length_m": 36.4,
+    "width_m": 23.5,
+    "eave_m": 4.0,
+    "ridge_m": 8.7,
+    "outdoor_c": 32.0,
+    "outdoor_rh": 0.7,
+    "solar_roof_wm2": 800.0,
+    "ventilation_m3s_per_floor_m2": 0.015,
+    "background_sensible_w": 10000.0,
+    "bare_resistance_m2kw": 0.02,
+    "insulation_conductivity_wmk": 0.035,
+    "h_out_conv": 10.0,
+    "h_out_rad": 5.0,
+    "h_in_conv": 3.0,
+    "h_in_rad": 5.0,
+    "cow_surface_c": 35.0,
+    "cow_area_m2": 4.5,
+    "cow_wetted_area_m2": 2.0,
+    "cow_emissivity": 0.95,
+    "cow_roof_view_factor": 0.35,
+    "base_wetness": 0.06,
+    "cow_water_capacity_kg": 0.3,
+    "roof_water_capacity_kgm2": 0.05,
+    "roof_spray_lpm_m2": 0.05,
+    "roof_on_s": 120,
+    "roof_off_s": 480,
+    "soaker_lpm": 1.3,
+    "soaker_captured_fraction": 0.25,
+    "soaker_on_s": 120,
+    "soaker_off_s": 600,
+    "mist_cell_m2": 4.0,
+    "mist_allocated_lpm": 0.01,
+    "mist_on_s": 60,
+    "mist_off_s": 240,
+    "mist_efficiency": 0.6
+  },
+  "scenarios": [
+    {
+      "name": "送風あり・屋根対策なし",
+      "reflectance": 0.2,
+      "insulation_m": 0.0,
+      "roof_spray": false,
+      "soaker": false,
+      "mist": false,
+      "cow_speed_mps": 2.0
+    },
+    {
+      "name": "遮熱塗装",
+      "reflectance": 0.7,
+      "insulation_m": 0.0,
+      "roof_spray": false,
+      "soaker": false,
+      "mist": false,
+      "cow_speed_mps": 2.0
+    },
+    {
+      "name": "断熱材20mm",
+      "reflectance": 0.2,
+      "insulation_m": 0.02,
+      "roof_spray": false,
+      "soaker": false,
+      "mist": false,
+      "cow_speed_mps": 2.0
+    },
+    {
+      "name": "屋根散水",
+      "reflectance": 0.2,
+      "insulation_m": 0.0,
+      "roof_spray": true,
+      "soaker": false,
+      "mist": false,
+      "cow_speed_mps": 2.0
+    },
+    {
+      "name": "牛体散水",
+      "reflectance": 0.2,
+      "insulation_m": 0.0,
+      "roof_spray": false,
+      "soaker": true,
+      "mist": false,
+      "cow_speed_mps": 2.0
+    },
+    {
+      "name": "遮熱塗装＋断熱",
+      "reflectance": 0.7,
+      "insulation_m": 0.02,
+      "roof_spray": false,
+      "soaker": false,
+      "mist": false,
+      "cow_speed_mps": 2.0
+    },
+    {
+      "name": "遮熱塗装＋断熱＋牛体散水",
+      "reflectance": 0.7,
+      "insulation_m": 0.02,
+      "roof_spray": false,
+      "soaker": true,
+      "mist": false,
+      "cow_speed_mps": 2.0
+    },
+    {
+      "name": "ミスト",
+      "reflectance": 0.2,
+      "insulation_m": 0.0,
+      "roof_spray": false,
+      "soaker": false,
+      "mist": true,
+      "cow_speed_mps": 2.0
+    }
+  ]
+}

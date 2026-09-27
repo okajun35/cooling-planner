@@ -1,0 +1,18 @@
+{
+  "source": "Independent Python implementation, ASHRAE SI relations, scipy.optimize.brentq for saturation endpoint",
+  "inputs": {
+    "temperatureC": 32.0,
+    "rhPct": 70.0,
+    "pressurePa": 101325.0,
+    "ventilationM3s": 0.06,
+    "waterKgs": 6e-05,
+    "efficiency": 0.6
+  },
+  "expected": {
+    "temperatureC": 30.687575686375368,
+    "rhPct": 77.26952664208,
+    "enthalpyJkg": 86323.71553594465,
+    "evaporatedKgs": 3.599999999999999e-05
+  },
+  "note": "This is not the missing original arithmetic_examples_v0_4.json mistCell fixture."
+}

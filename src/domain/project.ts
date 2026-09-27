@@ -1,0 +1,40 @@
+/** All coordinates: x = barn length, y = barn width; heightM = elevation. */
+export type Vec3 = [number, number, number];
+export interface Template {id:'fs-amr1-50-guided-reference';version:1;lengthM:number;widthM:number;eaveHeightM:4;ridgeHeightM:8.7}
+export interface Environment {temperatureC:number;relativeHumidityPct:number;pressurePa:number;backgroundSpeedMps:number;ventilationM3sPerM2:number;solarRoofWm2:number}
+export interface Pose {x:number;y:number;heightM:number;yawDeg:number;pitchDownDeg:number;anchor:{zoneId:string;u:number;v:number}}
+export interface Fan extends Pose {id:string;label:string;enabled:boolean;diameterM:number;outletSpeedMps:number;powerKw:number;hoursPerDay:number}
+export interface Nozzle extends Pose {id:string;label:string;enabled:boolean;flowLpm:number;halfAngleDeg:number}
+export interface WaterSystem {id:string;kind:'soaker'|'mist';enabled:boolean;onSec:number;offSec:number;hoursPerDay:number;pumpPowerKw:number;nozzles:Nozzle[]}
+export interface Scenario {id:string;name:string;readOnly:boolean;roof:RoofSettings;fans:Fan[];waterSystems:WaterSystem[]}
+export interface Profile {id:string;name:string;outletMultiplier:number;hcMultiplier:number;mistEfficiency:number;maxFilmKg:number}
+export interface Model {version:'cooling-integrated-v0.8';roof:RoofModel;surfaceTemperatureC:number;areaM2:number;wetAreaM2:number;patchLengthM:number;patchWidthM:number;baseWetFraction:number;emissivity:number;radiantOffsetC:number;kSpread:number;kDecay:number;latentHeatJkg:number;airDensityKgM3:number;airCpJkgK:number;vaporGasConstant:number;hcIntercept:number;hcSlope:number;profiles:Profile[]}
+export interface View {mode:'3d'|'2d';metric:'delta'|'speed'|'temperature';timeSec:number;selectedProbeId:string;selectedDeviceId:string|null;roof:boolean;flow:boolean;particles:boolean;camera:{azimuth:number;elevation:number;distance:number;target:Vec3}|null}
+export interface Project {schemaVersion:8;references:ReferenceSettings;appVersion:string;template:Template;environment:Environment;model:Model;baselineScenarioId:string;activeScenarioId:string;scenarios:Scenario[];view:View;prices:{electricityYenKwh:number|null;waterYenM3:number|null};provenance:{id:string;classification:string;note:string;url?:string}[]}
+export interface Zone {id:string;name:string;x:number;y:number;widthM:number;depthM:number;kind:'feed'|'feeding'|'stall'|'aisle'|'robot'|'utility'|'waiting'|'isolation';solid?:boolean}
+export interface Probe {id:string;label:string;x:number;y:number;heightM:number;zoneId:string;patchYawDeg:number;kind:'stall'|'feeding'|'waiting'}
+export interface Stall {id:string;x:number;y:number;widthM:number;depthM:number;row:string}
+export interface Layout {zones:Zone[];probes:Probe[];stalls:Stall[];solids:Box3[];cells:AirCell[]}
+export interface Box3 {min:Vec3;max:Vec3}
+export interface AirCell {id:string;ix:number;iy:number;x:number;y:number;widthM:number;depthM:number;areaM2:number}
+export interface HeatComponents {convectionW:number;radiationW:number;baseEvaporationW:number;soakerEvaporationW:number;condensationW:number}
+export interface FilmLedger {capturedKg:number;condensedKg:number;evaporatedKg:number;runoffKg:number;finalKg:number;maxResidualKg:number}
+export interface PointResult {probeId:string;inputHash:string;modelVersion:string;meanSpeedMps:number|null;meanAirTemperatureC:number|null;meanRelativeHumidityPct:number|null;meanQrefW:number|null;deltaQrefW:number|null;components:HeatComponents|null;parameterEnvelopeW:[number,number]|null;profileDeltas:Record<string,number>;status:'valid'|'invalid';warnings:string[];cellId:string;captureFraction:number;film:FilmLedger|null;meanRadiantC:number|null;meanFeelsLikeC:number|null;milk:MilkReference;fertility:FertilityReference;series:PointSample[]}
+export interface Resources {waterLPerDay:number;fanKwhPerDay:number;pumpKwhPerDay:number;totalKwhPerDay:number;systems:{kind:string;waterL:number;pumpKwh:number;onTotalSec:number}[]}
+export interface ScenarioResult {id:string;points:PointResult[];resources:Resources;warnings:string[];roof:RoofResult;trialWaterL:number;trialKwh:number}
+export interface SimulationResult {inputHash:string;modelVersion:string;scenarios:ScenarioResult[];profiles:string[];timeStepSec:number;rayCount:number;durationSec:3600}
+export type Device = Fan | Nozzle;
+export const activeScenario=(p:Project)=>p.scenarios.find(s=>s.id===p.activeScenarioId)!;
+export const devices=(s:Scenario):Device[]=>[...s.fans,...s.waterSystems.flatMap(w=>w.nozzles)];
+export const isFan=(d:Device):d is Fan=>'diameterM' in d;
+export const clone=<T>(v:T):T=>structuredClone(v);
+
+// v0.8 integration contracts. Underlying v0.5/v0.6/v0.7 model boundaries are unchanged.
+export interface RoofSettings {reflectance:number;insulationM:number;sprayEnabled:boolean;flowLpmM2:number;onSec:number;offSec:number;hoursPerDay:number;pumpPowerKw:number}
+export interface RoofModel {version:'cooling-thermal-v0.5-assumptions-1';backgroundSensibleW:number;bareResistance:number;conductivity:number;hOutConv:number;hOutRad:number;hInConv:number;hInRad:number;viewFactor:number;waterCapacityKgM2:number}
+export interface ReferenceSettings {milkModel:'milk-table-cowbell178-v1';baselineMilkKgPerDay:number|null;fertility:{model:'fertility-thi-period-or-baccouri2025-v1';p0:number;mode:'manual'|'simulation';exposureAssumed:boolean;temperatureC:number;relativeHumidityPct:number;profileVersion:1}}
+export interface MilkReference {status:'available'|'out_of_scope'|'invalid_input';ratioPct:number|null;kgPerDay:number|null;reasons:string[]}
+export interface FertilityReference {status:'available_reference'|'out_of_scope'|'invalid_input';probability:number|null;oddsRatio:number|null;thi:number|null;category:string|null;reasons:string[];source:'manual'|'simulation';exposureAssumed:boolean}
+export interface PointSample {timeSec:number;temperatureC:number;relativeHumidityPct:number;speedMps:number;filmKg:number;qW:number;deltaW:number|null;soakerOn:boolean;mistOn:boolean}
+export interface RoofSample {timeSec:number;outerC:number;underC:number;airC:number;radiantC:number;waterKgM2:number;evaporatedKgsM2:number}
+export interface RoofResult {meanOuterC:number;meanUnderC:number;meanAirC:number;meanRadiantC:number;areaM2:number;suppliedL:number;evaporatedKg:number;runoffL:number;finalWaterKg:number;waterResidualKg:number;energyResidualMaxWm2:number;series:RoofSample[]}

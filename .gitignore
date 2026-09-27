@@ -1,0 +1,14 @@
+node_modules/
+playwright-report/
+test-results/
+
+.compiled/
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.*
+!.env.example
+evidence/
+*.log
