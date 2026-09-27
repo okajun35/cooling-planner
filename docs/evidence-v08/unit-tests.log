@@ -1,0 +1,386 @@
+
+> cooling-planner@0.8.0-preview.1 test
+> tsc && node --test tests/unit/*.test.mjs tests/integration/*.test.mjs
+
+TAP version 13
+# Subtest: IT02: baseline deep clone / direct edits rejected
+ok 1 - IT02: baseline deep clone / direct edits rejected
+  ---
+  duration_ms: 17.933292
+  type: 'test'
+  ...
+# Subtest: IT03/05: shared environment and changed pose alter result input
+ok 2 - IT03/05: shared environment and changed pose alter result input
+  ---
+  duration_ms: 1538.526032
+  type: 'test'
+  ...
+# Subtest: IT07/08: dimension update changes all anchored layouts, exact one-step undo
+ok 3 - IT07/08: dimension update changes all anchored layouts, exact one-step undo
+  ---
+  duration_ms: 17.360613
+  type: 'test'
+  ...
+# Subtest: IT09: lossless JSON state and recalculated results
+ok 4 - IT09: lossless JSON state and recalculated results
+  ---
+  duration_ms: 1885.264095
+  type: 'test'
+  ...
+# Subtest: IT10/11: bad import is atomic and old format retains current project
+ok 5 - IT10/11: bad import is atomic and old format retains current project
+  ---
+  duration_ms: 6.406747
+  type: 'test'
+  ...
+# Subtest: IT12: older worker results cannot overwrite a newer request
+ok 6 - IT12: older worker results cannot overwrite a newer request
+  ---
+  duration_ms: 0.215882
+  type: 'test'
+  ...
+# Subtest: gesture transaction: many previews = one undo / cancel is clean
+ok 7 - gesture transaction: many previews = one undo / cancel is clean
+  ---
+  duration_ms: 10.913624
+  type: 'test'
+  ...
+# Subtest: fair water comparison explicitly copies current fans, leaves baseline unchanged
+ok 8 - fair water comparison explicitly copies current fans, leaves baseline unchanged
+  ---
+  duration_ms: 4.101672
+  type: 'test'
+  ...
+# Subtest: UT20 / IT06: moving soaker keeps water but reduces point capture
+ok 9 - UT20 / IT06: moving soaker keeps water but reduces point capture
+  ---
+  duration_ms: 1479.685082
+  type: 'test'
+  ...
+# Subtest: duplicate / delete / addition / undo preserve unique IDs and selection
+ok 10 - duplicate / delete / addition / undo preserve unique IDs and selection
+  ---
+  duration_ms: 8.053239
+  type: 'test'
+  ...
+# Subtest: IT01: initial barn has 50 stalls / 70 independent probes / three scenarios
+ok 11 - IT01: initial barn has 50 stalls / 70 independent probes / three scenarios
+  ---
+  duration_ms: 6.100592
+  type: 'test'
+  ...
+# Subtest: UT03/04: axial fan fixture and back rejection
+ok 12 - UT03/04: axial fan fixture and back rejection
+  ---
+  duration_ms: 1.613271
+  type: 'test'
+  ...
+# Subtest: UT05: only explicit solids occlude; segment intersection
+ok 13 - UT05: only explicit solids occlude; segment intersection
+  ---
+  duration_ms: 1.798191
+  type: 'test'
+  ...
+# Subtest: UT06: identical fan duplicate leaves max-jet speed, adds power
+ok 14 - UT06: identical fan duplicate leaves max-jet speed, adds power
+  ---
+  duration_ms: 1.443906
+  type: 'test'
+  ...
+# Subtest: UT09: capture is geometric, outside patch / blocked is zero
+ok 15 - UT09: capture is geometric, outside patch / blocked is zero
+  ---
+  duration_ms: 3.183189
+  type: 'test'
+  ...
+# Subtest: UT11/12: water balance / OFF evaporation / dry film
+ok 16 - UT11/12: water balance / OFF evaporation / dry film
+  ---
+  duration_ms: 7.460851
+  type: 'test'
+  ...
+# Subtest: UT15/16: no extra air latent term and negative condensation
+ok 17 - UT15/16: no extra air latent term and negative condensation
+  ---
+  duration_ms: 1.497001
+  type: 'test'
+  ...
+# Subtest: UT17/19: exact initial daily water and electricity including pumps
+ok 18 - UT17/19: exact initial daily water and electricity including pumps
+  ---
+  duration_ms: 1.21098
+  type: 'test'
+  ...
+# Subtest: UT20: moving devices does not change daily resources
+ok 19 - UT20: moving devices does not change daily resources
+  ---
+  duration_ms: 1.385242
+  type: 'test'
+  ...
+# Subtest: UT21/22: equal scenarios zero delta / common profiles form envelope
+ok 20 - UT21/22: equal scenarios zero delta / common profiles form envelope
+  ---
+  duration_ms: 2443.812969
+  type: 'test'
+  ...
+# Subtest: UT10 / hash: camera, particles, selection do not affect physics hash
+ok 21 - UT10 / hash: camera, particles, selection do not affect physics hash
+  ---
+  duration_ms: 3.544149
+  type: 'test'
+  ...
+# Subtest: IT10: reject NaN, bad model version, unknown anchors and oversized device counts
+ok 22 - IT10: reject NaN, bad model version, unknown anchors and oversized device counts
+  ---
+  duration_ms: 9.02733
+  type: 'test'
+  ...
+# Subtest: IT10/11: malformed and old saves rejected; prototype keys rejected
+ok 23 - IT10/11: malformed and old saves rejected; prototype keys rejected
+  ---
+  duration_ms: 3.0965
+  type: 'test'
+  ...
+# Subtest: UT01: 32 C / 70% THI = 84.32
+ok 24 - UT01: 32 C / 70% THI = 84.32
+  ---
+  duration_ms: 2.009824
+  type: 'test'
+  ...
+# Subtest: UT02: saved yaw and pitch use X/elevation/Y
+ok 25 - UT02: saved yaw and pitch use X/elevation/Y
+  ---
+  duration_ms: 1.056626
+  type: 'test'
+  ...
+# Subtest: UT07: convection stays negative above surface temperature
+ok 26 - UT07: convection stays negative above surface temperature
+  ---
+  duration_ms: 0.167129
+  type: 'test'
+  ...
+# Subtest: UT08: convection zero and independent difference fixture
+ok 27 - UT08: convection zero and independent difference fixture
+  ---
+  duration_ms: 0.129478
+  type: 'test'
+  ...
+# Subtest: UT13: saturated mist causes no cooling or evaporation
+ok 28 - UT13: saturated mist causes no cooling or evaporation
+  ---
+  duration_ms: 0.381517
+  type: 'test'
+  ...
+# Subtest: UT18: finite-cycle endpoints, not daily average duty
+ok 29 - UT18: finite-cycle endpoints, not daily average duty
+  ---
+  duration_ms: 0.395642
+  type: 'test'
+  ...
+# Subtest: pws independent 25 C ASHRAE reference
+ok 30 - pws independent 25 C ASHRAE reference
+  ---
+  duration_ms: 0.196098
+  type: 'test'
+  ...
+# Subtest: V08-PY1: Python v0.5 parity / 送風あり・屋根対策なし
+ok 31 - V08-PY1: Python v0.5 parity / 送風あり・屋根対策なし
+  ---
+  duration_ms: 25.235896
+  type: 'test'
+  ...
+# Subtest: V08-PY2: Python v0.5 parity / 遮熱塗装
+ok 32 - V08-PY2: Python v0.5 parity / 遮熱塗装
+  ---
+  duration_ms: 11.590219
+  type: 'test'
+  ...
+# Subtest: V08-PY3: Python v0.5 parity / 断熱材20mm
+ok 33 - V08-PY3: Python v0.5 parity / 断熱材20mm
+  ---
+  duration_ms: 24.800183
+  type: 'test'
+  ...
+# Subtest: V08-PY4: Python v0.5 parity / 屋根散水
+ok 34 - V08-PY4: Python v0.5 parity / 屋根散水
+  ---
+  duration_ms: 109.531717
+  type: 'test'
+  ...
+# Subtest: V08-PY5: Python v0.5 parity / 牛体散水
+ok 35 - V08-PY5: Python v0.5 parity / 牛体散水
+  ---
+  duration_ms: 8.908544
+  type: 'test'
+  ...
+# Subtest: V08-PY6: Python v0.5 parity / 遮熱塗装＋断熱
+ok 36 - V08-PY6: Python v0.5 parity / 遮熱塗装＋断熱
+  ---
+  duration_ms: 6.86995
+  type: 'test'
+  ...
+# Subtest: V08-PY7: Python v0.5 parity / 遮熱塗装＋断熱＋牛体散水
+ok 37 - V08-PY7: Python v0.5 parity / 遮熱塗装＋断熱＋牛体散水
+  ---
+  duration_ms: 6.321852
+  type: 'test'
+  ...
+# Subtest: V08-PY8: Python v0.5 parity / ミスト
+ok 38 - V08-PY8: Python v0.5 parity / ミスト
+  ---
+  duration_ms: 16.077254
+  type: 'test'
+  ...
+# Subtest: V08-M01: all six table values; kg uses baseline, not interpolation
+ok 39 - V08-M01: all six table values; kg uses baseline, not interpolation
+  ---
+  duration_ms: 0.599503
+  type: 'test'
+  ...
+# Subtest: V08-M02: RH boundaries inclusive and non-listed weather null
+ok 40 - V08-M02: RH boundaries inclusive and non-listed weather null
+  ---
+  duration_ms: 0.426871
+  type: 'test'
+  ...
+# Subtest: V08-M03: no nearest-neighbour rounding; machine representation tolerance only
+ok 41 - V08-M03: no nearest-neighbour rounding; machine representation tolerance only
+  ---
+  duration_ms: 0.271257
+  type: 'test'
+  ...
+# Subtest: V08-M04: no mean-only or time-varying milk conversion
+ok 42 - V08-M04: no mean-only or time-varying milk conversion
+  ---
+  duration_ms: 0.118959
+  type: 'test'
+  ...
+# Subtest: V08-M05: invalid is not out-of-scope or zero
+ok 43 - V08-M05: invalid is not out-of-scope or zero
+  ---
+  duration_ms: 0.085572
+  type: 'test'
+  ...
+# Subtest: V08-F01: exact category boundaries; no averaging category indexes
+ok 44 - V08-F01: exact category boundaries; no averaging category indexes
+  ---
+  duration_ms: 0.616153
+  type: 'test'
+  ...
+# Subtest: V08-F02: Python v0.7 numerical parity of four calculation examples
+ok 45 - V08-F02: Python v0.7 numerical parity of four calculation examples
+  ---
+  duration_ms: 0.521397
+  type: 'test'
+  ...
+# Subtest: V08-F03: explicit period assumption required; manual mode independent of a point
+ok 46 - V08-F03: explicit period assumption required; manual mode independent of a point
+  ---
+  duration_ms: 0.523373
+  type: 'test'
+  ...
+# Subtest: V08-F04: all coefficients including non-monotonic / non-significant kept
+ok 47 - V08-F04: all coefficients including non-monotonic / non-significant kept
+  ---
+  duration_ms: 0.609138
+  type: 'test'
+  ...
+# Subtest: V08-R01: no solar means no coating effect, insulation inner/outer directions
+ok 48 - V08-R01: no solar means no coating effect, insulation inner/outer directions
+  ---
+  duration_ms: 1.182597
+  type: 'test'
+  ...
+# Subtest: V08-R02: roof spray mass balance, energy residual, daily vs 60min water
+ok 49 - V08-R02: roof spray mass balance, energy residual, daily vs 60min water
+  ---
+  duration_ms: 58.813108
+  type: 'test'
+  ...
+# Subtest: V08-S01: roof and fertility change hash, labels/camera/time do not
+ok 50 - V08-S01: roof and fertility change hash, labels/camera/time do not
+  ---
+  duration_ms: 16.604625
+  type: 'test'
+  ...
+# Subtest: V08-S02: new schema round trip, missing/old roof data rejected atomically
+ok 51 - V08-S02: new schema round trip, missing/old roof data rejected atomically
+  ---
+  duration_ms: 12.908211
+  type: 'test'
+  ...
+# Subtest: V08-S03: copying current full equipment includes roof; undo restores
+ok 52 - V08-S03: copying current full equipment includes roof; undo restores
+  ---
+  duration_ms: 5.58487
+  type: 'test'
+  ...
+# Subtest: V08-I01: all 70 probes update from roof and baseline remains unchanged; no fake milk
+ok 53 - V08-I01: all 70 probes update from roof and baseline remains unchanged; no fake milk
+  ---
+  duration_ms: 1031.637865
+  type: 'test'
+  ...
+# Subtest: V08-I02: reference hashes, periods, sample times and energy components consistent
+ok 54 - V08-I02: reference hashes, periods, sample times and energy components consistent
+  ---
+  duration_ms: 645.367287
+  type: 'test'
+  ...
+# Subtest: UT14 additional independent mist fixture (not the missing original fixture)
+ok 55 - UT14 additional independent mist fixture (not the missing original fixture)
+  ---
+  duration_ms: 1.167882
+  type: 'test'
+  ...
+# Subtest: UT23: dt 1 s vs .5 s at all 70 default points and all scenarios
+ok 56 - UT23: dt 1 s vs .5 s at all 70 default points and all scenarios
+  ---
+  duration_ms: 1929.530393
+  type: 'test'
+  ...
+# Subtest: UT24: 256 vs 1024 rays at all default point patches and cooling outputs
+ok 57 - UT24: 256 vs 1024 rays at all default point patches and cooling outputs
+  ---
+  duration_ms: 1207.211327
+  type: 'test'
+  ...
+# Subtest: UT10: all display switches leave numerical results bit-for-bit identical
+ok 58 - UT10: all display switches leave numerical results bit-for-bit identical
+  ---
+  duration_ms: 1179.9402
+  type: 'test'
+  ...
+# Subtest: resource pump stops for zero flow and disabled nozzles
+ok 59 - resource pump stops for zero flow and disabled nozzles
+  ---
+  duration_ms: 0.656719
+  type: 'test'
+  ...
+# Subtest: short fan run time is reflected in 60-minute mean speed
+ok 60 - short fan run time is reflected in 60-minute mean speed
+  ---
+  duration_ms: 910.793174
+  type: 'test'
+  ...
+# Subtest: invalid active device in closed room invalidates comparison, not stale values
+ok 61 - invalid active device in closed room invalidates comparison, not stale values
+  ---
+  duration_ms: 575.594574
+  type: 'test'
+  ...
+# Subtest: camera projection and inverse drag plane preserve metre coordinates
+ok 62 - camera projection and inverse drag plane preserve metre coordinates
+  ---
+  duration_ms: 0.81092
+  type: 'test'
+  ...
+1..62
+# tests 62
+# suites 0
+# pass 62
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8037.966005

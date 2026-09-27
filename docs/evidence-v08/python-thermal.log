@@ -1,0 +1,22 @@
+test_01_geometry (test_thermal_model.Tests.test_01_geometry) ... ok
+test_02_raising_reflectance_reduces_roof_and_air (test_thermal_model.Tests.test_02_raising_reflectance_reduces_roof_and_air) ... ok
+test_03_insulation_reduces_underside_but_not_external_roof (test_thermal_model.Tests.test_03_insulation_reduces_underside_but_not_external_roof) ... ok
+test_04_paint_has_no_solar_effect_at_night (test_thermal_model.Tests.test_04_paint_has_no_solar_effect_at_night) ... ok
+test_05_uniform_equilibrium (test_thermal_model.Tests.test_05_uniform_equilibrium) ... ok
+test_06_roof_balances (test_thermal_model.Tests.test_06_roof_balances) ... ok
+test_07_roof_spray_mass_conservation (test_thermal_model.Tests.test_07_roof_spray_mass_conservation) ... ok
+test_08_soaker_mass_conservation (test_thermal_model.Tests.test_08_soaker_mass_conservation) ... ok
+test_09_soaker_does_not_directly_change_air (test_thermal_model.Tests.test_09_soaker_does_not_directly_change_air) ... ok
+test_10_soaker_drying_continues_when_supply_off (test_thermal_model.Tests.test_10_soaker_drying_continues_when_supply_off) ... ok
+test_11_mist_saturation (test_thermal_model.Tests.test_11_mist_saturation) ... ok
+test_12_mist_energy_and_supply_limits (test_thermal_model.Tests.test_12_mist_energy_and_supply_limits) ... ok
+test_13_components_no_duplicate_latent_cooling (test_thermal_model.Tests.test_13_components_no_duplicate_latent_cooling) ... ok
+test_14_identical_scenarios (test_thermal_model.Tests.test_14_identical_scenarios) ... ok
+test_15_hot_air_convection_is_negative (test_thermal_model.Tests.test_15_hot_air_convection_is_negative) ... ok
+test_16_timestep_refinement (test_thermal_model.Tests.test_16_timestep_refinement) ... ok
+test_17_invalid_inputs (test_thermal_model.Tests.test_17_invalid_inputs) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.265s
+
+OK

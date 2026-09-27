@@ -5,7 +5,8 @@
 ## 作成したもの
 
 Dairy Horizon配下の `cooling-planner/` から必要ファイルをコピーし、
-`cooling-planner-standalone/` を独立したGitリポジトリとして初期化した。
+`cooling-planner-standalone/` を独立したGitリポジトリとして初期化し、
+その後 `~/tmp/cooling-planner/` へ移した。
 Git履歴は新規に開始する。親プロジェクトのPythonアプリ、データ、環境ファイルは含まない。
 
 元フォルダーは維持した。切り出し後の `src/` と元の `src/` を比較し、差分がないことを確認した。
@@ -21,6 +22,8 @@ Git履歴は新規に開始する。親プロジェクトのPythonアプリ、�
 - Three.jsのMITライセンス本文をビルド済みJS・単体HTML・配信フォルダーへ同梱。
 - 環境ファイル、仮想環境、検証出力をGit管理対象から除外。
 - ソースと生成済み配布物をGit管理する構成。ソース変更時は `npm run build` で配布物も更新する。
+- 独立版用の `AGENTS.md` を追加し、Dairy Horizon専用のPhase 1規則を引き継がないことを明記。
+- v0.8の実装報告が参照する当時の証跡を `docs/evidence-v08/` へ保存。独立版の再検証結果とは区別する。
 
 ## 検証結果
 

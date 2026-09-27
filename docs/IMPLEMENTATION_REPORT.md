@@ -13,7 +13,7 @@
 
 生成した画面イメージではなく、実際にTypeScriptをビルドし、ブラウザ上で動かした成果物である。画面は簡略3Dを使用し、写実的な牛舎画像の再現を完成条件にはしなかった。
 
-![実装した3D画面。編集案Aに遮熱・断熱を追加した状態](../evidence/browser/roof-comparison-desktop.png)
+![実装した3D画面。編集案Aに遮熱・断熱を追加した状態](evidence-v08/browser/roof-comparison-desktop.png)
 
 ## 2. なぜ全面新規にしなかったか
 
@@ -106,7 +106,7 @@
 
 乳量の別表参照では、27℃・2.24m/s・RH65%・基準35kgに対して、95% = 33.25kg/頭/日を返す。表にない条件は返さない。
 
-正本：`evidence/integrated-example-results.json`。読込用の同じ設定は `examples/02-roof-comparison.json`。元の独立例での放熱値と異なるのは、アプリでは固定2m/sではなく幾何からの風速・捕水を使うためである。
+当時の結果：`docs/evidence-v08/integrated-example-results.json`。読込用の同じ設定は `examples/02-roof-comparison.json`。元の独立例での放熱値と異なるのは、アプリでは固定2m/sではなく幾何からの風速・捕水を使うためである。
 
 ## 5. 今回実行した検証
 
@@ -127,12 +127,14 @@
 
 ### 検証記録
 
-- `evidence/typecheck.log` / `unit-tests.log` / `build.log`
-- `evidence/python-thermal.log` / `python-fertility.log`
-- `evidence/browser-tests.log` / `browser-results.xml`
-- `evidence/browser/test-runs/`：WebGLでの20操作ケースの実行状況。別の1ケースはWebGLを故意に使えなくしたSVGフォールバック試験。
-- `evidence/verification-summary.json`：環境と集約結果。
-- `evidence/browser/`：実際のデスクトップ・390px幅の画面。
+以下は独立版へ移した当時の記録。現在の検証結果は `docs/STANDALONE_VALIDATION.md` を参照する。
+
+- `docs/evidence-v08/typecheck.log` / `unit-tests.log` / `build.log`
+- `docs/evidence-v08/python-thermal.log` / `python-fertility.log`
+- `docs/evidence-v08/browser-tests.log` / `browser-results.xml`
+- `docs/evidence-v08/browser/test-runs/`：WebGLでの20操作ケースの実行状況。別の1ケースはWebGLを故意に使えなくしたSVGフォールバック試験。
+- `docs/evidence-v08/verification-summary.json`：環境と集約結果。
+- `docs/evidence-v08/browser/`：実際のデスクトップ・390px幅の画面。
 
 ## 6. 技術構成で意図的に変えたこと
 

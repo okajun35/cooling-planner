@@ -92,7 +92,9 @@ Python参照実装の確認：
 
 `docs/REUSE_MAP.json`：v0.4とのファイル別比較とSHA-256。
 
-`evidence/`：この版で実行したテストログ・実画面・計算結果。
+`docs/evidence-v08/`：切り出し前のv0.8実装時のログ・画面・計算結果。
+
+`evidence/`：テスト実行時の出力先。Git管理対象外。
 
 `reference/`：照合に使用した元のPythonモデルと仕様。
 
@@ -102,3 +104,4 @@ Python参照実装の確認：
 
 - [遮熱モデルと乳量参照表示の課題](docs/MODEL_REVIEW_2026-09-27.md)：評価結果、感度確認、未実装の改善候補。
 - [単独リポジトリへの切り出し](docs/STANDALONE_REPOSITORY.md)：必要ファイルの書き出し、独立したビルド・起動、Git初期化の手順。
+- [AGENTS.md](AGENTS.md)：独立版で作業するエージェント向けの範囲・検証規則。

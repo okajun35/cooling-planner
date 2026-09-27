@@ -1,0 +1,389 @@
+{
+  "model": "cooling-integrated-v0.8",
+  "schemaVersion": 8,
+  "inputHash": "e727a08363b38360",
+  "durationSec": 3600,
+  "weather": {
+    "temperatureC": 32,
+    "relativeHumidityPct": 70,
+    "pressurePa": 101325,
+    "backgroundSpeedMps": 0.2,
+    "ventilationM3sPerM2": 0.015,
+    "solarRoofWm2": 800
+  },
+  "selectedProbeId": "feed-07",
+  "baselineDescription": "既存ファン10台＋ソーカー12個、屋根対策なし。無設備との比較ではない。",
+  "scenarios": [
+    {
+      "id": "baseline",
+      "name": "基準案",
+      "roof": {
+        "meanOuterC": 61.75593545919185,
+        "meanUnderC": 57.882716096993576,
+        "meanAirC": 36.466920221999146,
+        "meanRadiantC": 41.79616819246181,
+        "areaM2": 921.2939952045708,
+        "suppliedL": 0,
+        "evaporatedKg": 0,
+        "runoffL": 0,
+        "finalWaterKg": 0,
+        "waterResidualKg": 0,
+        "energyResidualMaxWm2": 2.2947688194108196e-9
+      },
+      "selectedPoint": {
+        "probeId": "feed-07",
+        "inputHash": "e727a08363b38360",
+        "modelVersion": "cooling-integrated-v0.8",
+        "meanSpeedMps": 1.2860388994425496,
+        "meanAirTemperatureC": 36.466920221999146,
+        "meanRelativeHumidityPct": 54.59910807600633,
+        "meanQrefW": 233.68248281757772,
+        "deltaQrefW": 0,
+        "components": {
+          "convectionW": -53.04773418634494,
+          "radiationW": -199.29613780429253,
+          "baseEvaporationW": 70.37267511017112,
+          "soakerEvaporationW": 415.6536796980441,
+          "condensationW": 0
+        },
+        "parameterEnvelopeW": [
+          0,
+          0
+        ],
+        "profileDeltas": {
+          "reference": 0,
+          "low": 0,
+          "high": 0
+        },
+        "status": "valid",
+        "warnings": [],
+        "cellId": "cell-8-2",
+        "captureFraction": 0.66015625,
+        "film": {
+          "capturedKg": 8.582031249999982,
+          "condensedKg": 0,
+          "evaporatedKg": 0.6157832291822803,
+          "runoffKg": 7.765975229553386,
+          "finalKg": 0.2002727912642378,
+          "maxResidualKg": 3.642919299551295e-17
+        },
+        "meanRadiantC": 41.79616819246181,
+        "meanFeelsLikeC": 29.66270091484021,
+        "milk": {
+          "status": "out_of_scope",
+          "ratioPct": null,
+          "kgPerDay": null,
+          "reasons": [
+            "気温は27℃・35℃のみ",
+            "風速は0.18・2.24・4.02m/sのみ",
+            "湿度は60〜70%のみ"
+          ]
+        },
+        "fertility": {
+          "probability": 0.22033534484527012,
+          "oddsRatio": 0.4239040657836599,
+          "thi": 75.36800000000001,
+          "category": "高暑熱区分",
+          "source": "manual",
+          "exposureAssumed": true,
+          "status": "available_reference",
+          "reasons": []
+        }
+      },
+      "resources": {
+        "fanKwhPerDay": 63.99999999999999,
+        "pumpKwhPerDay": 0.3333333333333333,
+        "waterLPerDay": 1248.0000000000002,
+        "totalKwhPerDay": 64.33333333333333,
+        "systems": [
+          {
+            "kind": "soaker",
+            "waterL": 1248.0000000000002,
+            "pumpKwh": 0.3333333333333333,
+            "onTotalSec": 4800
+          },
+          {
+            "kind": "mist",
+            "waterL": 0,
+            "pumpKwh": 0,
+            "onTotalSec": 0
+          },
+          {
+            "kind": "roof",
+            "waterL": 0,
+            "pumpKwh": 0,
+            "onTotalSec": 0
+          }
+        ]
+      },
+      "trialWaterL": 156.00000000000003,
+      "trialKwh": 4.041666666666666
+    },
+    {
+      "id": "working-soaker",
+      "name": "編集案 A",
+      "roof": {
+        "meanOuterC": 46.66921415427634,
+        "meanUnderC": 34.86324258186524,
+        "meanAirC": 32.981384324036846,
+        "meanRadiantC": 33.01128963826435,
+        "areaM2": 921.2939952045708,
+        "suppliedL": 0,
+        "evaporatedKg": 0,
+        "runoffL": 0,
+        "finalWaterKg": 0,
+        "waterResidualKg": 0,
+        "energyResidualMaxWm2": 2.9615634389301704e-9
+      },
+      "selectedPoint": {
+        "probeId": "feed-07",
+        "inputHash": "e727a08363b38360",
+        "modelVersion": "cooling-integrated-v0.8",
+        "meanSpeedMps": 1.2860388994425496,
+        "meanAirTemperatureC": 32.981384324036846,
+        "meanRelativeHumidityPct": 66.23421216226613,
+        "meanQrefW": 617.295913797275,
+        "deltaQrefW": 383.61343097969734,
+        "components": {
+          "convectionW": 72.99850816489335,
+          "radiationW": 55.88039125040292,
+          "baseEvaporationW": 70.77198150556067,
+          "soakerEvaporationW": 417.64503287641804,
+          "condensationW": 0
+        },
+        "parameterEnvelopeW": [
+          351.76650744178824,
+          417.54976802152436
+        ],
+        "profileDeltas": {
+          "reference": 383.61343097969734,
+          "low": 351.76650744178824,
+          "high": 417.54976802152436
+        },
+        "status": "valid",
+        "warnings": [],
+        "cellId": "cell-8-2",
+        "captureFraction": 0.66015625,
+        "film": {
+          "capturedKg": 8.582031249999982,
+          "condensedKg": 0,
+          "evaporatedKg": 0.618733382039131,
+          "runoffKg": 7.763483919692768,
+          "finalKg": 0.19981394826803248,
+          "maxResidualKg": 4.5102810375396984e-17
+        },
+        "meanRadiantC": 33.01128963826435,
+        "meanFeelsLikeC": 26.177165016876135,
+        "milk": {
+          "status": "out_of_scope",
+          "ratioPct": null,
+          "kgPerDay": null,
+          "reasons": [
+            "気温は27℃・35℃のみ",
+            "風速は0.18・2.24・4.02m/sのみ"
+          ]
+        },
+        "fertility": {
+          "probability": 0.22033534484527012,
+          "oddsRatio": 0.4239040657836599,
+          "thi": 75.36800000000001,
+          "category": "高暑熱区分",
+          "source": "manual",
+          "exposureAssumed": true,
+          "status": "available_reference",
+          "reasons": []
+        }
+      },
+      "resources": {
+        "fanKwhPerDay": 63.99999999999999,
+        "pumpKwhPerDay": 0.3333333333333333,
+        "waterLPerDay": 1248.0000000000002,
+        "totalKwhPerDay": 64.33333333333333,
+        "systems": [
+          {
+            "kind": "soaker",
+            "waterL": 1248.0000000000002,
+            "pumpKwh": 0.3333333333333333,
+            "onTotalSec": 4800
+          },
+          {
+            "kind": "mist",
+            "waterL": 0,
+            "pumpKwh": 0,
+            "onTotalSec": 0
+          },
+          {
+            "kind": "roof",
+            "waterL": 0,
+            "pumpKwh": 0,
+            "onTotalSec": 0
+          }
+        ]
+      },
+      "trialWaterL": 156.00000000000003,
+      "trialKwh": 4.041666666666666
+    },
+    {
+      "id": "working-mist",
+      "name": "編集案 B",
+      "roof": {
+        "meanOuterC": 61.75593545919185,
+        "meanUnderC": 57.882716096993576,
+        "meanAirC": 36.466920221999146,
+        "meanRadiantC": 41.79616819246181,
+        "areaM2": 921.2939952045708,
+        "suppliedL": 0,
+        "evaporatedKg": 0,
+        "runoffL": 0,
+        "finalWaterKg": 0,
+        "waterResidualKg": 0,
+        "energyResidualMaxWm2": 2.2947688194108196e-9
+      },
+      "selectedPoint": {
+        "probeId": "feed-07",
+        "inputHash": "e727a08363b38360",
+        "modelVersion": "cooling-integrated-v0.8",
+        "meanSpeedMps": 1.2860388994425496,
+        "meanAirTemperatureC": 34.82578529175089,
+        "meanRelativeHumidityPct": 63.67928646080591,
+        "meanQrefW": -125.5961709565112,
+        "deltaQrefW": -359.2786537740889,
+        "components": {
+          "convectionW": 6.300066899224571,
+          "radiationW": -199.29613780429253,
+          "baseEvaporationW": 67.39989994855677,
+          "soakerEvaporationW": 0,
+          "condensationW": 0
+        },
+        "parameterEnvelopeW": [
+          -465.727268371122,
+          -248.67061637555045
+        ],
+        "profileDeltas": {
+          "reference": -359.2786537740889,
+          "low": -248.67061637555045,
+          "high": -465.727268371122
+        },
+        "status": "valid",
+        "warnings": [],
+        "cellId": "cell-8-2",
+        "captureFraction": 0,
+        "film": {
+          "capturedKg": 0,
+          "condensedKg": 0,
+          "evaporatedKg": 0,
+          "runoffKg": 0,
+          "finalKg": 0,
+          "maxResidualKg": 0
+        },
+        "meanRadiantC": 41.79616819246181,
+        "meanFeelsLikeC": 28.021565984591817,
+        "milk": {
+          "status": "out_of_scope",
+          "ratioPct": null,
+          "kgPerDay": null,
+          "reasons": [
+            "時間変動する条件は対象外",
+            "気温は27℃・35℃のみ",
+            "風速は0.18・2.24・4.02m/sのみ",
+            "湿度は60〜70%のみ"
+          ]
+        },
+        "fertility": {
+          "probability": 0.22033534484527012,
+          "oddsRatio": 0.4239040657836599,
+          "thi": 75.36800000000001,
+          "category": "高暑熱区分",
+          "source": "manual",
+          "exposureAssumed": true,
+          "status": "available_reference",
+          "reasons": []
+        }
+      },
+      "resources": {
+        "fanKwhPerDay": 63.99999999999999,
+        "pumpKwhPerDay": 1.6,
+        "waterLPerDay": 115.2,
+        "totalKwhPerDay": 65.6,
+        "systems": [
+          {
+            "kind": "soaker",
+            "waterL": 0,
+            "pumpKwh": 0,
+            "onTotalSec": 0
+          },
+          {
+            "kind": "mist",
+            "waterL": 115.2,
+            "pumpKwh": 1.6,
+            "onTotalSec": 5760
+          },
+          {
+            "kind": "roof",
+            "waterL": 0,
+            "pumpKwh": 0,
+            "onTotalSec": 0
+          }
+        ]
+      },
+      "trialWaterL": 14.4,
+      "trialKwh": 4.199999999999999
+    }
+  ],
+  "milkExample": {
+    "status": "available",
+    "ratioPct": 95,
+    "kgPerDay": 33.25,
+    "reasons": []
+  },
+  "fertilityExamples": [
+    {
+      "temperatureC": 15,
+      "rh": 70,
+      "probability": 0.4,
+      "oddsRatio": 1,
+      "thi": 58.835,
+      "category": "基準区分",
+      "source": "manual",
+      "exposureAssumed": true,
+      "status": "available_reference",
+      "reasons": []
+    },
+    {
+      "temperatureC": 20,
+      "rh": 70,
+      "probability": 0.3298312837763398,
+      "oddsRatio": 0.7382423465726119,
+      "thi": 66.35,
+      "category": "軽度区分",
+      "source": "manual",
+      "exposureAssumed": true,
+      "status": "available_reference",
+      "reasons": []
+    },
+    {
+      "temperatureC": 22,
+      "rh": 70,
+      "probability": 0.24873216323314762,
+      "oddsRatio": 0.496624807545845,
+      "thi": 69.356,
+      "category": "中等度区分",
+      "source": "manual",
+      "exposureAssumed": true,
+      "status": "available_reference",
+      "reasons": []
+    },
+    {
+      "temperatureC": 26,
+      "rh": 70,
+      "probability": 0.22033534484527012,
+      "oddsRatio": 0.4239040657836599,
+      "thi": 75.36800000000001,
+      "category": "高暑熱区分",
+      "source": "manual",
+      "exposureAssumed": true,
+      "status": "available_reference",
+      "reasons": []
+    }
+  ]
+}

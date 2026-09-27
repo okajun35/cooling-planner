@@ -1,0 +1,25 @@
+test_baseline (test_fertility_reference.FertilityReferenceTests.test_baseline) ... ok
+test_coefficients_not_smoothed (test_fertility_reference.FertilityReferenceTests.test_coefficients_not_smoothed) ... ok
+test_constant_scenario (test_fertility_reference.FertilityReferenceTests.test_constant_scenario) ... ok
+test_deterministic (test_fertility_reference.FertilityReferenceTests.test_deterministic) ... ok
+test_invalid_baseline (test_fertility_reference.FertilityReferenceTests.test_invalid_baseline) ... ok
+test_invalid_period_means (test_fertility_reference.FertilityReferenceTests.test_invalid_period_means) ... ok
+test_medium_all (test_fertility_reference.FertilityReferenceTests.test_medium_all) ... ok
+test_missing_period (test_fertility_reference.FertilityReferenceTests.test_missing_period) ... ok
+test_no_implicit_exposure_extension (test_fertility_reference.FertilityReferenceTests.test_no_implicit_exposure_extension) ... ok
+test_no_interpolation_within_category (test_fertility_reference.FertilityReferenceTests.test_no_interpolation_within_category) ... ok
+test_odds_not_risk_multiplier (test_fertility_reference.FertilityReferenceTests.test_odds_not_risk_multiplier) ... ok
+test_period_means (test_fertility_reference.FertilityReferenceTests.test_period_means) ... ok
+test_periods_cover_52_days_without_overlap (test_fertility_reference.FertilityReferenceTests.test_periods_cover_52_days_without_overlap) ... ok
+test_rh_invalid (test_fertility_reference.FertilityReferenceTests.test_rh_invalid) ... ok
+test_severe_all (test_fertility_reference.FertilityReferenceTests.test_severe_all) ... ok
+test_small_all (test_fertility_reference.FertilityReferenceTests.test_small_all) ... ok
+test_thi_boundaries (test_fertility_reference.FertilityReferenceTests.test_thi_boundaries) ... ok
+test_thi_formula (test_fertility_reference.FertilityReferenceTests.test_thi_formula) ... ok
+test_unknown_category (test_fertility_reference.FertilityReferenceTests.test_unknown_category) ... ok
+test_unsupported_population (test_fertility_reference.FertilityReferenceTests.test_unsupported_population) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.001s
+
+OK

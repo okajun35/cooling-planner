@@ -1,0 +1,59 @@
+{
+  "version": "0.8.0-preview.1",
+  "createdAtUtc": "2026-09-26T08:05:02.597138+00:00",
+  "environment": {
+    "node": "22.16.0",
+    "typescript": "5.8.3",
+    "python": "3.13.5",
+    "browser": "Chromium / Xvfb / SwiftShader",
+    "browser_loading": "self-contained HTML injected into about:blank; NOT HTTP acceptance"
+  },
+  "checks": {
+    "typecheck": {
+      "passed": true,
+      "log": "typecheck.log"
+    },
+    "javascript": {
+      "passed": 62,
+      "failed": 0,
+      "log": "unit-tests.log",
+      "includes": "38 existing tests + 24 new tests; 8 thermal and 4 fertility reference example comparisons"
+    },
+    "python_thermal": {
+      "passed": 17,
+      "failed": 0,
+      "log": "python-thermal.log"
+    },
+    "python_fertility": {
+      "passed": 20,
+      "failed": 0,
+      "log": "python-fertility.log"
+    },
+    "browser": {
+      "passed": 21,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 163.993,
+      "pageErrors": 0,
+      "log": "browser-tests.log",
+      "loading": "inline own HTML; actual pointer, WebGL, Worker, download/upload interactions"
+    },
+    "build": {
+      "passed": true,
+      "log": "build.log"
+    }
+  },
+  "not_verified": [
+    "Public HTTPS / AWS hosting",
+    "Normal HTTP browser navigation (ERR_BLOCKED_BY_ADMINISTRATOR)",
+    "file:// browser opening",
+    "Windows/macOS/Android/iOS physical devices and Safari",
+    "Physical farm model accuracy"
+  ],
+  "notes": [
+    "First browser pass had one test selector syntax failure; corrected and final full run all21 passed.",
+    "Python unit results are reference model regression, not full app or scientific validation.",
+    "Browser timing is diagnostic, not a benchmark."
+  ]
+}

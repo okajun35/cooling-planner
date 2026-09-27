@@ -1,0 +1,242 @@
+
+> cooling-planner@0.8.0-preview.1 test
+> tsc && node --test tests/unit/*.test.mjs tests/integration/*.test.mjs
+
+TAP version 13
+# Subtest: IT02: baseline deep clone / direct edits rejected
+ok 1 - IT02: baseline deep clone / direct edits rejected
+  ---
+  duration_ms: 25.164551
+  type: 'test'
+  ...
+# Subtest: IT03/05: shared environment and changed pose alter result input
+ok 2 - IT03/05: shared environment and changed pose alter result input
+  ---
+  duration_ms: 1377.663121
+  type: 'test'
+  ...
+# Subtest: IT07/08: dimension update changes all anchored layouts, exact one-step undo
+ok 3 - IT07/08: dimension update changes all anchored layouts, exact one-step undo
+  ---
+  duration_ms: 9.072337
+  type: 'test'
+  ...
+# Subtest: IT09: lossless JSON state and recalculated results
+ok 4 - IT09: lossless JSON state and recalculated results
+  ---
+  duration_ms: 1862.524101
+  type: 'test'
+  ...
+# Subtest: IT10/11: bad import is atomic and old format retains current project
+ok 5 - IT10/11: bad import is atomic and old format retains current project
+  ---
+  duration_ms: 8.790976
+  type: 'test'
+  ...
+# Subtest: IT12: older worker results cannot overwrite a newer request
+ok 6 - IT12: older worker results cannot overwrite a newer request
+  ---
+  duration_ms: 0.248652
+  type: 'test'
+  ...
+# Subtest: gesture transaction: many previews = one undo / cancel is clean
+ok 7 - gesture transaction: many previews = one undo / cancel is clean
+  ---
+  duration_ms: 14.720187
+  type: 'test'
+  ...
+# Subtest: fair water comparison explicitly copies current fans, leaves baseline unchanged
+ok 8 - fair water comparison explicitly copies current fans, leaves baseline unchanged
+  ---
+  duration_ms: 4.143244
+  type: 'test'
+  ...
+# Subtest: UT20 / IT06: moving soaker keeps water but reduces point capture
+ok 9 - UT20 / IT06: moving soaker keeps water but reduces point capture
+  ---
+  duration_ms: 1447.775265
+  type: 'test'
+  ...
+# Subtest: duplicate / delete / addition / undo preserve unique IDs and selection
+ok 10 - duplicate / delete / addition / undo preserve unique IDs and selection
+  ---
+  duration_ms: 13.979931
+  type: 'test'
+  ...
+# Subtest: IT01: initial barn has 50 stalls / 70 independent probes / three scenarios
+ok 11 - IT01: initial barn has 50 stalls / 70 independent probes / three scenarios
+  ---
+  duration_ms: 5.437537
+  type: 'test'
+  ...
+# Subtest: UT03/04: axial fan fixture and back rejection
+ok 12 - UT03/04: axial fan fixture and back rejection
+  ---
+  duration_ms: 1.201089
+  type: 'test'
+  ...
+# Subtest: UT05: only explicit solids occlude; segment intersection
+ok 13 - UT05: only explicit solids occlude; segment intersection
+  ---
+  duration_ms: 2.050173
+  type: 'test'
+  ...
+# Subtest: UT06: identical fan duplicate leaves max-jet speed, adds power
+ok 14 - UT06: identical fan duplicate leaves max-jet speed, adds power
+  ---
+  duration_ms: 2.952495
+  type: 'test'
+  ...
+# Subtest: UT09: capture is geometric, outside patch / blocked is zero
+ok 15 - UT09: capture is geometric, outside patch / blocked is zero
+  ---
+  duration_ms: 2.747016
+  type: 'test'
+  ...
+# Subtest: UT11/12: water balance / OFF evaporation / dry film
+ok 16 - UT11/12: water balance / OFF evaporation / dry film
+  ---
+  duration_ms: 5.474491
+  type: 'test'
+  ...
+# Subtest: UT15/16: no extra air latent term and negative condensation
+ok 17 - UT15/16: no extra air latent term and negative condensation
+  ---
+  duration_ms: 1.260242
+  type: 'test'
+  ...
+# Subtest: UT17/19: exact initial daily water and electricity including pumps
+ok 18 - UT17/19: exact initial daily water and electricity including pumps
+  ---
+  duration_ms: 1.140029
+  type: 'test'
+  ...
+# Subtest: UT20: moving devices does not change daily resources
+ok 19 - UT20: moving devices does not change daily resources
+  ---
+  duration_ms: 2.217415
+  type: 'test'
+  ...
+# Subtest: UT21/22: equal scenarios zero delta / common profiles form envelope
+ok 20 - UT21/22: equal scenarios zero delta / common profiles form envelope
+  ---
+  duration_ms: 2405.219845
+  type: 'test'
+  ...
+# Subtest: UT10 / hash: camera, particles, selection do not affect physics hash
+ok 21 - UT10 / hash: camera, particles, selection do not affect physics hash
+  ---
+  duration_ms: 4.231869
+  type: 'test'
+  ...
+# Subtest: IT10: reject NaN, bad model version, unknown anchors and oversized device counts
+ok 22 - IT10: reject NaN, bad model version, unknown anchors and oversized device counts
+  ---
+  duration_ms: 8.973594
+  type: 'test'
+  ...
+# Subtest: IT10/11: malformed and old saves rejected; prototype keys rejected
+ok 23 - IT10/11: malformed and old saves rejected; prototype keys rejected
+  ---
+  duration_ms: 3.712213
+  type: 'test'
+  ...
+# Subtest: UT01: 32 C / 70% THI = 84.32
+ok 24 - UT01: 32 C / 70% THI = 84.32
+  ---
+  duration_ms: 1.808352
+  type: 'test'
+  ...
+# Subtest: UT02: saved yaw and pitch use X/elevation/Y
+ok 25 - UT02: saved yaw and pitch use X/elevation/Y
+  ---
+  duration_ms: 1.161119
+  type: 'test'
+  ...
+# Subtest: UT07: convection stays negative above surface temperature
+ok 26 - UT07: convection stays negative above surface temperature
+  ---
+  duration_ms: 0.179135
+  type: 'test'
+  ...
+# Subtest: UT08: convection zero and independent difference fixture
+ok 27 - UT08: convection zero and independent difference fixture
+  ---
+  duration_ms: 0.105121
+  type: 'test'
+  ...
+# Subtest: UT13: saturated mist causes no cooling or evaporation
+ok 28 - UT13: saturated mist causes no cooling or evaporation
+  ---
+  duration_ms: 0.332215
+  type: 'test'
+  ...
+# Subtest: UT18: finite-cycle endpoints, not daily average duty
+ok 29 - UT18: finite-cycle endpoints, not daily average duty
+  ---
+  duration_ms: 0.575863
+  type: 'test'
+  ...
+# Subtest: pws independent 25 C ASHRAE reference
+ok 30 - pws independent 25 C ASHRAE reference
+  ---
+  duration_ms: 0.207002
+  type: 'test'
+  ...
+# Subtest: UT14 additional independent mist fixture (not the missing original fixture)
+ok 31 - UT14 additional independent mist fixture (not the missing original fixture)
+  ---
+  duration_ms: 1.176736
+  type: 'test'
+  ...
+# Subtest: UT23: dt 1 s vs .5 s at all 70 default points and all scenarios
+ok 32 - UT23: dt 1 s vs .5 s at all 70 default points and all scenarios
+  ---
+  duration_ms: 2050.614469
+  type: 'test'
+  ...
+# Subtest: UT24: 256 vs 1024 rays at all default point patches and cooling outputs
+ok 33 - UT24: 256 vs 1024 rays at all default point patches and cooling outputs
+  ---
+  duration_ms: 1210.672072
+  type: 'test'
+  ...
+# Subtest: UT10: all display switches leave numerical results bit-for-bit identical
+ok 34 - UT10: all display switches leave numerical results bit-for-bit identical
+  ---
+  duration_ms: 1128.617396
+  type: 'test'
+  ...
+# Subtest: resource pump stops for zero flow and disabled nozzles
+ok 35 - resource pump stops for zero flow and disabled nozzles
+  ---
+  duration_ms: 0.693969
+  type: 'test'
+  ...
+# Subtest: short fan run time is reflected in 60-minute mean speed
+ok 36 - short fan run time is reflected in 60-minute mean speed
+  ---
+  duration_ms: 853.776015
+  type: 'test'
+  ...
+# Subtest: invalid active device in closed room invalidates comparison, not stale values
+ok 37 - invalid active device in closed room invalidates comparison, not stale values
+  ---
+  duration_ms: 543.895282
+  type: 'test'
+  ...
+# Subtest: camera projection and inverse drag plane preserve metre coordinates
+ok 38 - camera projection and inverse drag plane preserve metre coordinates
+  ---
+  duration_ms: 0.834639
+  type: 'test'
+  ...
+1..38
+# tests 38
+# suites 0
+# pass 38
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5947.351194

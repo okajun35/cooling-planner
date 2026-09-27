@@ -1,0 +1,6 @@
+
+> cooling-planner@0.8.0-preview.1 build
+> tsc && node scripts/build-portable.mjs
+
+Built offline HTTP distribution and standalone HTML (231 KiB).
+Renderer: native WebGL. Runtime is self-contained; no CDN or API server.

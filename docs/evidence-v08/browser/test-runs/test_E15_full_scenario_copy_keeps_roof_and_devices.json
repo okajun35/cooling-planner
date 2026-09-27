@@ -1,0 +1,12 @@
+{
+  "mode": "inline about:blank",
+  "errors": [],
+  "metrics": {
+    "lastCalculationMs": 862.6000000238419,
+    "renderer": "Three.js r180",
+    "undoCount": 3,
+    "redoCount": 0,
+    "workerFailed": false,
+    "calculating": false
+  }
+}

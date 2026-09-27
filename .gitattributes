@@ -1,3 +1,5 @@
 # Preserve Markdown hard line breaks and the reference CSV's CRLF records.
 *.md whitespace=-blank-at-eol
 *.csv whitespace=cr-at-eol
+# Historical test logs are archived verbatim, including their final blank line.
+docs/evidence-v08/*.log whitespace=-blank-at-eof

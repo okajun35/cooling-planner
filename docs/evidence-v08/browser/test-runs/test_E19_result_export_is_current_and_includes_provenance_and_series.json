@@ -1,0 +1,12 @@
+{
+  "mode": "inline about:blank",
+  "errors": [],
+  "metrics": {
+    "lastCalculationMs": 1225.199999988079,
+    "renderer": "WebGL / ローカル描画",
+    "undoCount": 1,
+    "redoCount": 0,
+    "workerFailed": false,
+    "calculating": false
+  }
+}
