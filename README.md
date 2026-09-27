@@ -10,6 +10,8 @@ Node.js 22.12以上で、初回は `npm ci && npm run build`、以降は `npm st
 
 `cooling-planner-v0.8.html` は、CSS・JavaScript・計算Workerを内包した単体ファイルです。ZIPを展開し、PCのChrome/Edge等で開いてください。インターネット接続、ログイン、APIキーは不要な構成です。ブラウザの制限でローカルファイルを開けない場合は、下のローカルHTTP配信を利用してください。
 
+現在の目的・対象範囲は[現在計画](docs/CURRENT_PLAN.md)、設備操作から案比較までの受入条件案と現行コードの対応は[受入条件](docs/ACCEPTANCE_CRITERIA.md)を参照してください。
+
 検証範囲と結果は [独立版の検証記録](docs/STANDALONE_VALIDATION.md) に記載します。
 公開HTTPS、`file://`、実機のChrome/Edge/Safariの全組合せを確認したものではありません。
 
