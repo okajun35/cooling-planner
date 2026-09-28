@@ -12,15 +12,6 @@ HTML=(ROOT/'cooling-planner-v0.9.html').read_text()
 OUT=ROOT/'evidence/browser';OUT.mkdir(parents=True,exist_ok=True)
 (OUT/'test-runs').mkdir(exist_ok=True)
 
-@pytest.fixture(scope='session')
-def browser():
-    with sync_playwright() as p:
-        b=p.chromium.launch(executable_path=os.environ.get('CHROMIUM_PATH'),headless=os.environ.get('HEADLESS','1')!='0',args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage'])
-        try:
-            yield b
-        finally:
-            b.close()
-
 def ready(page):
     page.wait_for_function("window.__DCS__ && window.__DCS__.result() && document.querySelector('#status').dataset.state==='ready' && window.__DCS__.hash()===window.__DCS__.result().inputHash",timeout=45000)
 def snap(page):return page.evaluate('window.__DCS__.snapshot()')

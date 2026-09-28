@@ -1,7 +1,7 @@
 # Cooling Planner — MCP PoC 実装引継ぎ
 
-更新日：2026-09-28。状態：**実装前の計画**。
-本書は別のLLMが実装するための引継ぎ。今回の作業は文書作成のみ。
+更新日：2026-09-28。状態：**実装済み**（報告：[MCP_POC_IMPLEMENTATION_REPORT.md](MCP_POC_IMPLEMENTATION_REPORT.md)）。
+本書は別のLLMが実装するための引継ぎとして作成された。
 
 ## 1. 作る体験
 

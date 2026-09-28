@@ -88,7 +88,7 @@ Cooling Plannerへ旧Phase 1の制限・完成条件を適用しない。旧仕�
 2026-09-28追記：[MCP PoC実装引継ぎ](MCP_POC_IMPLEMENTATION_PLAN.md)を追加。
 外部AIとの会話から、開いている牛舎画面の状態取得・設備編集・案比較・Undoを行う。
 ローカル1人・1タブの簡単な構成とし、既存のStore・Workerを再利用する。
-MCPは未実装。本書と引継ぎ文書の追加は文書作業のみで、実装は別のLLMが担当する。
+MCP PoCは実装済み。接続手順・検証・制限は[実装報告](MCP_POC_IMPLEMENTATION_REPORT.md)とREADMEのMCP節を参照。
 
 2026-09-28追記：[区画別の暑熱・冷却可視化仕様](AREA_COOLING_VISUALIZATION_V0_1.md)を追加。
 牛床・採食・待機の面表示、放熱不足/改善の切替、区画詳細、エリア平均と設備作用の診断を定義した。

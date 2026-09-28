@@ -71,6 +71,45 @@ Python参照実装の確認：
 
 `node scripts/make-examples.mjs` で、検証済みの入力例と統合計算結果を再生成できます。先に `npm run build` を実行してください。
 
+## MCP PoC（外部AIクライアント連携）
+
+`docs/MCP_POC_IMPLEMENTATION_PLAN.md` のPoC実装です。外部のMCP対応AIクライアントが、開いている画面そのものを読み取り・操作します。状態の正本はブラウザのProjectStoreで、サーバー側は計算・保存のコピーを持ちません。
+
+### 起動と接続
+
+1. リポジトリ内で `npm ci && npm run build`。
+2. AIクライアントへ下記のstdioサーバーを登録して接続する（パスはリポジトリの実位置に合わせる。`npm run mcp` と同等）。
+
+```json
+{
+  "mcpServers": {
+    "cooling-planner": {
+      "command": "node",
+      "args": ["/home/hddwm390/tmp/cooling-planner/scripts/mcp-server.mjs"]
+    }
+  }
+}
+```
+
+Devin CLI ではリポジトリ内で次を実行します（`.devin/mcp_config.local.json` へ登録）。
+
+```bash
+devin mcp add cooling-planner -- node /home/hddwm390/tmp/cooling-planner/scripts/mcp-server.mjs
+```
+
+3. `http://127.0.0.1:4174/?mcp=1` を1タブで開く。このモードでは `npm start` は不要です。MCPプロセスが `dist-offline` の静的配信も担当します。
+4. AIから `get_state` を呼ぶ。
+
+ツールは `get_state` / `edit` / `set_view` / `get_results` / `undo` の5つです。編集は現在の案へ適用され、画面へ即時反映・既存経路で自動再計算されます。人の画面操作とMCPの操作は同じUndo履歴を共有します。
+
+- MCP SDKは `@modelcontextprotocol/server` 2.1.0（v2系）を使用し、lockfileで固定しています。
+- 通常の `npm start`（ポート4173）や単体HTMLでは従来どおり利用でき、`?mcp=1` なしではMCP接続を開始しません。
+- 配信とWebSocketは `127.0.0.1` 固定です。2タブ目の接続は拒否されます。認証・遠隔接続・複数ユーザー・アプリ内チャットはPoC対象外です。
+- ポート4174が使用中だとサーバーは起動時メッセージを出して終了します。手動起動の `npm run mcp` とAIクライアント起動の両方を同時に立ち上げないでください。環境変数 `COOLING_PLANNER_PORT` でポートを変えられます（ブラウザ側は開いたページのポートへ自動で接続します）。stdioクライアントが切断されるとサーバーは自動終了します。
+- 計算式・係数・保存スキーマは変更していません。
+
+ブラウザ結合確認：`CHROMIUM_PATH` を指定し `python3 -m pytest tests/e2e/test_mcp.py`（実際のMCP stdio会話で画面が変わることまで確認します）。
+
 ## 保存形式
 
 `schemaVersion: 9`。配置・屋根条件・気象・係数・参照モデルの仮定・日運転開始時刻・乳量モデル設定・表示設定を保存します。v8・v4のJSONは自動変換せず拒否し、現在の案を保持します。既存のv8本体・データを別途残してください。

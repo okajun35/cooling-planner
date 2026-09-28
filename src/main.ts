@@ -14,10 +14,12 @@ import {el,icon} from './ui/dom.js';
 import {renderControls,renderResults,renderSettings,renderReference,renderEvidence,renderAreas} from './ui/panels.js';
 import {renderTimeline,updateTime} from './ui/timeline.js';
 import type {ChartMetric} from './ui/timeline.js';
+import {createCommands} from './mcp/commands.js';
+import {startMcpBridge} from './mcp/bridge.js';
 
 declare global {interface Window {__DCS_WORKER_SOURCE__?:string;__DCS__?:unknown}}
 const store=new ProjectStore(createProject()),gate=new ResultGate();
-let result:SimulationResult|null=null,worker:Worker|null=null,scene:SceneView|null=null,mode='',calculating=false,lastCalculationMs=0,startTime=0,workerFailed=false,pending=false,invalid=false;
+let result:SimulationResult|null=null,worker:Worker|null=null,scene:SceneView|null=null,mode='',calculating=false,lastCalculationMs=0,startTime=0,workerFailed=false,pending=false,invalid=false,workerError:string|null=null;
 let chart:ChartMetric='qW',playing=false,playTimer:number|null=null,speed=120,jobTimer:number|null=null;
 const ROOT_KEY='cooling-planner-project-v9';
 let previousView=JSON.stringify(store.project.view),previousFull=store.project;
@@ -53,17 +55,17 @@ function makeWorker(){
   if(window.__DCS_WORKER_SOURCE__){const url=URL.createObjectURL(new Blob([window.__DCS_WORKER_SOURCE__],{type:'application/javascript'}));worker=new Worker(url);URL.revokeObjectURL(url)}
   else worker=new Worker(new URL('./worker.js',document.baseURI));
   worker.onmessage=(e:MessageEvent<Reply>)=>{if(!gate.accepts(e.data))return;const d=e.data;
-   if(d.kind==='error'){calculating=false;lastCalculationMs=performance.now()-startTime;workerFailed=true;result=null;showError(d.error)}
-   else if(d.kind==='thermal-result'){result=d.result;workerFailed=false/* keep calculating until the daily stage */}
+   if(d.kind==='error'){calculating=false;lastCalculationMs=performance.now()-startTime;workerFailed=true;workerError=d.error;result=null;showError(d.error)}
+   else if(d.kind==='thermal-result'){result=d.result;workerFailed=false;workerError=null/* keep calculating until the daily stage */}
    else if(d.kind==='daily-result'){if(result&&result.inputHash===d.inputHash)mergeDaily(result,d.daily,d.dailyMilkStatus);calculating=false;lastCalculationMs=performance.now()-startTime}
    renderResults(store.project,currentResult());renderAreas(store.project,currentResult());renderTimeline(store.project,currentResult(),chart);updateTime(store.project,currentResult());syncScene();status();
   };
-  worker.onerror=()=>{calculating=false;workerFailed=true;showError('計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。');status()};
+  worker.onerror=()=>{calculating=false;workerFailed=true;workerError='計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。';showError(workerError);status()};
  }catch(e){workerFailed=true;showError(String(e));status()}
 }
 function recalculate(){
  if(jobTimer!==null)clearTimeout(jobTimer);const hash=inputHash(store.committed),jobId=gate.expect(hash);
- if(calculating){worker?.terminate();worker=null}calculating=true;status();
+ if(calculating){worker?.terminate();worker=null}calculating=true;workerError=null;status();
  jobTimer=window.setTimeout(()=>{jobTimer=null;if(!worker)makeWorker();if(!worker){calculating=false;status();return}startTime=performance.now();worker.postMessage({jobId,inputHash:hash,project:store.committed})},100);
 }
 function stopPlayback(){playing=false;if(playTimer!==null)clearInterval(playTimer);playTimer=null;el('play-button').innerHTML=`${icon('play',15)} 再生`}
@@ -149,3 +151,7 @@ document.addEventListener('keydown',e=>{
 });
 Object.defineProperty(window,'__DCS__',{value:{snapshot:()=>structuredClone(store.project),result:()=>structuredClone(currentResult()),hash:()=>inputHash(store.committed),screenPoint:(x:number,h:number,y:number)=>scene?.screenPoint?.([x,h,y]),metrics:()=>({lastCalculationMs,renderer:scene?.rendererName,undoCount:store.undoCount,redoCount:store.redoCount,workerFailed,calculating})},writable:false});
 makeWorker();recalculate();render();
+if(location.protocol==='http:'&&new URLSearchParams(location.search).get('mcp')==='1'){
+ const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback});
+ startMcpBridge({url:`ws://${location.host}/bridge`,commands,notify:toast});
+}

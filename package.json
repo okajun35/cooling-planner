@@ -12,6 +12,7 @@
     "build": "tsc && node scripts/build-portable.mjs",
     "build:portable": "npm run build",
     "start": "node scripts/serve.mjs",
+    "mcp": "node scripts/mcp-server.mjs",
     "test:browser": "python3 -m pytest tests/e2e -v"
   },
   "devDependencies": {
@@ -19,6 +20,9 @@
     "typescript": "5.8.3"
   },
   "dependencies": {
-    "three": "0.180.0"
+    "@modelcontextprotocol/server": "2.1.0",
+    "three": "0.180.0",
+    "ws": "8.22.0",
+    "zod": "4.6.5"
   }
 }

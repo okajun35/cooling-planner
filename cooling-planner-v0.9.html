@@ -62,8 +62,10 @@ const layout_js_1 = require("./ui/layout.js");
 const dom_js_1 = require("./ui/dom.js");
 const panels_js_1 = require("./ui/panels.js");
 const timeline_js_1 = require("./ui/timeline.js");
+const commands_js_1 = require("./mcp/commands.js");
+const bridge_js_1 = require("./mcp/bridge.js");
 const store = new store_js_1.ProjectStore((0, defaults_js_1.createProject)()), gate = new protocol_js_1.ResultGate();
-let result = null, worker = null, scene = null, mode = '', calculating = false, lastCalculationMs = 0, startTime = 0, workerFailed = false, pending = false, invalid = false;
+let result = null, worker = null, scene = null, mode = '', calculating = false, lastCalculationMs = 0, startTime = 0, workerFailed = false, pending = false, invalid = false, workerError = null;
 let chart = 'qW', playing = false, playTimer = null, speed = 120, jobTimer = null;
 const ROOT_KEY = 'cooling-planner-project-v9';
 let previousView = JSON.stringify(store.project.view), previousFull = store.project;
@@ -151,12 +153,14 @@ function makeWorker() {
                 calculating = false;
                 lastCalculationMs = performance.now() - startTime;
                 workerFailed = true;
+                workerError = d.error;
                 result = null;
                 showError(d.error);
             }
             else if (d.kind === 'thermal-result') {
                 result = d.result;
-                workerFailed = false; /* keep calculating until the daily stage */
+                workerFailed = false;
+                workerError = null; /* keep calculating until the daily stage */
             }
             else if (d.kind === 'daily-result') {
                 if (result && result.inputHash === d.inputHash)
@@ -171,7 +175,7 @@ function makeWorker() {
             syncScene();
             status();
         };
-        worker.onerror = () => { calculating = false; workerFailed = true; showError('計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。'); status(); };
+        worker.onerror = () => { calculating = false; workerFailed = true; workerError = '計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。'; showError(workerError); status(); };
     }
     catch (e) {
         workerFailed = true;
@@ -188,6 +192,7 @@ function recalculate() {
         worker = null;
     }
     calculating = true;
+    workerError = null;
     status();
     jobTimer = window.setTimeout(() => {
         jobTimer = null;
@@ -540,6 +545,10 @@ Object.defineProperty(window, '__DCS__', { value: { snapshot: () => structuredCl
 makeWorker();
 recalculate();
 render();
+if (location.protocol === 'http:' && new URLSearchParams(location.search).get('mcp') === '1') {
+    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback });
+    (0, bridge_js_1.startMcpBridge)({ url: `ws://${location.host}/bridge`, commands, notify: toast });
+}
 
 },
 "domain/project.js":function(require,module,exports){
@@ -11156,6 +11165,277 @@ function updateTime(p, r) {
     // Sample nearest to selected display time only; model input is never snapped or altered.
     const sample = q.series.reduce((a, b) => Math.abs(b.timeSec - time) < Math.abs(a.timeSec - time) ? b : a);
     (0, dom_js_1.el)('scene-live').innerHTML = `<small>時系列サンプル ${Math.floor(sample.timeSec / 60)}分${Math.round(sample.timeSec % 60)}秒</small><strong>放熱量 ${(0, dom_js_1.num)(sample.qW, 0)} W</strong><span>保持水 ${(0, dom_js_1.num)(sample.filmKg, 2)} kg</span>`;
+}
+
+},
+"mcp/commands.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createCommands = createCommands;
+const project_js_1 = require("../domain/project.js");
+const layout_js_1 = require("../template/layout.js");
+const faces_js_1 = require("../template/faces.js");
+const areaStats_js_1 = require("../model/areaStats.js");
+const simulation_js_1 = require("../model/simulation.js");
+const CONFIRM_INPUT = '画面の入力を確定してください';
+/** Short guidance also embedded in the MCP server instructions and tool descriptions. */
+const MODEL_NOTES = [
+    '最初にget_stateで現状・ID・選択対象を確認する。「この牛」は選択地点として解釈する。',
+    '座標はx=牛舎の長さ方向、y=幅方向、heightM=高さ。長さはm、向きはdeg。',
+    '編集は現在の案へ適用する。基準案は読取専用。update_environmentは全案に効く。',
+    '変更前を残す依頼はcopy_to_otherを使う。コピー先は既存の別案を上書きする。',
+    '数値説明はget_resultsの計算結果を使う。未計算・null・invalidをゼロと説明しない。',
+    'meanQrefWは地点の正味放熱量。referenceCoolingWPerCowは不足計算に用いる仮定値。',
+    'deltaQrefWは基準案からの放熱差。meanDeficitWは秒ごとの不足を積算した60分平均。',
+    '区画平均は代表地点の単純平均。乳量の牛群平均・滞在時間加重とは異なる。',
+    'resourcesの単位はL/day、kWh/day。trialWaterL/trialKwhは60分試行分。日乳量の資源量はdailyMilk.resources。',
+    '地点のseriesを省いて返す平均値は、timeSecを変えても変化しない。',
+    '各面は代表地点の値。CFDや面内全域の計算ではない。',
+    '日乳量は仮説モデルの参考値。係数は明示的な仮定で、実牛舎での効果保証ではない。',
+    '「なぜ」の説明は風速・放射・放熱内訳・設備作用等を根拠にする。断定が難しいときは仮説と伝え、1条件だけ変えて比較する。',
+];
+const DEVICE_COMMON = ['x', 'y', 'heightM', 'yawDeg', 'pitchDownDeg', 'enabled'];
+const PATCH_FIELDS = {
+    fan: new Set([...DEVICE_COMMON, 'diameterM', 'outletSpeedMps', 'powerKw', 'hoursPerDay', 'dailyStartHour']),
+    nozzle: new Set([...DEVICE_COMMON, 'flowLpm', 'halfAngleDeg']),
+    roof: new Set(['reflectance', 'insulationM', 'sprayEnabled', 'flowLpmM2', 'onSec', 'offSec', 'hoursPerDay', 'dailyStartHour', 'pumpPowerKw']),
+    system: new Set(['enabled', 'onSec', 'offSec', 'hoursPerDay', 'dailyStartHour', 'pumpPowerKw']),
+    environment: new Set(['temperatureC', 'relativeHumidityPct', 'pressurePa', 'backgroundSpeedMps', 'ventilationM3sPerM2', 'solarRoofWm2']),
+};
+function ensureEditable(d) {
+    const s = d.status();
+    if (s.invalidInput || s.pendingInput || d.store.isDraft)
+        throw Error(CONFIRM_INPUT);
+}
+function checkPatch(patch, allowed, label) {
+    if (!patch || !Object.keys(patch).length)
+        throw Error('patchに変更対象のフィールドがありません');
+    const bad = Object.keys(patch).filter(k => !allowed.has(k));
+    if (bad.length)
+        throw Error(`${label}のpatchに許可されないフィールドがあります: ${bad.join(', ')}`);
+    return patch;
+}
+function layout(p) { return (0, layout_js_1.buildLayout)(p.template); }
+function scenarioDevices(p) { return (0, project_js_1.devices)((0, project_js_1.activeScenario)(p)); }
+function deviceById(p, id) {
+    const d = scenarioDevices(p).find(d => d.id === id);
+    if (!d)
+        throw Error(`設備が見つかりません: ${id}`);
+    return d;
+}
+function stripPoint(q) { const { series, qSeries, ...rest } = q; return rest; }
+/** Editable/calculating/result readiness shared by get_state and get_results. */
+function resultStatus(d) {
+    const s = d.status();
+    if (s.invalidInput)
+        return { status: 'editing', reason: '入力エラーがあります' };
+    if (d.store.isDraft)
+        return { status: 'editing', reason: '配置を編集中です' };
+    if (s.pendingInput)
+        return { status: 'editing', reason: '入力が未確定です' };
+    const r = d.currentResult();
+    // Never serve a result computed for a different committed input.
+    if (r && r.inputHash === (0, simulation_js_1.inputHash)(d.store.committed))
+        return { status: r.dailyMilkStatus === 'pending' ? 'thermal_ready' : 'ready' };
+    if (s.workerError)
+        return { status: 'error', reason: s.workerError };
+    return { status: 'calculating' };
+}
+function createCommands(d) {
+    const store = d.store;
+    function getState() {
+        const p = store.committed, l = layout(p), s = d.status();
+        return {
+            appVersion: p.appVersion, schemaVersion: p.schemaVersion, inputHash: (0, simulation_js_1.inputHash)(p),
+            baselineScenarioId: p.baselineScenarioId, activeScenarioId: p.activeScenarioId,
+            scenarios: p.scenarios.map(s => ({ id: s.id, name: s.name, readOnly: s.readOnly, roof: s.roof, fans: s.fans, waterSystems: s.waterSystems })),
+            template: p.template, environment: p.environment, view: p.view, milkSimulation: p.milkSimulation,
+            probes: l.probes.map(q => ({ id: q.id, label: q.label, kind: q.kind, x: q.x, y: q.y, heightM: q.heightM })),
+            areas: (0, faces_js_1.buildAreas)(l).map(a => ({ id: a.id, label: a.label, probeIds: a.probeIds, subtotal: a.subtotal ?? false })),
+            undoCount: store.undoCount, redoCount: store.redoCount,
+            draft: store.isDraft, pendingInput: s.pendingInput, invalidInput: s.invalidInput,
+            calculation: resultStatus(d).status,
+            modelNotes: MODEL_NOTES,
+        };
+    }
+    function edit(args) {
+        ensureEditable(d);
+        const p = () => store.committed;
+        const finish = (applied) => ({ operation: args.operation, activeScenarioId: p().activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(p()), undoCount: store.undoCount, ...applied });
+        switch (args.operation) {
+            case 'switch_scenario': {
+                if (!args.scenarioId)
+                    throw Error('scenarioIdが必要です');
+                store.switchScenario(args.scenarioId);
+                return finish({ scenario: (0, project_js_1.activeScenario)(p()).id });
+            }
+            case 'copy_to_other': {
+                store.copyActiveToOther();
+                return finish({ scenario: (0, project_js_1.activeScenario)(p()).id, name: (0, project_js_1.activeScenario)(p()).name });
+            }
+            case 'update_device': {
+                const dev = deviceById(p(), args.deviceId);
+                const patch = checkPatch(args.patch, (0, project_js_1.isFan)(dev) ? PATCH_FIELDS.fan : PATCH_FIELDS.nozzle, (0, project_js_1.isFan)(dev) ? 'ファン' : 'ノズル');
+                store.updateDevice(dev.id, patch);
+                return finish({ deviceId: dev.id, applied: deviceById(p(), dev.id) });
+            }
+            case 'update_roof': {
+                const patch = checkPatch(args.patch, PATCH_FIELDS.roof, '屋根');
+                store.updateRoof(patch);
+                return finish({ applied: (0, project_js_1.activeScenario)(p()).roof });
+            }
+            case 'update_system': {
+                if (!(0, project_js_1.activeScenario)(p()).waterSystems.some(w => w.id === args.systemId))
+                    throw Error(`系統が見つかりません: ${args.systemId}`);
+                const patch = checkPatch(args.patch, PATCH_FIELDS.system, '水系統');
+                store.updateSystem(args.systemId, patch);
+                return finish({ systemId: args.systemId, applied: (0, project_js_1.activeScenario)(p()).waterSystems.find(w => w.id === args.systemId) });
+            }
+            case 'update_environment': {
+                const patch = checkPatch(args.patch, PATCH_FIELDS.environment, '共通気象');
+                store.updateEnvironment(patch);
+                return finish({ applied: p().environment });
+            }
+            case 'add_device': {
+                if (args.kind !== 'fan' && args.kind !== 'soaker' && args.kind !== 'mist')
+                    throw Error(`不明な設備種別です: ${args.kind}`);
+                const id = args.kind === 'fan' ? store.addFan() : store.addNozzle(args.kind);
+                return finish({ deviceId: id, applied: deviceById(p(), id) });
+            }
+            case 'duplicate_device': {
+                deviceById(p(), args.deviceId);
+                const id = store.duplicateDevice(args.deviceId);
+                return finish({ deviceId: id, applied: deviceById(p(), id) });
+            }
+            case 'remove_device': {
+                deviceById(p(), args.deviceId);
+                store.removeDevice(args.deviceId);
+                return finish({ removedDeviceId: args.deviceId });
+            }
+            default: throw Error(`不明なoperationです: ${args.operation}`);
+        }
+    }
+    function setView(args) {
+        const p = store.committed, l = layout(p), patch = {};
+        if (args.mode !== undefined)
+            patch.mode = args.mode;
+        if (args.metric !== undefined)
+            patch.metric = args.metric;
+        if (args.analysis !== undefined)
+            patch.analysis = args.analysis;
+        if (args.roof !== undefined)
+            patch.roof = args.roof;
+        if (args.flow !== undefined)
+            patch.flow = args.flow;
+        if (args.particles !== undefined)
+            patch.particles = args.particles;
+        if (args.selectedAreaId !== undefined) {
+            if (args.selectedAreaId !== null && !(0, faces_js_1.buildAreas)(l).some(a => a.id === args.selectedAreaId))
+                throw Error(`区画が見つかりません: ${args.selectedAreaId}`);
+            patch.selectedAreaId = args.selectedAreaId;
+        }
+        if (args.selectedProbeId !== undefined) {
+            const q = l.probes.find(q => q.id === args.selectedProbeId);
+            if (!q)
+                throw Error(`地点が見つかりません: ${args.selectedProbeId}`);
+            patch.selectedProbeId = q.id;
+            patch.selectedAreaId = (0, faces_js_1.areaOfProbe)(l, q.id)?.id ?? null;
+        }
+        if (args.selectedDeviceId !== undefined) {
+            patch.selectedDeviceId = args.selectedDeviceId === null ? null : deviceById(p, args.selectedDeviceId).id;
+        }
+        if (args.timeSec !== undefined) {
+            d.stopPlayback();
+            patch.timeSec = args.timeSec;
+        }
+        store.setView(patch);
+        return store.committed.view;
+    }
+    function getResults(args = {}) {
+        const p = store.committed, l = layout(p);
+        const probeId = args.probeId ?? p.view.selectedProbeId;
+        const probe = l.probes.find(q => q.id === probeId);
+        if (!probe)
+            throw Error(`地点が見つかりません: ${probeId}`);
+        const wanted = args.scenarioId ? [args.scenarioId] : p.scenarios.map(s => s.id);
+        for (const id of wanted)
+            if (!p.scenarios.some(s => s.id === id))
+                throw Error(`案が見つかりません: ${id}`);
+        const st = resultStatus(d);
+        if (st.status !== 'ready' && st.status !== 'thermal_ready')
+            return { status: st.status, reason: st.reason, result: null };
+        const r = d.currentResult(), areas = (0, faces_js_1.buildAreas)(l);
+        const scenarios = wanted.map(id => {
+            const sr = r.scenarios.find(s => s.id === id), { series: _, ...roof } = sr.roof;
+            const meta = p.scenarios.find(s => s.id === id);
+            return { id, name: meta.name, readOnly: meta.readOnly, warnings: sr.warnings, areas: areas.map(a => (0, areaStats_js_1.areaStats)(sr.points, a)), resources: sr.resources, trialWaterL: sr.trialWaterL, trialKwh: sr.trialKwh, roof, dailyMilk: sr.dailyMilk };
+        });
+        const points = Object.fromEntries(wanted.map(id => {
+            const q = r.scenarios.find(s => s.id === id).points.find(q => q.probeId === probe.id);
+            return [id, q ? stripPoint(q) : null];
+        }));
+        const area = (0, faces_js_1.areaOfProbe)(l, probe.id);
+        return { status: st.status, result: {
+                inputHash: r.inputHash, modelVersion: r.modelVersion, durationSec: r.durationSec, dailyMilkStatus: r.dailyMilkStatus, baselineScenarioId: p.baselineScenarioId,
+                scenarios,
+                probe: { id: probe.id, label: probe.label, kind: probe.kind, areaId: area?.id ?? null, points },
+            } };
+    }
+    function undo() {
+        ensureEditable(d);
+        const changed = store.undoCount > 0;
+        store.undo();
+        return { changed, activeScenarioId: store.committed.activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(store.committed), undoCount: store.undoCount };
+    }
+    return { get_state: getState, edit, set_view: setView, get_results: getResults, undo };
+}
+
+},
+"mcp/bridge.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.startMcpBridge = startMcpBridge;
+/** One WebSocket per page; executes commands against the live UI and answers on the same socket.
+ * The Node MCP process owns reconnection policy — on close the user reloads the page. */
+function startMcpBridge(opts) {
+    let ws;
+    try {
+        ws = new WebSocket(opts.url);
+    }
+    catch {
+        opts.notify('MCPブリッジを開始できません');
+        return;
+    }
+    const reply = (id, payload) => {
+        try {
+            ws.send(JSON.stringify({ id, ...payload }));
+        }
+        catch { }
+    };
+    ws.onmessage = ev => {
+        let msg;
+        try {
+            msg = JSON.parse(String(ev.data));
+        }
+        catch {
+            return;
+        }
+        const { id, command, args } = msg;
+        if (typeof id !== 'number' || typeof command !== 'string')
+            return;
+        const fn = opts.commands[command];
+        if (!fn) {
+            reply(id, { ok: false, error: `不明な操作です: ${command}` });
+            return;
+        }
+        try {
+            reply(id, { ok: true, data: fn(args) });
+        }
+        catch (e) {
+            reply(id, { ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
+    };
+    ws.onclose = ev => { opts.notify(ev.reason ? `MCP接続が閉じられました: ${ev.reason}` : 'MCP接続が閉じられました。ページを再読込すると再接続します'); };
 }
 
 }};const cache={};function resolve(id,from){if(!id.startsWith('.')){if(modules[id])return id;throw Error('Optional dependency not included in the offline distribution: '+id)}const out=[];for(const x of (from.slice(0,from.lastIndexOf('/')+1)+id).split('/')){if(x==='..')out.pop();else if(x!=='.'&&x)out.push(x)}return out.join('/')}function load(id){if(cache[id])return cache[id].exports;const fn=modules[id];if(!fn)throw Error('Missing module: '+id);const module={exports:{}};cache[id]=module;fn(s=>load(resolve(s,id)),module,module.exports);return module.exports}load("main.js");})();</script></body></html>
