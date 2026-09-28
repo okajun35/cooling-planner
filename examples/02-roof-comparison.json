@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "references": {
     "milkModel": "milk-table-cowbell178-v1",
     "baselineMilkKgPerDay": 35,
@@ -13,7 +13,36 @@
       "profileVersion": 1
     }
   },
-  "appVersion": "0.8.0-preview.1",
+  "milkSimulation": {
+    "modelId": "milk-heat-deficit-v0.1",
+    "mode": "repeated-day",
+    "weatherMode": "constant-environment",
+    "operationPolicy": "daily-window-reset-v1",
+    "potentialMilkKgPerCowDay": 40,
+    "referenceCoolingWPerCow": 630,
+    "responseKgPerCowDayPerW": 0.01,
+    "maxLossFraction": 0.25,
+    "lagWeights": [
+      0.2,
+      0.5,
+      0.3
+    ],
+    "occupancyFractions": {
+      "stall": 0.5833333333333334,
+      "feeding": 0.25,
+      "waiting": 0.16666666666666666
+    },
+    "responseSensitivityKgPerCowDayPerW": [
+      0.005,
+      0.01,
+      0.015
+    ],
+    "warmupDurationSec": 86400,
+    "evaluationDurationSec": 86400,
+    "timeStepSec": 1,
+    "assumptionClass": "demo_assumption"
+  },
+  "appVersion": "0.9.0-preview.1",
   "template": {
     "id": "fs-amr1-50-guided-reference",
     "version": 1,
@@ -31,7 +60,7 @@
     "solarRoofWm2": 800
   },
   "model": {
-    "version": "cooling-integrated-v0.8",
+    "version": "cooling-integrated-v0.9",
     "roof": {
       "version": "cooling-thermal-v0.5-assumptions-1",
       "backgroundSensibleW": 10000,
@@ -102,6 +131,7 @@
         "onSec": 120,
         "offSec": 480,
         "hoursPerDay": 8,
+        "dailyStartHour": 8,
         "pumpPowerKw": 0.25
       },
       "fans": [
@@ -118,6 +148,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "feeding",
             "u": 0.1,
@@ -137,6 +168,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "feeding",
             "u": 0.6,
@@ -156,6 +188,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-A",
             "u": 0.1,
@@ -175,6 +208,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-A",
             "u": 0.6,
@@ -194,6 +228,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-B",
             "u": 0.1,
@@ -213,6 +248,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-B",
             "u": 0.6,
@@ -232,6 +268,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-C",
             "u": 0.1,
@@ -251,6 +288,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-C",
             "u": 0.6,
@@ -270,6 +308,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-D",
             "u": 0.1,
@@ -289,6 +328,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-D",
             "u": 0.6,
@@ -304,6 +344,7 @@
           "onSec": 120,
           "offSec": 600,
           "hoursPerDay": 8,
+          "dailyStartHour": 8,
           "pumpPowerKw": 0.25,
           "nozzles": [
             {
@@ -519,6 +560,7 @@
           "onSec": 60,
           "offSec": 240,
           "hoursPerDay": 8,
+          "dailyStartHour": 8,
           "pumpPowerKw": 1,
           "nozzles": [
             {
@@ -741,6 +783,7 @@
         "onSec": 120,
         "offSec": 480,
         "hoursPerDay": 8,
+        "dailyStartHour": 8,
         "pumpPowerKw": 0.25
       },
       "fans": [
@@ -757,6 +800,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "feeding",
             "u": 0.1,
@@ -776,6 +820,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "feeding",
             "u": 0.6,
@@ -795,6 +840,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-A",
             "u": 0.1,
@@ -814,6 +860,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-A",
             "u": 0.6,
@@ -833,6 +880,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-B",
             "u": 0.1,
@@ -852,6 +900,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-B",
             "u": 0.6,
@@ -871,6 +920,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-C",
             "u": 0.1,
@@ -890,6 +940,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-C",
             "u": 0.6,
@@ -909,6 +960,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-D",
             "u": 0.1,
@@ -928,6 +980,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-D",
             "u": 0.6,
@@ -943,6 +996,7 @@
           "onSec": 120,
           "offSec": 600,
           "hoursPerDay": 8,
+          "dailyStartHour": 8,
           "pumpPowerKw": 0.25,
           "nozzles": [
             {
@@ -1158,6 +1212,7 @@
           "onSec": 60,
           "offSec": 240,
           "hoursPerDay": 8,
+          "dailyStartHour": 8,
           "pumpPowerKw": 1,
           "nozzles": [
             {
@@ -1380,6 +1435,7 @@
         "onSec": 120,
         "offSec": 480,
         "hoursPerDay": 8,
+        "dailyStartHour": 8,
         "pumpPowerKw": 0.25
       },
       "fans": [
@@ -1396,6 +1452,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "feeding",
             "u": 0.1,
@@ -1415,6 +1472,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "feeding",
             "u": 0.6,
@@ -1434,6 +1492,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-A",
             "u": 0.1,
@@ -1453,6 +1512,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-A",
             "u": 0.6,
@@ -1472,6 +1532,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-B",
             "u": 0.1,
@@ -1491,6 +1552,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-B",
             "u": 0.6,
@@ -1510,6 +1572,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-C",
             "u": 0.1,
@@ -1529,6 +1592,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-C",
             "u": 0.6,
@@ -1548,6 +1612,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-D",
             "u": 0.1,
@@ -1567,6 +1632,7 @@
           "outletSpeedMps": 5,
           "powerKw": 0.4,
           "hoursPerDay": 16,
+          "dailyStartHour": 8,
           "anchor": {
             "zoneId": "stall-D",
             "u": 0.6,
@@ -1582,6 +1648,7 @@
           "onSec": 120,
           "offSec": 600,
           "hoursPerDay": 8,
+          "dailyStartHour": 8,
           "pumpPowerKw": 0.25,
           "nozzles": [
             {
@@ -1797,6 +1864,7 @@
           "onSec": 60,
           "offSec": 240,
           "hoursPerDay": 8,
+          "dailyStartHour": 8,
           "pumpPowerKw": 1,
           "nozzles": [
             {
@@ -2048,9 +2116,14 @@
       "note": "全酪連COWBELL No.178（2025年10月）p.6の送風体感温度式、p.8の乳量表。日本飼養標準2017・柴田ら1984の抜粋。乳量は掲載6条件・RH60〜70%のみ。"
     },
     {
+      "id": "milk-daily",
+      "classification": "design-assumption",
+      "note": "乳量仮説モデル milk-heat-deficit-v0.1 の係数は demo_assumption に相当する仮定。Y0=40kg、Qref=630W、beta=0.010、上限25%、遅れ0.2/0.5/0.3、滞在14/6/4時間相当。文献からの回帰係数ではなく、信頼区間でもない。"
+    },
+    {
       "id": "roof",
       "classification": "design-assumption",
-      "note": "屋根の係数と背景熱は熱モデルv0.5の固定仮定。遮熱反射率0.7・断熱20mm。放射・風・散水の効果を乳量やTHIへ換算しない。"
+      "note": "屋根の係数と背景熱は熱モデルv0.5の固定仮定。遮熱反射率0.7・断熱20mm。放射・風・散水の効果をTHIや深部体温へ換算しない。"
     },
     {
       "id": "fertility",
@@ -2066,7 +2139,7 @@
     {
       "id": "calculation",
       "classification": "derived",
-      "note": "70地点は独立試行。放熱Wを牛群へ合算しない。乳量は表の6条件、受胎は別の52日代表シナリオ。"
+      "note": "70地点は独立試行。放熱Wを牛群へ合算しない。日乳量は仮説モデルv0.1の牛群平均、受胎は別の52日代表シナリオ。乳量の掲載表は資料として保持。"
     }
   ]
 }

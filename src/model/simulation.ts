@@ -27,10 +27,10 @@ export function stableStringify(v:unknown):string {
 const deviceInput=(d:any)=>Object.fromEntries(Object.entries(d).filter(([k])=>!['label','anchor'].includes(k)));
 export const scenarioInput=(s:Scenario)=>({roof:s.roof,fans:s.fans.map(deviceInput),waterSystems:s.waterSystems.map(w=>({...w,nozzles:w.nozzles.map(deviceInput)}))});
 export function inputHash(p:Project){
-  const input=stableStringify({schema:p.schemaVersion,template:p.template,environment:p.environment,model:p.model,references:p.references,baselineScenarioId:p.baselineScenarioId,scenarios:p.scenarios.map(s=>({id:s.id,...scenarioInput(s)}))});let h=0xcbf29ce484222325n;
+  const input=stableStringify({schema:p.schemaVersion,template:p.template,environment:p.environment,model:p.model,references:p.references,milkSimulation:p.milkSimulation,baselineScenarioId:p.baselineScenarioId,scenarios:p.scenarios.map(s=>({id:s.id,...scenarioInput(s)}))});let h=0xcbf29ce484222325n;
   for(let i=0;i<input.length;i++){h^=BigInt(input.charCodeAt(i));h=BigInt.asUintN(64,h*0x100000001b3n)}return h.toString(16).padStart(16,'0');
 }
-function mistDistribution(p:Project,s:Scenario,layout:Layout,rays:number){
+export function mistDistribution(p:Project,s:Scenario,layout:Layout,rays:number){
   const water=new Map<string,number>(),mist=s.waterSystems.find(w=>w.kind==='mist')!;
   if(mist.enabled)for(const n of mist.nozzles){
     if(!n.enabled||n.flowLpm<=0)continue;const origin=world(n);
@@ -89,7 +89,7 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
     filmLedger.finalKg=mass;
     return {...blank,status:'valid',meanSpeedMps:speedSum/3600,meanAirTemperatureC:tempSum/3600,meanRelativeHumidityPct:rhSum/3600,meanQrefW:Object.values(comp).reduce((a,b)=>a+b,0),meanRadiantC:roof.result.meanRadiantC,meanFeelsLikeC:feelSum/3600,components:comp,film:filmLedger,captureFraction:maxFraction,series,milk:milkReference(firstT,firstRH,firstSpeed,p.references.baselineMilkKgPerDay,staticInputs),fertility:fertilityReference(p.references.fertility,tempSum/3600,rhSum/3600)};
   });
-  return {id:s.id,points,resources:resources(s,p),warnings,roof:roof.result,...trialResources(s,p)};
+  return {id:s.id,points,resources:resources(s,p),warnings,roof:roof.result,...trialResources(s,p),dailyMilk:null};
 }
 export function simulate(p:Project,opts:{dt?:number;rays?:number;envelope?:boolean}={}):SimulationResult{
   const dt=opts.dt??1,rays=opts.rays??256;if(dt!==1&&dt!==.5)throw Error('時間刻みは1秒または0.5秒です');if(![256,1024].includes(rays))throw Error('積分レイ数は256または1024です');
@@ -115,5 +115,5 @@ export function simulate(p:Project,opts:{dt?:number;rays?:number;envelope?:boole
     q.profileDeltas=deltas;const vals=Object.values(deltas);if(vals.length===3)q.parameterEnvelopeW=[Math.min(...vals),Math.max(...vals)];
     if(q.parameterEnvelopeW&&q.parameterEnvelopeW[0]<0&&q.parameterEnvelopeW[1]>0)q.warnings.push('仮定を変えると増減が逆転');
   }
-  return {inputHash:hash,modelVersion:p.model.version,scenarios:reference,profiles:profiles.map(x=>x.id),timeStepSec:dt,rayCount:rays,durationSec:3600};
+  return {inputHash:hash,modelVersion:p.model.version,scenarios:reference,profiles:profiles.map(x=>x.id),timeStepSec:dt,rayCount:rays,durationSec:3600,dailyMilkStatus:'pending'};
 }

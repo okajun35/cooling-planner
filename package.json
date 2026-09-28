@@ -1,6 +1,6 @@
 {
   "name": "cooling-planner",
-  "version": "0.8.0-preview.1",
+  "version": "0.9.0-preview.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,7 +12,7 @@
     "build": "tsc && node scripts/build-portable.mjs",
     "build:portable": "npm run build",
     "start": "node scripts/serve.mjs",
-    "test:browser": "python -m pytest tests/e2e -v"
+    "test:browser": "python3 -m pytest tests/e2e -v"
   },
   "devDependencies": {
     "@types/three": "0.180.0",

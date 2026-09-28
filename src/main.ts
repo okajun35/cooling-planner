@@ -3,6 +3,7 @@ import {activeScenario} from './domain/project.js';
 import {createProject} from './data/defaults.js';
 import {ProjectStore} from './state/store.js';
 import {inputHash} from './model/simulation.js';
+import {mergeDaily} from './model/dailySimulation.js';
 import {ResultGate} from './worker/protocol.js';
 import type {Reply} from './worker/protocol.js';
 import {Viewport3D} from './views/viewport3d.js';
@@ -18,7 +19,7 @@ declare global {interface Window {__DCS_WORKER_SOURCE__?:string;__DCS__?:unknown
 const store=new ProjectStore(createProject()),gate=new ResultGate();
 let result:SimulationResult|null=null,worker:Worker|null=null,scene:SceneView|null=null,mode='',calculating=false,lastCalculationMs=0,startTime=0,workerFailed=false,pending=false,invalid=false;
 let chart:ChartMetric='qW',playing=false,playTimer:number|null=null,speed=120,jobTimer:number|null=null;
-const ROOT_KEY='cooling-planner-project-v8';
+const ROOT_KEY='cooling-planner-project-v9';
 let previousView=JSON.stringify(store.project.view),previousFull=store.project;
 el('app').innerHTML=layout();
 function safe(fn:()=>void){try{fn()}catch(e){showError(e instanceof Error?e.message:String(e))}}
@@ -26,8 +27,9 @@ function showError(message:string){el('error-message').textContent=message;el('e
 let toastTimer=0;function toast(message:string){clearTimeout(toastTimer);el('toast').textContent=message;el('toast').hidden=false;toastTimer=window.setTimeout(()=>el('toast').hidden=true,3500)}
 const currentResult=()=>result?.inputHash===gate.expectedHash?result:null;
 function status(){
+ const milkPending=calculating&&result!==null;
  const state=invalid?'invalid':store.isDraft?'editing':pending?'pending':workerFailed?'error':calculating?'calculating':'ready';
- const labels:Record<string,string>={invalid:'入力エラー',editing:'配置を編集中',pending:'入力を確定してください',error:'計算エラー',calculating:'計算中…',ready:`計算完了 · ${(lastCalculationMs/1000).toFixed(1)}秒`};
+ const labels:Record<string,string>={invalid:'入力エラー',editing:'配置を編集中',pending:'入力を確定してください',error:'計算エラー',calculating:milkPending?'乳量を計算中…':'計算中…',ready:`計算完了 · ${(lastCalculationMs/1000).toFixed(1)}秒`};
  el('status').textContent=labels[state];el('status').dataset.state=state;
  el('scene-busy').hidden=!calculating;el<HTMLButtonElement>('undo-button').disabled=!store.undoCount;el<HTMLButtonElement>('redo-button').disabled=!store.redoCount;
  document.querySelectorAll<HTMLButtonElement>('[data-action="save"],[data-action="export-results"]').forEach(b=>b.disabled=pending||invalid||store.isDraft);
@@ -50,8 +52,10 @@ function makeWorker(){
  try{
   if(window.__DCS_WORKER_SOURCE__){const url=URL.createObjectURL(new Blob([window.__DCS_WORKER_SOURCE__],{type:'application/javascript'}));worker=new Worker(url);URL.revokeObjectURL(url)}
   else worker=new Worker(new URL('./worker.js',document.baseURI));
-  worker.onmessage=(e:MessageEvent<Reply>)=>{if(!gate.accepts(e.data))return;calculating=false;lastCalculationMs=performance.now()-startTime;
-   if('error' in e.data){workerFailed=true;result=null;showError(e.data.error)}else {result=e.data.result;workerFailed=false}
+  worker.onmessage=(e:MessageEvent<Reply>)=>{if(!gate.accepts(e.data))return;const d=e.data;
+   if(d.kind==='error'){calculating=false;lastCalculationMs=performance.now()-startTime;workerFailed=true;result=null;showError(d.error)}
+   else if(d.kind==='thermal-result'){result=d.result;workerFailed=false/* keep calculating until the daily stage */}
+   else if(d.kind==='daily-result'){if(result&&result.inputHash===d.inputHash)mergeDaily(result,d.daily,d.dailyMilkStatus);calculating=false;lastCalculationMs=performance.now()-startTime}
    renderResults(store.project,currentResult());renderTimeline(store.project,currentResult(),chart);updateTime(store.project,currentResult());syncScene();status();
   };
   worker.onerror=()=>{calculating=false;workerFailed=true;showError('計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。');status()};
@@ -103,6 +107,7 @@ document.addEventListener('change',event=>{
   else if(i.dataset.template)store.updateTemplate({lengthM:Number(el<HTMLInputElement>('barn-length').value),widthM:Number(el<HTMLInputElement>('barn-width').value)});
   else if(i.dataset.price)store.updatePrices({[i.dataset.price]:value});
   else if(i.hasAttribute('data-milk-baseline'))store.updateReferences({baselineMilkKgPerDay:value});
+  else if(i.dataset.milk)store.updateMilk({[i.dataset.milk]:value} as Partial<import('./domain/project.js').MilkSimulation>);
   else if(i.dataset.fertility)store.updateFertility({[i.dataset.fertility]:value});
   i.classList.remove('bad-input');pending=false;invalid=!!document.querySelector('.bad-input');if(!invalid)el('error-banner').hidden=true;status();
  }catch(e){invalid=true;pending=false;i.classList.add('bad-input');showError(e instanceof Error?e.message:String(e));status()}
@@ -114,12 +119,13 @@ document.addEventListener('click',event=>{const b=(event.target as Element).clos
  if(b.dataset.chart){chart=b.dataset.chart as ChartMetric;document.querySelectorAll<HTMLElement>('[data-chart]').forEach(x=>x.classList.toggle('active',x.dataset.chart===chart));renderTimeline(p,currentResult(),chart);return}
  if(b.dataset.close){el<HTMLDialogElement>(b.dataset.close).close();return}
  switch(b.dataset.action){
-  case 'save':if(pending||invalid||store.isDraft)throw Error('入力を確定してから保存してください');download('cooling-planner-v8.json',store.serialize());toast('配置・環境・モデルの仮定を保存しました');break;
+  case 'save':if(pending||invalid||store.isDraft)throw Error('入力を確定してから保存してください');download('cooling-planner-v9.json',store.serialize());toast('配置・環境・モデルの仮定を保存しました');break;
   case 'load':el<HTMLInputElement>('file-input').click();break;
-  case 'export-results':if(!currentResult())throw Error('計算完了後に保存してください');download('cooling-planner-v8-results.json',{appVersion:p.appVersion,project:p,result:currentResult()});break;
+  case 'export-results':{const r=currentResult();if(!r)throw Error('計算完了後に保存してください');if(r.dailyMilkStatus==='pending')throw Error('日乳量の計算完了を待ってください');download('cooling-planner-v9-results.json',{appVersion:p.appVersion,project:p,result:r});break}
   case 'undo':store.undo();break;case 'redo':store.redo();break;
   case 'reset-active':store.resetActive();toast('編集案を基準の設定に戻しました');break;
   case 'copy-scenario':store.copyActiveToOther();toast('屋根・機器を別の編集案へコピーしました');break;
+  case 'reset-milk':store.resetMilk();toast('乳量モデルの仮定を初期値に戻しました');break;
   case 'select-first-fan':store.setView({selectedDeviceId:activeScenario(p).fans[0]?.id??null});break;
   case 'add-fan':store.addFan();break;case 'add-soaker':store.addNozzle('soaker');break;case 'add-mist':store.addNozzle('mist');break;
   case 'duplicate':if(id)store.duplicateDevice(id);break;case 'remove':if(id)store.removeDevice(id);break;

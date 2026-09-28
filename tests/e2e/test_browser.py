@@ -8,7 +8,7 @@ import json, os
 import pytest
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[2]
-HTML=(ROOT/'cooling-planner-v0.8.html').read_text()
+HTML=(ROOT/'cooling-planner-v0.9.html').read_text()
 OUT=ROOT/'evidence/browser';OUT.mkdir(parents=True,exist_ok=True)
 (OUT/'test-runs').mkdir(exist_ok=True)
 
@@ -56,7 +56,12 @@ def test_E01_initial_three_scenarios_70_points_webgl_and_no_placeholder_values(p
     assert all(len(s['points'])==70 for s in r['scenarios'])
     assert all(p['deltaQrefW']==0 for p in r['scenarios'][1]['points'])
     assert r['scenarios'][1]['points'][0]['milk']['kgPerDay'] is None
-    assert '参照表の対象外' in page.locator('#results').inner_text()
+    assert r['dailyMilkStatus']=='complete'
+    for s in r['scenarios']:assert s['dailyMilk']['status']=='available' and s['dailyMilk']['yieldKgPerCowDay'] is not None
+    assert r['scenarios'][1]['dailyMilk']['deltaKgPerCowDay']==0
+    text=page.locator('#results').inner_text()
+    assert '乳量への参考影響' in text and 'kg/頭/日' in text
+    assert '参照表の対象外' not in text
     page.screenshot(path=str(OUT/'initial-desktop.png'),full_page=True)
 
 def test_E02_roof_coating_insulation_integrate_into_all_points_and_comparison(page):
@@ -237,7 +242,8 @@ def test_E19_result_export_is_current_and_includes_provenance_and_series(page,tm
     with page.expect_download() as ev:page.locator('[data-action=export-results]').click()
     path=tmp_path/'results.json';ev.value.save_as(path);data=json.loads(path.read_text())
     assert data['result']['inputHash']==page.evaluate('window.__DCS__.hash()')
-    assert data['project']['schemaVersion']==8
+    assert data['project']['schemaVersion']==9
+    assert data['result']['dailyMilkStatus']=='complete'
     assert data['project']['provenance']
     assert len(data['result']['scenarios'][1]['points'][0]['series'])==61
 
@@ -246,8 +252,29 @@ def test_E20_evidence_lists_versions_assumptions_and_non_confidence_envelope(pag
     text=page.locator('#evidence-body').inner_text()
     assert '95%信頼区間ではありません' in text
     assert 'design-assumption' in text
-    assert 'cooling-integrated-v0.8' in text
-    assert '熱v0.5、乳量v0.6、受胎v0.7' in text
+    assert 'cooling-integrated-v0.9' in text
+    assert '熱v0.5、乳量表v0.6、受胎v0.7' in text
+    assert 'milk-heat-deficit-v0.1' in text
+
+def test_E22_daily_milk_card_updates_and_probe_choice_does_not_change_it(page):
+    r0=result(page)
+    assert r0['scenarios'][1]['dailyMilk']['status']=='available'
+    y0=r0['scenarios'][1]['dailyMilk']['yieldKgPerCowDay']
+    page.locator('#roof-spray').check();ready(page)
+    r1=result(page)
+    assert r1['scenarios'][1]['dailyMilk']['yieldKgPerCowDay']!=y0
+    # selecting a different probe must not change the herd-average daily milk
+    page.locator('#probe-select').select_option('stall-A-01');ready(page)
+    assert result(page)['scenarios'][1]['dailyMilk']==r1['scenarios'][1]['dailyMilk']
+    # milk beta is editable through the assumptions details
+    page.locator('#milk-details summary').click()
+    number(page,'#milk-beta',0.02)
+    r2=result(page)
+    assert abs(r2['scenarios'][1]['dailyMilk']['responseKgPerCowDayPerW']-0.02)<1e-12
+    assert len(r2['scenarios'][1]['dailyMilk']['sensitivities'])==3
+    # daily start time is part of the physics input hash
+    page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-start',6)
+    assert fan(snap(page))['dailyStartHour']==6
 
 def test_E21_webgl_unavailable_fallback_still_drags_calculates_and_saves(browser):
     ctx=browser.new_context(viewport={'width':1280,'height':900},accept_downloads=True);pg=ctx.new_page()
@@ -259,5 +286,5 @@ def test_E21_webgl_unavailable_fallback_still_drags_calculates_and_saves(browser
     pg.mouse.move(rect['x']+rect['width']/3,rect['y']+rect['height']/2);pg.mouse.down();pg.mouse.move(rect['x']+rect['width']/3+30,rect['y']+rect['height']/2+8,steps=5);pg.mouse.up();ready(pg)
     assert fan(snap(pg))['x']!=fan(before)['x']
     with pg.expect_download() as ev:pg.locator('[data-action=save]').click()
-    assert ev.value.suggested_filename=='cooling-planner-v8.json'
+    assert ev.value.suggested_filename=='cooling-planner-v9.json'
     ctx.close()

@@ -1,4 +1,4 @@
-import type {Project,Device,Environment,Template,View,WaterSystem,RoofSettings,ReferenceSettings} from '../domain/project.js';
+import type {Project,Device,Environment,Template,View,WaterSystem,RoofSettings,ReferenceSettings,MilkSimulation} from '../domain/project.js';
 import {activeScenario,devices,isFan,clone} from '../domain/project.js';
 import {validateProject,parseProject} from '../domain/validation.js';
 import {anchorPose,buildLayout,positionFromAnchor} from '../template/layout.js';
@@ -23,6 +23,8 @@ export class ProjectStore{
  updateRoof(patch:Partial<RoofSettings>){this.edit(p=>Object.assign(this.editable(p).roof,patch))}
  updateReferences(patch:Partial<ReferenceSettings>){this.edit(p=>Object.assign(p.references,patch))}
  updateFertility(patch:Partial<ReferenceSettings['fertility']>){this.edit(p=>Object.assign(p.references.fertility,patch))}
+ updateMilk(patch:Partial<MilkSimulation>){this.edit(p=>Object.assign(p.milkSimulation,patch))}
+ resetMilk(){this.edit(p=>{p.milkSimulation=clone(createProject().milkSimulation)})}
  setAllFans(enabled:boolean){this.edit(p=>this.editable(p).fans.forEach(f=>f.enabled=enabled))}
  copyActiveToOther(){this.edit(p=>{const source=this.editable(p),target=p.scenarios.find(s=>!s.readOnly&&s.id!==source.id)!;const next=clone(source);next.id=target.id;next.name=target.name;p.scenarios[p.scenarios.indexOf(target)]=next;p.activeScenarioId=target.id;this.repairSelection(p)})}
  updatePrices(patch:Partial<Project['prices']>){this.edit(p=>Object.assign(p.prices,patch))}
