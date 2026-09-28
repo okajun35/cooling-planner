@@ -23,3 +23,8 @@
 .micro-table th{text-align:left;padding:5px 8px 5px 0;vertical-align:top;white-space:nowrap;color:#5a6b82}
 .micro-table td{padding:5px 0}
 .legend-note{font-size:8px;color:var(--muted);margin-left:4px}
+
+/* Realistic view uses the same workspace and selections as the standard view. */
+.realistic-note{position:absolute;bottom:12px;right:12px;max-width:55%;font-size:10px;line-height:1.5;color:#385461;background:rgba(247,250,249,.87);padding:5px 9px;border-radius:5px;pointer-events:none}
+.stage-toolbar{flex-wrap:wrap;gap:8px}.scene-switches{flex-wrap:wrap}.stage-footer{flex-wrap:wrap;gap:8px}
+@media(max-width:600px){.realistic-note{bottom:60px;max-width:70%}.modes button{padding:6px 8px}}

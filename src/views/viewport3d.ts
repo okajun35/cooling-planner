@@ -4,6 +4,7 @@ import type {SceneView,ViewCallbacks} from './common.js';
 import {sceneGeometry} from './sceneGeometry.js';
 import type {Batch} from './sceneGeometry.js';
 import {ThreeBackend} from './threeBackend.js';
+import {RealisticBackend} from './realistic3d.js';
 import type {RenderBackend} from './common.js';
 import {matrix,project,planeAt} from './math3d.js';
 import type {Camera} from './math3d.js';
@@ -13,16 +14,17 @@ export class Viewport3D implements SceneView{
  private canvas:HTMLCanvasElement;private backend:RenderBackend;private p:Project|null=null;private result:SimulationResult|null=null;private batch:Batch|null=null;private observer:ResizeObserver;private abort=new AbortController();private camera:Camera={azimuth:-.28,elevation:.6,distance:42,target:[18.2,0,11.75]};
  private pointer:{x:number;y:number;lastX:number;lastY:number;id:number;deviceId:string|null;height:number;offset:Vec3;started:boolean;pan:boolean;startCamera:Camera}|null=null;
  get rendererName(){return this.backend.name}
- constructor(private container:HTMLElement,private cb:ViewCallbacks,backendFactory?:(c:HTMLCanvasElement)=>RenderBackend){
+ diagnostics(){return this.backend.diagnostics?.()??{}}
+ constructor(private container:HTMLElement,private cb:ViewCallbacks,backendFactory?:(c:HTMLCanvasElement)=>RenderBackend,realistic=false){
   this.canvas=document.createElement('canvas');this.canvas.className='scene-canvas';this.canvas.tabIndex=0;this.canvas.setAttribute('aria-label','牛舎3D。設備をドラッグして移動、背景をドラッグして回転');this.canvas.dataset.testid='scene3d';container.append(this.canvas);
-  try{this.backend=backendFactory?backendFactory(this.canvas):new ThreeBackend(this.canvas)}catch(err){this.canvas.remove();throw err}
+  try{this.backend=backendFactory?backendFactory(this.canvas):realistic?new RealisticBackend(this.canvas):new ThreeBackend(this.canvas)}catch(err){this.canvas.remove();throw err}
   const opts={signal:this.abort.signal};this.canvas.addEventListener('pointerdown',this.down,opts);this.canvas.addEventListener('pointermove',this.move,opts);this.canvas.addEventListener('pointerup',this.up,opts);this.canvas.addEventListener('pointercancel',this.cancel,opts);this.canvas.addEventListener('contextmenu',e=>e.preventDefault(),opts);this.canvas.addEventListener('wheel',this.wheel,{...opts,passive:false});this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.cb.error('3D描画が停止しました。2D表示に切り替えます。')},opts);window.addEventListener('keydown',e=>{if(e.key==='Escape')this.cancel()},opts);window.addEventListener('blur',this.cancel,opts);
   this.observer=new ResizeObserver(()=>this.draw());this.observer.observe(container);
  }
  private size(){return {w:Math.max(1,this.container.clientWidth),h:Math.max(1,this.container.clientHeight)}}
  private local(e:PointerEvent|WheelEvent){const r=this.canvas.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
- private draw(){const {w,h}=this.size();this.backend.draw(matrix(this.camera,w/h),w,h)}
- sync(p:Project,r:SimulationResult|null){if(!this.pointer&&p.view.camera&&JSON.stringify(this.p?.view.camera)!==JSON.stringify(p.view.camera))this.camera=structuredClone(p.view.camera);const initial=!this.p,dimensionsChanged=this.p&&JSON.stringify(this.p.template)!==JSON.stringify(p.template);this.p=p;this.result=r;if(initial){this.camera=p.view.camera?structuredClone(p.view.camera):{azimuth:-.28,elevation:.6,distance:42*Math.max(1,1.7/(this.size().w/this.size().h)),target:[p.template.lengthM/2,0,p.template.widthM/2]}}else if(dimensionsChanged)this.camera.target=[p.template.lengthM/2,0,p.template.widthM/2];this.batch=sceneGeometry(p,r);this.backend.update(this.batch);this.draw()}
+ private draw(){const {w,h}=this.size();this.backend.draw(matrix(this.camera,w/h),w,h,this.camera)}
+ sync(p:Project,r:SimulationResult|null){if(!this.pointer&&p.view.camera&&JSON.stringify(this.p?.view.camera)!==JSON.stringify(p.view.camera))this.camera=structuredClone(p.view.camera);const initial=!this.p,dimensionsChanged=this.p&&JSON.stringify(this.p.template)!==JSON.stringify(p.template);this.p=p;this.result=r;if(initial){this.camera=p.view.camera?structuredClone(p.view.camera):{azimuth:-.28,elevation:.6,distance:42*Math.max(1,1.7/(this.size().w/this.size().h)),target:[p.template.lengthM/2,0,p.template.widthM/2]}}else if(dimensionsChanged)this.camera.target=[p.template.lengthM/2,0,p.template.widthM/2];this.batch=sceneGeometry(p,r);this.backend.update(this.batch,p,r);this.draw()}
  screenPoint(v:Vec3){const {w,h}=this.size(),pt=project(v,matrix(this.camera,w/h),w,h),r=this.canvas.getBoundingClientRect();return {...pt,x:pt.x+r.left,y:pt.y+r.top}}
  private down=(e:PointerEvent)=>{
   if(!this.p||!this.batch||e.button>2)return;e.preventDefault();this.canvas.focus();const {x,y}=this.local(e),{w,h}=this.size(),m=matrix(this.camera,w/h);

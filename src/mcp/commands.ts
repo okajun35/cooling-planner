@@ -18,7 +18,7 @@ export interface CommandDeps{
 
 export type ResultStatus='editing'|'calculating'|'thermal_ready'|'ready'|'error';
 export interface EditArgs{operation:string;scenarioId?:string;deviceId?:string;systemId?:string;kind?:string;patch?:Record<string,unknown>}
-export interface SetViewArgs{mode?:View['mode'];metric?:View['metric'];selectedProbeId?:string;selectedDeviceId?:string|null;selectedAreaId?:string|null;analysis?:boolean;roof?:boolean;flow?:boolean;particles?:boolean;timeSec?:number}
+export interface SetViewArgs{mode?:View['mode'];metric?:View['metric'];selectedProbeId?:string;selectedDeviceId?:string|null;selectedAreaId?:string|null;analysis?:boolean;realistic?:boolean;heatmap?:boolean;roof?:boolean;flow?:boolean;particles?:boolean;timeSec?:number}
 export interface GetResultsArgs{scenarioId?:string;probeId?:string}
 
 const CONFIRM_INPUT='画面の入力を確定してください';
@@ -160,6 +160,8 @@ export function createCommands(d:CommandDeps){
   if(args.mode!==undefined)patch.mode=args.mode;
   if(args.metric!==undefined)patch.metric=args.metric;
   if(args.analysis!==undefined)patch.analysis=args.analysis;
+  if(args.realistic!==undefined)patch.realistic=args.realistic;
+  if(args.heatmap!==undefined)patch.heatmap=args.heatmap;
   if(args.roof!==undefined)patch.roof=args.roof;
   if(args.flow!==undefined)patch.flow=args.flow;
   if(args.particles!==undefined)patch.particles=args.particles;

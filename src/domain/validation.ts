@@ -46,7 +46,7 @@ export function validateProject(input:unknown):asserts input is Project{
  if(p.baselineScenarioId!=='baseline'||!ids.has(p.baselineScenarioId)||!ids.has(p.activeScenarioId)||!ids.has('working-soaker')||!ids.has('working-mist'))fail('scenario','案ID・参照先が不正です');
  for(const s of p.scenarios)if(s.readOnly!==(s.id===p.baselineScenarioId))fail('readOnly','基準だけを読取専用にしてください');
  const v=record(p.view,'view');if(!['2d','3d'].includes(v.mode)||!['delta','deficit','speed','temperature'].includes(v.metric))fail('view','表示設定が不正です');for(const k of ['roof','flow','particles'])bool(v[k],`view.${k}`);
- if(v.analysis!==undefined)bool(v.analysis,'view.analysis');if(v.selectedAreaId!==undefined&&v.selectedAreaId!==null)id(v.selectedAreaId,'view.selectedAreaId');
+ if(v.analysis!==undefined)bool(v.analysis,'view.analysis');for(const k of ['realistic','heatmap'])if(v[k]!==undefined)bool(v[k],`view.${k}`);if(v.selectedAreaId!==undefined&&v.selectedAreaId!==null)id(v.selectedAreaId,'view.selectedAreaId');
  number(v.timeSec,0,3600,'view.timeSec');
  if(!layout.probes.some(q=>q.id===v.selectedProbeId))fail('selectedProbeId','地点がありません');if(v.selectedDeviceId!==null){id(v.selectedDeviceId,'selectedDeviceId');const s=p.scenarios.find((s:any)=>s.id===p.activeScenarioId);if(!s.fans.concat(s.waterSystems.flatMap((w:any)=>w.nozzles)).some((d:any)=>d.id===v.selectedDeviceId))fail('selectedDeviceId','設備がありません')}
  if(v.camera!==null){const c=record(v.camera,'camera');number(c.azimuth,-100,100,'camera.azimuth');number(c.elevation,.1,1.56,'camera.elevation');number(c.distance,8,160,'camera.distance');if(!Array.isArray(c.target)||c.target.length!==3)fail('camera.target','3座標が必要です');c.target.forEach((n:any)=>number(n,-100,200,'camera.target'))}

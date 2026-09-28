@@ -1282,6 +1282,9 @@ function validateProject(input) {
         bool(v[k], `view.${k}`);
     if (v.analysis !== undefined)
         bool(v.analysis, 'view.analysis');
+    for (const k of ['realistic', 'heatmap'])
+        if (v[k] !== undefined)
+            bool(v[k], `view.${k}`);
     if (v.selectedAreaId !== undefined && v.selectedAreaId !== null)
         id(v.selectedAreaId, 'view.selectedAreaId');
     number(v.timeSec, 0, 3600, 'view.timeSec');

@@ -1,9 +1,9 @@
 import type {Project,SimulationResult,Device,Vec3,View,PointResult} from '../domain/project.js';
 import type {Batch} from './sceneGeometry.js';
 import type {Mat4} from './math3d.js';
-export interface RenderBackend{readonly name:string;update:(b:Batch)=>void;draw:(m:Mat4,w:number,h:number)=>void;dispose:()=>void}
+export interface RenderBackend{readonly name:string;update:(b:Batch,p?:Project,r?:SimulationResult|null)=>void;draw:(m:Mat4,w:number,h:number,camera?:NonNullable<View['camera']>)=>void;dispose:()=>void;diagnostics?:()=>Record<string,unknown>}
 export interface ViewCallbacks {selectDevice:(id:string|null)=>void;selectProbe:(id:string)=>void;begin:()=>void;preview:(id:string,patch:Partial<Device>)=>void;commit:()=>void;cancel:()=>void;camera:(c:View['camera'])=>void;error:(message:string)=>void}
-export interface SceneView {sync:(p:Project,r:SimulationResult|null)=>void;dispose:()=>void;preset?:(name:'overview'|'top'|'side')=>void;screenPoint?:(v:Vec3)=>{x:number;y:number;visible:boolean};readonly rendererName:string}
+export interface SceneView {sync:(p:Project,r:SimulationResult|null)=>void;dispose:()=>void;preset?:(name:'overview'|'top'|'side')=>void;screenPoint?:(v:Vec3)=>{x:number;y:number;visible:boolean};readonly rendererName:string;diagnostics?:()=>Record<string,unknown>}
 export const escapeHtml=(s:unknown)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export const zoneColor:Record<string,string>={feed:'#ddd6c1',feeding:'#e6eee8',stall:'#d8e3ee',aisle:'#ecf0f5',robot:'#8cbed3',utility:'#b9c7d5',waiting:'#e1e9f1',isolation:'#d2dce9'};
 /** Metric shown on faces/probes. 'deficit' = per-second mean of max(0, Qref − Q) [W]. */

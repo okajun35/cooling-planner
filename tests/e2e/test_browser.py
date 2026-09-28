@@ -362,3 +362,53 @@ def test_E21_webgl_unavailable_fallback_still_drags_calculates_and_saves(browser
     with pg.expect_download() as ev:pg.locator('[data-action=save]').click()
     assert ev.value.suggested_filename=='cooling-planner-v9.json'
     ctx.close()
+
+
+def test_E26_realistic_tab_keeps_results_and_supports_drag_undo(page):
+    initial=snap(page);initial_hash=page.evaluate('window.__DCS__.hash()')
+    initial_result=result(page)
+    page.locator('[data-render=realistic]').click()
+    assert 'realistic' in page.evaluate('window.__DCS__.metrics().renderer')
+    poses=page.evaluate('window.__DCS__.metrics().graphics.cowPoses')
+    assert poses['feeding']==3 and sum(poses.values())==50
+    assert poses['standing']>0 and poses['lying']>0
+    assert page.evaluate('window.__DCS__.hash()')==initial_hash
+    assert result(page)==initial_result
+    assert page.evaluate('window.__DCS__.metrics().graphics.windSegments')>0
+    page.locator('#show-heatmap').check()
+    page.locator('#show-analysis').check()
+    assert page.evaluate('window.__DCS__.hash()')==initial_hash
+    page.screenshot(path=str(OUT/'realistic-analysis.png'),full_page=True)
+    page.locator('#show-analysis').uncheck()
+    drag(page,fan(initial),35,-8)
+    assert page.evaluate('window.__DCS__.hash()')!=initial_hash
+    page.locator('[data-action=undo]').click();ready(page)
+    assert snap(page)['scenarios']==initial['scenarios']
+    page.locator('[data-mode="3d"]').click()
+    assert page.evaluate('window.__DCS__.metrics().renderer')=='Three.js r180'
+    assert page.evaluate('window.__DCS__.hash()')==initial_hash
+    page.locator('[data-mode="2d"]').click()
+    page.locator('[data-render=realistic]').click()
+    assert 'realistic' in page.evaluate('window.__DCS__.metrics().renderer')
+    poses=page.evaluate('window.__DCS__.metrics().graphics.cowPoses')
+    assert poses['feeding']==3 and sum(poses.values())==50
+    assert poses['standing']>0 and poses['lying']>0
+    assert page.evaluate('window.__DCS__.hash()')==initial_hash
+
+
+def test_E27_realistic_wind_and_spray_follow_toggles_and_operation(page):
+    page.locator('[data-render=realistic]').click()
+    assert page.evaluate('window.__DCS__.metrics().graphics.soakerDrops')>0
+    page.locator('#show-flow').uncheck()
+    assert page.evaluate('window.__DCS__.metrics().graphics.windSegments')==0
+    page.locator('#show-flow').check()
+    page.locator('#show-particles').uncheck()
+    assert page.evaluate('window.__DCS__.metrics().graphics.soakerDrops')==0
+    page.locator('#show-particles').check()
+    page.locator('#scenario-tabs [data-scenario="working-mist"]').click()
+    assert page.evaluate('window.__DCS__.metrics().graphics.mistParticles')>0
+    page.locator('#time-slider').fill('120')
+    assert page.evaluate('window.__DCS__.metrics().graphics.mistParticles')==0
+    page.set_viewport_size({'width':390,'height':844})
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+    page.screenshot(path=str(OUT/'realistic-mobile.png'),full_page=True)

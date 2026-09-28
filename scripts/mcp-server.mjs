@@ -147,7 +147,7 @@ function createServer(){
    selectedProbeId:z.string().optional(),
    selectedDeviceId:z.string().nullable().optional(),
    selectedAreaId:z.string().nullable().optional(),
-   analysis:z.boolean().optional(),roof:z.boolean().optional(),flow:z.boolean().optional(),particles:z.boolean().optional(),
+   analysis:z.boolean().optional(),realistic:z.boolean().optional(),heatmap:z.boolean().optional(),roof:z.boolean().optional(),flow:z.boolean().optional(),particles:z.boolean().optional(),
    timeSec:z.number().min(0).max(3600).optional(),
   }),
  },args=>relay('set_view',args));

@@ -42,6 +42,8 @@ export interface DailyMilkResult {
 export interface View {mode:'3d'|'2d';metric:'delta'|'deficit'|'speed'|'temperature';timeSec:number;selectedProbeId:string;selectedDeviceId:string|null;roof:boolean;flow:boolean;particles:boolean;camera:{azimuth:number;elevation:number;distance:number;target:Vec3}|null;
  /** analysis view: hide roof/cow silhouettes so area faces stay readable. Optional for v9 load-compat. */
  analysis?:boolean;
+ /** Presentation only: optional for existing schema 9 projects. */
+ realistic?:boolean;heatmap?:boolean;
  /** highlighted display area; excluded from the physics input hash. Optional for v9 load-compat. */
  selectedAreaId?:string|null}
 export interface Project {schemaVersion:9;references:ReferenceSettings;milkSimulation:MilkSimulation;appVersion:string;template:Template;environment:Environment;model:Model;baselineScenarioId:string;activeScenarioId:string;scenarios:Scenario[];view:View;prices:{electricityYenKwh:number|null;waterYenM3:number|null};provenance:{id:string;classification:string;note:string;url?:string}[]}

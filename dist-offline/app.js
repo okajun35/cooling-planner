@@ -70,19 +70,20 @@ function status() {
 }
 function syncScene() {
     const p = store.project;
-    if (!scene || mode !== p.view.mode) {
+    const requestedMode = p.view.mode === '3d' && p.view.realistic ? 'realistic' : p.view.mode;
+    if (!scene || mode !== requestedMode) {
         scene?.dispose();
         scene = null;
-        mode = p.view.mode;
+        mode = requestedMode;
         const cb = { selectDevice: id => safe(() => store.setView({ selectedDeviceId: id })), selectProbe: id => safe(() => store.setView({ selectedProbeId: id })), begin: () => store.begin(), preview: (id, patch) => store.previewDevice(id, patch), commit: () => store.commit(), cancel: () => store.cancel(), camera: c => store.setView({ camera: c }), error: message => {
                 showError(message);
                 if (store.project.view.mode === '3d') {
                     store.setView({ mode: '2d' });
                 }
             } };
-        if (mode === '3d') {
+        if (mode === '3d' || mode === 'realistic') {
             try {
-                scene = new viewport3d_js_1.Viewport3D((0, dom_js_1.el)('scene'), cb);
+                scene = new viewport3d_js_1.Viewport3D((0, dom_js_1.el)('scene'), cb, undefined, mode === 'realistic');
             }
             catch {
                 mode = '2d';
@@ -350,7 +351,11 @@ document.addEventListener('click', event => {
             return;
         }
         if (b.dataset.mode) {
-            store.setView({ mode: b.dataset.mode });
+            store.setView({ mode: b.dataset.mode, ...(b.dataset.mode === '3d' ? { realistic: false } : {}) });
+            return;
+        }
+        if (b.dataset.render === 'realistic') {
+            store.setView({ mode: '3d', realistic: true });
             return;
         }
         if (b.dataset.metric) {
@@ -516,7 +521,7 @@ document.addEventListener('keydown', e => {
         store.redo();
     }
 });
-Object.defineProperty(window, '__DCS__', { value: { snapshot: () => structuredClone(store.project), result: () => structuredClone(currentResult()), hash: () => (0, simulation_js_1.inputHash)(store.committed), screenPoint: (x, h, y) => scene?.screenPoint?.([x, h, y]), metrics: () => ({ lastCalculationMs, renderer: scene?.rendererName, undoCount: store.undoCount, redoCount: store.redoCount, workerFailed, calculating }) }, writable: false });
+Object.defineProperty(window, '__DCS__', { value: { snapshot: () => structuredClone(store.project), result: () => structuredClone(currentResult()), hash: () => (0, simulation_js_1.inputHash)(store.committed), screenPoint: (x, h, y) => scene?.screenPoint?.([x, h, y]), metrics: () => ({ lastCalculationMs, renderer: scene?.rendererName, undoCount: store.undoCount, redoCount: store.redoCount, workerFailed, calculating, graphics: scene?.diagnostics?.() ?? {} }) }, writable: false });
 makeWorker();
 recalculate();
 render();
@@ -1180,6 +1185,9 @@ function validateProject(input) {
         bool(v[k], `view.${k}`);
     if (v.analysis !== undefined)
         bool(v.analysis, 'view.analysis');
+    for (const k of ['realistic', 'heatmap'])
+        if (v[k] !== undefined)
+            bool(v[k], `view.${k}`);
     if (v.selectedAreaId !== undefined && v.selectedAreaId !== null)
         id(v.selectedAreaId, 'view.selectedAreaId');
     number(v.timeSec, 0, 3600, 'view.timeSec');
@@ -2129,6 +2137,7 @@ exports.Viewport3D = void 0;
 const project_js_1 = require("../domain/project.js");
 const sceneGeometry_js_1 = require("./sceneGeometry.js");
 const threeBackend_js_1 = require("./threeBackend.js");
+const realistic3d_js_1 = require("./realistic3d.js");
 const math3d_js_1 = require("./math3d.js");
 const faces_js_1 = require("../template/faces.js");
 const layout_js_1 = require("../template/layout.js");
@@ -2145,7 +2154,8 @@ class Viewport3D {
     camera = { azimuth: -.28, elevation: .6, distance: 42, target: [18.2, 0, 11.75] };
     pointer = null;
     get rendererName() { return this.backend.name; }
-    constructor(container, cb, backendFactory) {
+    diagnostics() { return this.backend.diagnostics?.() ?? {}; }
+    constructor(container, cb, backendFactory, realistic = false) {
         this.container = container;
         this.cb = cb;
         this.canvas = document.createElement('canvas');
@@ -2155,7 +2165,7 @@ class Viewport3D {
         this.canvas.dataset.testid = 'scene3d';
         container.append(this.canvas);
         try {
-            this.backend = backendFactory ? backendFactory(this.canvas) : new threeBackend_js_1.ThreeBackend(this.canvas);
+            this.backend = backendFactory ? backendFactory(this.canvas) : realistic ? new realistic3d_js_1.RealisticBackend(this.canvas) : new threeBackend_js_1.ThreeBackend(this.canvas);
         }
         catch (err) {
             this.canvas.remove();
@@ -2179,7 +2189,7 @@ class Viewport3D {
     }
     size() { return { w: Math.max(1, this.container.clientWidth), h: Math.max(1, this.container.clientHeight) }; }
     local(e) { const r = this.canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
-    draw() { const { w, h } = this.size(); this.backend.draw((0, math3d_js_1.matrix)(this.camera, w / h), w, h); }
+    draw() { const { w, h } = this.size(); this.backend.draw((0, math3d_js_1.matrix)(this.camera, w / h), w, h, this.camera); }
     sync(p, r) {
         if (!this.pointer && p.view.camera && JSON.stringify(this.p?.view.camera) !== JSON.stringify(p.view.camera))
             this.camera = structuredClone(p.view.camera);
@@ -2192,7 +2202,7 @@ class Viewport3D {
         else if (dimensionsChanged)
             this.camera.target = [p.template.lengthM / 2, 0, p.template.widthM / 2];
         this.batch = (0, sceneGeometry_js_1.sceneGeometry)(p, r);
-        this.backend.update(this.batch);
+        this.backend.update(this.batch, p, r);
         this.draw();
     }
     screenPoint(v) { const { w, h } = this.size(), pt = (0, math3d_js_1.project)(v, (0, math3d_js_1.matrix)(this.camera, w / h), w, h), r = this.canvas.getBoundingClientRect(); return { ...pt, x: pt.x + r.left, y: pt.y + r.top }; }
@@ -10665,6 +10675,640 @@ exports.TextureUtils = Wd;
 "undefined" != typeof __THREE_DEVTOOLS__ && __THREE_DEVTOOLS__.dispatchEvent(new CustomEvent("register", { detail: { revision: t } })), "undefined" != typeof window && (window.__THREE__ ? console.warn("WARNING: Multiple instances of Three.js being imported.") : window.__THREE__ = t);
 
 },
+"views/realistic3d.js":function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RealisticBackend = void 0;
+const THREE = __importStar(require("three"));
+const project_js_1 = require("../domain/project.js");
+const layout_js_1 = require("../template/layout.js");
+const faces_js_1 = require("../template/faces.js");
+const geometry_js_1 = require("../model/geometry.js");
+const physics_js_1 = require("../model/physics.js");
+const common_js_1 = require("./common.js");
+const math3d_js_1 = require("./math3d.js");
+const holstein_js_1 = require("./holstein.js");
+const V = (v) => new THREE.Vector3(...v);
+const UP = new THREE.Vector3(0, 1, 0);
+const seed = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+/** Small authored kit: one draw call for all copies of each shape/material pair. */
+class Kit {
+    batches = new Map();
+    add(g, m, pos, scale, q = new THREE.Quaternion()) {
+        const key = g.uuid + m.uuid;
+        let b = this.batches.get(key);
+        if (!b) {
+            b = { g, m, matrices: [] };
+            this.batches.set(key, b);
+        }
+        b.matrices.push(new THREE.Matrix4().compose(V(pos), q, V(scale)));
+    }
+    finish(root) {
+        for (const b of this.batches.values()) {
+            const mesh = new THREE.InstancedMesh(b.g, b.m, b.matrices.length);
+            b.matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.computeBoundingSphere();
+            root.add(mesh);
+        }
+    }
+}
+/** Presentation-only PBR scene. All numerical simulation stays in the existing Worker. */
+class RealisticBackend {
+    name = 'Three.js r180 · realistic';
+    renderer;
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(42, 1, .1, 400);
+    building = new THREE.Group();
+    equipment = new THREE.Group();
+    overlay = new THREE.Group();
+    sun = new THREE.DirectionalLight(0xfff0d5, 3.1);
+    sunTarget = new THREE.Object3D();
+    env;
+    textures = [];
+    box = new THREE.BoxGeometry(1, 1, 1);
+    sphere = new THREE.SphereGeometry(1, 12, 8);
+    cowBody = (0, holstein_js_1.holsteinBody)();
+    cylinder = new THREE.CylinderGeometry(1, 1, 1, 12);
+    ring = new THREE.TorusGeometry(1, .04, 6, 36);
+    materials;
+    lineMat = new THREE.LineBasicMaterial({ color: 0x328db1, transparent: true, opacity: .68, depthWrite: false, toneMapped: false });
+    dropMat = new THREE.LineBasicMaterial({ color: 0xadddf4, transparent: true, opacity: .85, depthWrite: false, toneMapped: false });
+    mistMat;
+    wind = new THREE.LineSegments(new THREE.BufferGeometry(), this.lineMat);
+    drops = new THREE.LineSegments(new THREE.BufferGeometry(), this.dropMat);
+    mist;
+    winds = [];
+    waters = [];
+    fogs = [];
+    cowPoses = { standing: 0, lying: 0, feeding: 0 };
+    buildingKey = '';
+    equipmentKey = '';
+    overlayKey = '';
+    effectKey = '';
+    p = null;
+    frame = 0;
+    lastFrame = 0;
+    disposed = false;
+    reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    clockStart = performance.now();
+    frameMs = 0;
+    width = 1;
+    height = 1;
+    constructor(canvas) {
+        this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+        this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.12;
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.shadowMap.autoUpdate = false;
+        this.scene.background = new THREE.Color(0xd8e3e7);
+        this.scene.fog = new THREE.Fog(0xd8e3e7, 105, 235);
+        this.scene.add(new THREE.HemisphereLight(0xdceeff, 0x93816a, 2.1), this.sun, this.sunTarget, this.building, this.equipment, this.overlay, this.wind, this.drops);
+        this.sun.target = this.sunTarget;
+        this.sun.castShadow = true;
+        const shadowSize = innerWidth < 600 ? 1024 : 2048;
+        this.sun.shadow.mapSize.set(shadowSize, shadowSize);
+        this.sun.shadow.bias = -.00015;
+        this.sun.shadow.normalBias = .045;
+        // Procedural environment is baked once; no HDR downloads or addon bundler needed.
+        const envScene = new THREE.Scene();
+        envScene.background = new THREE.Color(0xc3d5df);
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshBasicMaterial({ color: 0x858777, side: THREE.DoubleSide }));
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -4;
+        envScene.add(ground);
+        const panel = new THREE.Mesh(new THREE.PlaneGeometry(25, 25), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.7, 2.2), side: THREE.DoubleSide }));
+        panel.position.set(-20, 35, 10);
+        panel.lookAt(0, 0, 0);
+        envScene.add(panel);
+        const pmrem = new THREE.PMREMGenerator(this.renderer);
+        this.env = pmrem.fromScene(envScene, .08);
+        this.scene.environment = this.env.texture;
+        this.scene.environmentIntensity = .5;
+        pmrem.dispose();
+        ground.geometry.dispose();
+        ground.material.dispose();
+        panel.geometry.dispose();
+        panel.material.dispose();
+        const concrete = this.texture('concrete'), sand = this.texture('sand'), hide = this.texture('hide');
+        const mat = (color, roughness, metalness = 0, map) => new THREE.MeshStandardMaterial({ color, roughness, metalness, map });
+        this.materials = { concrete: mat(0xbdb9af, .92, 0, concrete), sand: mat(0xc2af88, 1, 0, sand), grass: mat(0x7e8763, 1, 0, sand),
+            steel: mat(0x9ba8ac, .36, .78), darkSteel: mat(0x3a4648, .5, .65), roof: mat(0xa1adb3, .48, .65), rubber: mat(0x313331, .92),
+            hide: mat(0xf2eee0, .92, 0, hide), hide2: mat(0xf2eee0, .92, 0, this.texture('hide', 1)), hide3: mat(0xf2eee0, .92, 0, this.texture('hide', 2)), black: mat(0x252724, .95), nose: mat(0xb8a095, .93), white: mat(0xefede6, .6),
+            brass: mat(0xb58b49, .38, .75), blue: mat(0x266c80, .5, .25), purple: mat(0x7a648d, .5, .25), feed: mat(0x867647, 1, 0, sand) };
+        const sprite = document.createElement('canvas');
+        sprite.width = sprite.height = 32;
+        const ctx = sprite.getContext('2d');
+        const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+        grad.addColorStop(0, 'rgba(255,255,255,.8)');
+        grad.addColorStop(.4, 'rgba(255,255,255,.35)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 32, 32);
+        const mistTexture = new THREE.CanvasTexture(sprite);
+        this.textures.push(mistTexture);
+        this.mistMat = new THREE.PointsMaterial({ map: mistTexture, color: 0xe4f1f5, size: .24, transparent: true, opacity: .5, depthWrite: false, toneMapped: false });
+        this.mist = new THREE.Points(new THREE.BufferGeometry(), this.mistMat);
+        this.scene.add(this.mist);
+        for (const obj of [this.wind, this.drops, this.mist])
+            obj.frustumCulled = false;
+        this.frame = requestAnimationFrame(this.animate);
+    }
+    texture(kind, variant = 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 256;
+        const c = canvas.getContext('2d');
+        c.fillStyle = kind === 'hide' ? '#eee9db' : kind === 'sand' ? '#d7c7a3' : '#ccc8bf';
+        c.fillRect(0, 0, 256, 256);
+        if (kind === 'hide') {
+            // Few broad asymmetric islands; each animal uses one of three shared coats.
+            const patches = [[20, 30, 44, 59], [157, 45, 64, 48], [71, 137, 55, 47], [213, 179, 59, 68], [24, 242, 44, 38]];
+            for (const [i, patch] of patches.entries()) {
+                const [px, py, rx, ry] = patch, x = (px + variant * 37) % 256, y = (py + variant * 23) % 256;
+                c.fillStyle = '#202321';
+                for (const ox of [-256, 0, 256])
+                    for (const oy of [-256, 0, 256]) {
+                        c.beginPath();
+                        for (let j = 0; j <= 48; j++) {
+                            const a = j / 48 * Math.PI * 2, r = 1 + .13 * Math.sin(a * 3 + i + variant) + .09 * Math.cos(a * 5 - i);
+                            c.lineTo(x + ox + Math.cos(a) * rx * r, y + oy + Math.sin(a) * ry * r);
+                        }
+                        c.closePath();
+                        c.fill();
+                    }
+            }
+        }
+        else {
+            for (let i = 0; i < 8500; i++) {
+                const n = Math.floor(100 + seed(i + 17) * 110);
+                c.fillStyle = `rgba(${n},${n - 5},${n - 12},.18)`;
+                c.fillRect(seed(i) * 256, seed(i + 19) * 256, kind === 'sand' ? 3 : 1, 1);
+            }
+            if (kind === 'concrete') {
+                c.strokeStyle = 'rgba(55,52,44,.18)';
+                c.lineWidth = 1;
+                for (let y = 0; y < 256; y += 16) {
+                    c.beginPath();
+                    c.moveTo(0, y);
+                    c.lineTo(256, y);
+                    c.stroke();
+                }
+            }
+        }
+        const t = new THREE.CanvasTexture(canvas);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+        this.textures.push(t);
+        return t;
+    }
+    clear(root, ownGeometry = false) {
+        for (const child of [...root.children]) {
+            root.remove(child);
+            if (child instanceof THREE.InstancedMesh)
+                child.dispose();
+            if (ownGeometry && child instanceof THREE.Mesh) {
+                child.geometry.dispose();
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach(m => m.dispose());
+            }
+        }
+    }
+    bar(k, a, b, r, material) { const d = V(b).sub(V(a)); k.add(this.cylinder, material, V(a).add(V(b)).multiplyScalar(.5).toArray(), [r, d.length(), r], new THREE.Quaternion().setFromUnitVectors(UP, d.normalize())); }
+    cow(k, x, z, floor, id, pose) {
+        this.cowPoses[pose]++;
+        const m = this.materials, hide = [m.hide, m.hide2, m.hide3][id % 3], lying = pose === 'lying', feeding = pose === 'feeding';
+        const scale = .95 + seed(id + 401) * .08, bodyY = lying ? .47 : 1.01;
+        const at = (p) => [x + p[0] * scale, floor + p[1] * scale, z + p[2] * scale];
+        const part = (g, mat, p, size, q = new THREE.Quaternion()) => k.add(g, mat, at(p), size.map(n => n * scale), q);
+        const bone = (a, b, r, mat) => this.bar(k, at(a), at(b), r * scale, mat);
+        const ellipsoid = (a, b, r, depth, mat) => {
+            const axis = V(b).sub(V(a));
+            part(this.sphere, mat, V(a).add(V(b)).multiplyScalar(.5).toArray(), [r, axis.length() / 2, depth], new THREE.Quaternion().setFromUnitVectors(UP, axis.normalize()));
+        };
+        part(this.cowBody, hide, [0, bodyY, 0], [1, 1, 1]);
+        // Bony hooks, brisket and tapered neck separate the shoulder and pelvis from the barrel.
+        for (const sign of [-1, 1])
+            part(this.sphere, hide, [sign * .28, bodyY + .23, .51], [.105, .11, .17]);
+        const poll = [.025 * (seed(id + 73) - .5), bodyY + (feeding ? -.35 : .35), feeding ? -1.08 : -.99];
+        const muzzle = [poll[0], poll[1] - .38, poll[2] - .29];
+        ellipsoid([0, bodyY + .15, -.53], poll, .18, .23, hide);
+        ellipsoid([0, bodyY - .13, -.56], [poll[0], poll[1] - .19, poll[2] + .04], .12, .12, m.white);
+        ellipsoid(poll, muzzle, .145, .17, m.black);
+        // Long white blaze on the face, broad muzzle and two nostrils.
+        ellipsoid([poll[0], poll[1] + .01, poll[2] - .12], [muzzle[0], muzzle[1] + .06, muzzle[2] - .105], .047, .037, m.white);
+        part(this.sphere, m.nose, muzzle, [.185, .10, .125]);
+        for (const sign of [-1, 1]) {
+            part(this.sphere, m.black, [muzzle[0] + sign * .105, muzzle[1] + .025, muzzle[2] - .093], [.035, .022, .022]);
+            part(this.sphere, m.black, [poll[0] + sign * .18, poll[1] - .12, poll[2] - .09], [.022, .024, .032]);
+            part(this.sphere, hide, [poll[0] + sign * .24, poll[1] + .02, poll[2] + .045], [.17, .05, .087], new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sign * .18));
+            part(this.sphere, m.nose, [poll[0] + sign * .25, poll[1] + .035, poll[2] + .025], [.105, .016, .054]);
+            if (sign === 1)
+                part(this.box, m.brass, [poll[0] + .29, poll[1] - .04, poll[2] - .025], [.06, .08, .012]);
+            for (const rear of [false, true]) {
+                const legX = sign * .24, hipZ = rear ? .56 : -.54;
+                if (lying) {
+                    ellipsoid([legX, .37, hipZ], [legX + sign * .055, .11, hipZ + .15], .10, .105, hide);
+                    bone([legX + sign * .055, .11, hipZ + .15], [legX + sign * .06, .095, hipZ - .15], .043, m.white);
+                    part(this.sphere, m.black, [legX + sign * .06, .08, hipZ - .18], [.062, .065, .10]);
+                }
+                else {
+                    const knee = [legX, .47, hipZ + (rear ? .15 : -.045)], ankle = [legX, .14, hipZ + (rear ? .04 : .02)];
+                    ellipsoid([legX, 1.04, hipZ], knee, rear ? .11 : .077, rear ? .14 : .085, hide);
+                    bone(knee, ankle, .044, m.white);
+                    part(this.sphere, m.white, knee, [.063, .077, .075]);
+                    for (const toe of [-1, 1])
+                        part(this.box, m.black, [legX + toe * .026, .065, ankle[2] - .035], [.045, .11, .14]);
+                }
+            }
+        }
+        // Udder, teats and a hanging tail provide dairy-cow cues in side/rear views.
+        part(this.sphere, m.nose, [0, bodyY - .37, .39], [.18, lying ? .09 : .145, .22]);
+        if (!lying)
+            for (const sx of [-.085, .085])
+                for (const sz of [.30, .46])
+                    bone([sx, bodyY - .46, sz], [sx, bodyY - .56, sz], .018, m.nose);
+        bone([0, bodyY + .19, .76], [.04, bodyY - .22, .91], .025, m.white);
+        bone([.04, bodyY - .22, .91], [.10, lying ? .16 : .28, .96], .016, m.white);
+        part(this.sphere, m.black, [.10, lying ? .12 : .22, .96], [.045, .10, .04]);
+    }
+    buildBarn(p) {
+        this.cowPoses = { standing: 0, lying: 0, feeding: 0 };
+        this.clear(this.building);
+        const k = new Kit(), m = this.materials, l = (0, layout_js_1.buildLayout)(p.template), L = p.template.lengthM, W = p.template.widthM;
+        k.add(this.box, m.grass, [L / 2, -.42, W / 2], [L + 32, .15, W + 28]);
+        k.add(this.box, m.concrete, [L / 2, -.17, W / 2], [L + 2, .4, W + 2]);
+        // Expansion joints and the grooved walking surface give the slab a readable scale.
+        for (let x = 0; x < L; x += 3)
+            k.add(this.box, m.darkSteel, [x, .035, W / 2], [.015, .006, W]);
+        for (const z of l.zones) {
+            if (z.kind === 'feed') {
+                k.add(this.box, m.feed, [z.x + z.widthM / 2, .10, z.y + z.depthM / 2], [z.widthM, .13, z.depthM * .68]);
+                this.bar(k, [z.x, .22, z.y + z.depthM], [z.x + z.widthM, .22, z.y + z.depthM], .085, m.concrete);
+            }
+            if (z.solid) {
+                k.add(this.box, m.white, [z.x + z.widthM / 2, 1.25, z.y + z.depthM / 2], [z.widthM, 2.5, z.depthM]);
+                k.add(this.box, m.steel, [z.x + z.widthM / 2, 2.52, z.y + z.depthM / 2], [z.widthM + .12, .08, z.depthM + .12]);
+                k.add(this.box, m.darkSteel, [z.x + z.widthM / 2, 1.1, z.y - .015], [.92, 2.1, .025]);
+                k.add(this.box, m.blue, [z.x + z.widthM * .8, 1.65, z.y - .025], [.7, .65, .025]);
+            }
+        }
+        for (const [i, s] of l.stalls.entries()) {
+            const x = s.x, y = s.y, w = s.widthM, d = s.depthM;
+            k.add(this.box, m.concrete, [x + w / 2, .09, y + d / 2], [w - .04, .12, d - .04]);
+            k.add(this.box, m.sand, [x + w / 2, .15, y + d / 2], [w - .13, .035, d - .12]);
+            for (const dx of [0, w]) {
+                this.bar(k, [x + dx, .18, y + .2], [x + dx, .82, y + .42], .028, m.steel);
+                this.bar(k, [x + dx, .82, y + .42], [x + dx, .82, y + d - .4], .028, m.steel);
+                this.bar(k, [x + dx, .82, y + d - .4], [x + dx, .2, y + d - .18], .028, m.steel);
+            }
+            // Three existing animals are shown at the soaker/feed alley instead of their beds.
+            if (!p.view.analysis && ![2, 18, 37].includes(i))
+                this.cow(k, x + w / 2, y + d / 2, .17, i, seed(i + 101) > .4 ? 'standing' : 'lying');
+        }
+        if (!p.view.analysis) {
+            const feeding = l.probes.filter(q => q.kind === 'feeding');
+            for (const [j, index] of [2, 6, 10].entries()) {
+                const q = feeding[index];
+                if (q)
+                    this.cow(k, q.x, q.y - .45, .035, [2, 18, 37][j], 'feeding');
+            }
+        }
+        // Structural columns and open trusses remain visible when the cutaway roof is off.
+        for (let i = 0; i <= 6; i++) {
+            const x = L * i / 6;
+            for (const z of [0, W]) {
+                k.add(this.box, m.concrete, [x, .2, z], [.46, .4, .46]);
+                k.add(this.box, m.darkSteel, [x, 2.12, z], [.14, 4, .18]);
+            }
+            this.bar(k, [x, 4, 0], [x, 8.7, W / 2], .065, m.steel);
+            this.bar(k, [x, 8.7, W / 2], [x, 4, W], .065, m.steel);
+            this.bar(k, [x, 4, 0], [x, 4, W], .042, m.steel);
+            for (let j = 1; j < 6; j++) {
+                const z = W * j / 6, top = 4 + 4.7 * (1 - Math.abs(z - W / 2) / (W / 2));
+                this.bar(k, [x, 4, z], [x, top, z], .023, m.steel);
+                this.bar(k, [x, 4, z - W / 6], [x, top, z], .02, m.steel);
+            }
+        }
+        for (const z of [0, W / 2, W])
+            this.bar(k, [0, z === W / 2 ? 8.7 : 4, z], [L, z === W / 2 ? 8.7 : 4, z], .06, m.darkSteel);
+        if (p.view.roof && !p.view.analysis) {
+            const slope = Math.atan2(4.7, W / 2), length = Math.hypot(4.7, W / 2);
+            m.roof.color.set((0, project_js_1.activeScenario)(p).roof.reflectance > .5 ? 0xe9e8df : 0x88969e);
+            k.add(this.box, m.roof, [L / 2, 6.38, W / 4], [L + .5, .055, length + .25], new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), slope));
+            for (let x = 0; x <= L; x += .32)
+                this.bar(k, [x, 4.05, 0], [x, 8.75, W / 2], .018, m.steel);
+        }
+        const feed = l.zones.find(z => z.kind === 'feeding');
+        if (feed) {
+            for (const h of [.55, 1.25])
+                this.bar(k, [feed.x, h, feed.y], [feed.x + feed.widthM, h, feed.y], .032, m.steel);
+            for (let x = feed.x; x < feed.x + feed.widthM; x += .65)
+                this.bar(k, [x, .55, feed.y], [x + .25, 1.25, feed.y], .022, m.steel);
+        }
+        const robot = l.zones.find(z => z.kind === 'robot');
+        k.add(this.box, m.darkSteel, [robot.x + 1.5, .8, robot.y + 1.2], [2.1, 1.5, 1.6]);
+        k.add(this.box, m.blue, [robot.x + 1.5, 1.55, robot.y + 1.2], [2.3, .35, 1.8]);
+        k.add(this.box, m.white, [robot.x + .42, 1.05, robot.y + 1.2], [.09, .8, 1.5]);
+        k.finish(this.building);
+        this.renderer.shadowMap.needsUpdate = true;
+        this.sunTarget.position.set(L / 2, 0, W / 2);
+        this.sun.position.set(L / 2 - 20, 35, W / 2 + 18);
+        const span = Math.max(L, W) * .8 + 8;
+        Object.assign(this.sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: .5, far: 110 });
+        this.sun.shadow.camera.updateProjectionMatrix();
+    }
+    buildEquipment(p) {
+        this.clear(this.equipment);
+        const k = new Kit(), m = this.materials, s = (0, project_js_1.activeScenario)(p);
+        for (const f of s.fans) {
+            const c = V((0, geometry_js_1.world)(f)), axis = V((0, geometry_js_1.direction)(f.yawDeg, f.pitchDownDeg)), rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis), r = f.diameterM / 2;
+            const local = (x, y, z) => new THREE.Vector3(x, y, z).applyQuaternion(rotation).add(c).toArray();
+            for (const z of [-.13, .13])
+                k.add(this.ring, f.enabled ? m.steel : m.rubber, local(0, 0, z), [r, r, r], rotation);
+            for (let i = 0; i < 12; i++) {
+                const a = i * Math.PI / 6;
+                this.bar(k, local(Math.cos(a) * r, Math.sin(a) * r, -.13), local(Math.cos(a) * r, Math.sin(a) * r, .13), .015, m.steel);
+            }
+            for (const radius of [.35, .65, .9])
+                k.add(this.ring, m.steel, local(0, 0, .15), [r * radius, r * radius, r * .2], rotation);
+            for (let i = 0; i < 4; i++) {
+                const a = i * Math.PI / 2, spin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), a + .4);
+                k.add(this.box, f.enabled ? m.darkSteel : m.rubber, local(Math.cos(a) * r * .43, Math.sin(a) * r * .43, 0), [r * .65, r * .19, .028], rotation.clone().multiply(spin));
+            }
+            k.add(this.sphere, m.darkSteel, local(0, 0, -.04), [r * .22, r * .22, .23], rotation);
+            this.bar(k, [f.x, Math.max(4, f.heightM + .3), f.y], (0, geometry_js_1.world)(f), .032, m.steel);
+            if (p.view.selectedDeviceId === f.id)
+                k.add(this.ring, m.brass, local(0, 0, .19), [r + .17, r + .17, .6], rotation);
+        }
+        for (const w of [...s.waterSystems].sort((a, b) => Number(a.enabled) - Number(b.enabled))) {
+            const ordered = [...w.nozzles].sort((a, b) => a.x - b.x);
+            for (let i = 1; i < ordered.length; i++)
+                this.bar(k, [ordered[i - 1].x, ordered[i - 1].heightM + .16, ordered[i - 1].y], [ordered[i].x, ordered[i].heightM + .16, ordered[i].y], .025, m.rubber);
+            for (const n of w.nozzles) {
+                const axis = V((0, geometry_js_1.direction)(n.yawDeg, n.pitchDownDeg)), q = new THREE.Quaternion().setFromUnitVectors(UP, axis);
+                const enabled = w.enabled && n.enabled;
+                k.add(this.cylinder, enabled ? (w.kind === 'soaker' ? m.blue : m.purple) : m.rubber, (0, geometry_js_1.world)(n), [.085, .18, .085], q);
+                k.add(this.sphere, m.brass, V((0, geometry_js_1.world)(n)).addScaledVector(axis, .12).toArray(), [.055, .055, .055]);
+                if (p.view.selectedDeviceId === n.id)
+                    k.add(this.ring, m.brass, (0, geometry_js_1.world)(n), [.26, .26, .4], new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+            }
+        }
+        k.finish(this.equipment);
+        this.renderer.shadowMap.needsUpdate = true;
+    }
+    buildOverlay(p, result) {
+        this.clear(this.overlay, true);
+        const layout = (0, layout_js_1.buildLayout)(p.template), out = result?.scenarios.find(s => s.id === p.activeScenarioId);
+        const selected = (0, faces_js_1.buildAreas)(layout).find(a => a.id === p.view.selectedAreaId);
+        const positions = [], colors = [];
+        const outline = [], invalidLines = [];
+        for (const f of (0, faces_js_1.buildFaces)(layout)) {
+            const corners = [[f.x + .035, f.surfaceY + .025, f.y + .035], [f.x + f.widthM - .035, f.surfaceY + .025, f.y + .035], [f.x + f.widthM - .035, f.surfaceY + .025, f.y + f.depthM - .035], [f.x + .035, f.surfaceY + .025, f.y + f.depthM - .035]];
+            if (p.view.heatmap || p.view.analysis) {
+                const point = out?.points.find(q => q.probeId === f.probeId);
+                const c = new THREE.Color((0, common_js_1.metricColor)((0, common_js_1.metricValue)(point, p.view.metric), p.view.metric));
+                if (point?.status === 'invalid')
+                    invalidLines.push(...corners[0], ...corners[2]);
+                for (const i of [0, 2, 1, 0, 3, 2]) {
+                    positions.push(...corners[i]);
+                    colors.push(c.r, c.g, c.b);
+                }
+            }
+            if (f.probeId === p.view.selectedProbeId || selected?.probeIds.includes(f.probeId))
+                for (let i = 0; i < 4; i++)
+                    outline.push(...corners[i], ...corners[(i + 1) % 4]);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        this.overlay.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false })));
+        const o = new THREE.BufferGeometry();
+        o.setAttribute('position', new THREE.Float32BufferAttribute(outline, 3));
+        // LineSegments cleanup is handled explicitly on the next update/dispose.
+        const line = new THREE.LineSegments(o, new THREE.LineBasicMaterial({ color: 0xe2a947, toneMapped: false }));
+        this.overlay.add(line);
+        const invalidGeometry = new THREE.BufferGeometry();
+        invalidGeometry.setAttribute('position', new THREE.Float32BufferAttribute(invalidLines, 3));
+        this.overlay.add(new THREE.LineSegments(invalidGeometry, new THREE.LineBasicMaterial({ color: 0x626e7b, toneMapped: false, depthTest: false })));
+        const probe = layout.probes.find(q => q.id === p.view.selectedProbeId);
+        if (probe) {
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(.4, .025, 6, 32), new THREE.MeshBasicMaterial({ color: 0xe2a947, toneMapped: false }));
+            ring.rotation.x = Math.PI / 2;
+            ring.position.set(probe.x, probe.heightM + .15, probe.y);
+            this.overlay.add(ring);
+        }
+    }
+    resetParticles(obj, count) { obj.geometry.dispose(); obj.geometry = new THREE.BufferGeometry(); obj.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3).setUsage(THREE.DynamicDrawUsage)); }
+    buildEffects(p) {
+        this.winds = [];
+        this.waters = [];
+        this.fogs = [];
+        const s = (0, project_js_1.activeScenario)(p), layout = (0, layout_js_1.buildLayout)(p.template), time = Math.min(p.view.timeSec, 3599), profile = p.model.profiles.find(x => x.id === 'reference');
+        if (p.view.flow)
+            for (const [fi, f] of s.fans.entries()) {
+                if (!f.enabled || f.outletSpeedMps <= 0 || time >= f.hoursPerDay * 3600)
+                    continue;
+                const axis = V((0, geometry_js_1.direction)(f.yawDeg, f.pitchDownDeg)), u = new THREE.Vector3().crossVectors(axis, Math.abs(axis.y) > .9 ? new THREE.Vector3(1, 0, 0) : UP).normalize(), v = new THREE.Vector3().crossVectors(axis, u), c = V((0, geometry_js_1.world)(f));
+                for (let j = 0; j < 12; j++) {
+                    const angle = j * 2.39996, rad = Math.sqrt((j + .5) / 12) * .7;
+                    let previous = c.clone().addScaledVector(axis, .2).addScaledVector(u, Math.cos(angle) * rad * f.diameterM / 2).addScaledVector(v, Math.sin(angle) * rad * f.diameterM / 2);
+                    const origin = previous.clone();
+                    for (let step = 1; step <= 16; step++) {
+                        const distance = step * .65, spread = f.diameterM / 2 + p.model.kSpread * distance;
+                        const next = c.clone().addScaledVector(axis, distance).addScaledVector(u, Math.cos(angle) * rad * spread).addScaledVector(v, Math.sin(angle) * rad * spread);
+                        if (next.y < .12 || next.x < 0 || next.z < 0 || next.x > p.template.lengthM || next.z > p.template.widthM || layout.solids.some(b => (0, geometry_js_1.segmentHitsBox)(previous.toArray(), next.toArray(), b)))
+                            break;
+                        const speed = (0, geometry_js_1.fanContribution)(f, next.toArray(), p.model, profile, layout.solids);
+                        if (speed < .15)
+                            break;
+                        previous = next;
+                    }
+                    if (previous.distanceTo(origin) > .3) {
+                        const middle = origin.clone().lerp(previous, .5), speed = (0, geometry_js_1.fanContribution)(f, middle.toArray(), p.model, profile, layout.solids);
+                        for (let dash = 0; dash < 3; dash++)
+                            this.winds.push({ a: origin, b: previous, speed, phase: (seed(fi * 123 + j * 31) + dash / 3) % 1 });
+                    }
+                }
+            }
+        if (p.view.particles)
+            for (const w of s.waterSystems) {
+                if (!w.enabled || !(0, physics_js_1.isOn)(time, w.onSec, w.offSec, w.hoursPerDay))
+                    continue;
+                for (const [ni, n] of w.nozzles.entries()) {
+                    if (!n.enabled || n.flowLpm <= 0)
+                        continue;
+                    const c = (0, geometry_js_1.world)(n);
+                    for (const [i, d] of (0, geometry_js_1.sprayDirections)(n, w.kind === 'mist' ? 48 : 24).entries()) {
+                        const hit = (0, geometry_js_1.rayAtHeight)(c, d, .19);
+                        if (!hit || hit[0] < 0 || hit[2] < 0 || hit[0] > p.template.lengthM || hit[2] > p.template.widthM || layout.solids.some(b => (0, geometry_js_1.segmentHitsBox)(c, hit, b)))
+                            continue;
+                        const trail = { a: V(c), b: V(hit), speed: w.kind === 'mist' ? .28 : .65, phase: seed(ni * 79 + i) };
+                        (w.kind === 'mist' ? this.fogs : this.waters).push(trail);
+                    }
+                }
+            }
+        this.resetParticles(this.wind, this.winds.length * 2);
+        this.resetParticles(this.drops, this.waters.length * 2);
+        this.resetParticles(this.mist, this.fogs.length);
+    }
+    moveEffects(t) {
+        const lines = (obj, trails, wind) => {
+            const attr = obj.geometry.getAttribute('position');
+            trails.forEach((r, i) => {
+                const phase = (r.phase + t * (wind ? Math.min(r.speed, 8) / Math.max(.5, r.a.distanceTo(r.b)) : r.speed)) % 1;
+                const a = r.a.clone().lerp(r.b, phase), b = r.a.clone().lerp(r.b, Math.min(1, phase + (wind ? .09 : .045)));
+                attr.setXYZ(i * 2, a.x, a.y, a.z);
+                attr.setXYZ(i * 2 + 1, b.x, b.y, b.z);
+            });
+            if (trails.length)
+                attr.needsUpdate = true;
+        };
+        lines(this.wind, this.winds, true);
+        lines(this.drops, this.waters, false);
+        const attr = this.mist.geometry.getAttribute('position');
+        this.fogs.forEach((r, i) => { const phase = (r.phase + t * r.speed) % 1, pos = r.a.clone().lerp(r.b, phase); pos.x += Math.sin(i + t) * .07 * phase; attr.setXYZ(i, pos.x, pos.y, pos.z); });
+        if (this.fogs.length)
+            attr.needsUpdate = true;
+    }
+    update(_batch, p, result) {
+        if (!p)
+            return;
+        this.p = p;
+        const s = (0, project_js_1.activeScenario)(p);
+        const barn = JSON.stringify([p.template, p.view.analysis, p.view.roof, s.roof.reflectance]);
+        if (barn !== this.buildingKey) {
+            this.buildingKey = barn;
+            this.buildBarn(p);
+        }
+        const devices = JSON.stringify([s.fans, s.waterSystems, p.view.selectedDeviceId]);
+        if (devices !== this.equipmentKey) {
+            this.equipmentKey = devices;
+            this.buildEquipment(p);
+        }
+        const overlay = JSON.stringify([p.template, p.activeScenarioId, result?.inputHash, p.view.metric, p.view.heatmap, p.view.analysis, p.view.selectedProbeId, p.view.selectedAreaId]);
+        if (overlay !== this.overlayKey) {
+            this.overlayKey = overlay;
+            this.disposeOverlayLines();
+            this.buildOverlay(p, result ?? null);
+        }
+        const effects = JSON.stringify([s.fans, s.waterSystems, p.template, p.environment, p.model, p.view.flow, p.view.particles, p.view.timeSec]);
+        if (effects !== this.effectKey) {
+            this.effectKey = effects;
+            this.buildEffects(p);
+        }
+    }
+    disposeOverlayLines() {
+        for (const c of this.overlay.children)
+            if (c instanceof THREE.LineSegments) {
+                c.geometry.dispose();
+                c.material.dispose();
+            }
+    }
+    draw(_m, w, h, c) {
+        if (!c || !this.p)
+            return;
+        this.width = w;
+        this.height = h;
+        const shadowSize = innerWidth < 600 ? 1024 : 2048;
+        if (this.sun.shadow.mapSize.x !== shadowSize) {
+            this.sun.shadow.mapSize.set(shadowSize, shadowSize);
+            this.sun.shadow.map?.dispose();
+            this.sun.shadow.map = null;
+            this.renderer.shadowMap.needsUpdate = true;
+        }
+        this.renderer.setSize(w, h, false);
+        this.camera.aspect = w / h;
+        this.camera.position.copy(V((0, math3d_js_1.eyeOf)(c)));
+        this.camera.lookAt(V(c.target));
+        this.camera.updateProjectionMatrix();
+        this.renderFrame();
+    }
+    renderFrame() {
+        if (!this.p)
+            return;
+        const start = performance.now();
+        this.moveEffects(this.reduced.matches ? 0 : (start - this.clockStart) / 1000);
+        this.renderer.render(this.scene, this.camera);
+        this.frameMs = performance.now() - start;
+    }
+    animate = (time) => {
+        if (this.disposed)
+            return;
+        this.frame = requestAnimationFrame(this.animate);
+        if (document.hidden || this.reduced.matches || time - this.lastFrame < 33)
+            return;
+        this.lastFrame = time;
+        this.renderFrame();
+    };
+    diagnostics() {
+        return { calls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles, geometries: this.renderer.info.memory.geometries, textures: this.renderer.info.memory.textures,
+            materials: Object.keys(this.materials).length + 5, shadowLights: 1, shadowMap: this.sun.shadow.mapSize.x, dpr: this.renderer.getPixelRatio(), postPasses: 0, frameMs: this.frameMs, width: this.width, height: this.height,
+            cowPoses: { ...this.cowPoses }, windSegments: this.winds.length, soakerDrops: this.waters.length, mistParticles: this.fogs.length, reducedMotion: this.reduced.matches };
+    }
+    dispose() {
+        this.disposed = true;
+        cancelAnimationFrame(this.frame);
+        this.disposeOverlayLines();
+        this.clear(this.overlay, true);
+        this.clear(this.building);
+        this.clear(this.equipment);
+        for (const obj of [this.wind, this.drops, this.mist])
+            obj.geometry.dispose();
+        for (const g of [this.box, this.sphere, this.cylinder, this.ring, this.cowBody])
+            g.dispose();
+        for (const m of Object.values(this.materials))
+            m.dispose();
+        this.lineMat.dispose();
+        this.dropMat.dispose();
+        this.mistMat.dispose();
+        this.textures.forEach(t => t.dispose());
+        this.env.dispose();
+        this.sun.shadow.map?.dispose();
+        this.renderer.dispose();
+    }
+}
+exports.RealisticBackend = RealisticBackend;
+
+},
 "views/math3d.js":function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -10696,6 +11340,71 @@ function planeAt(x, y, w, h, c, height) {
         return null;
     const t = (height - eye[1]) / d[1];
     return t > 0 ? [eye[0] + d[0] * t, height, eye[2] + d[2] * t] : null;
+}
+
+},
+"views/holstein.js":function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.holsteinBody = holsteinBody;
+const THREE = __importStar(require("three"));
+/** Authored longitudinal cross-sections: shoulder, rib barrel, angular loin and rump.
+ * Local +Z is the tail end; Y=0 is the barrel centre. Presentation geometry only. */
+function holsteinBody() {
+    const sections = [[-.78, .13, .25, .00], [-.62, .27, .38, .035], [-.37, .34, .41, 0], [0, .38, .43, -.025], [.34, .35, .39, .015], [.57, .32, .36, .025], [.76, .20, .30, .005], [.82, .06, .18, 0]];
+    const positions = [], uv = [], indices = [], sides = 16;
+    sections.forEach(([z, width, height, offset], j) => {
+        for (let i = 0; i <= sides; i++) {
+            const angle = i / sides * Math.PI * 2, sy = Math.sin(angle);
+            // A firmer, flatter topline and a deeper abdomen, rather than an egg silhouette.
+            const y = sy >= 0 ? Math.pow(sy, .45) * height : sy * height * 1.05;
+            positions.push(Math.cos(angle) * width, y + offset, z);
+            uv.push(i / sides, j / (sections.length - 1));
+            if (j < sections.length - 1 && i < sides) {
+                const a = j * (sides + 1) + i, b = a + sides + 1;
+                indices.push(a, a + 1, b, b, a + 1, b + 1);
+            }
+        }
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(indices);
+    g.computeVertexNormals();
+    return g;
 }
 
 },
@@ -10852,10 +11561,10 @@ function layout() {
 <main class="workspace">
 <aside class="equipment-panel panel"><div class="panel-heading"><span class="eyebrow">01 / EQUIPMENT</span><h2>対策を選ぶ・配置する</h2></div><div id="equipment-controls"></div><div class="inspector"><h3>選択中の設備</h3><div id="device-selector"></div><div id="device-properties"></div></div></aside>
 <section class="simulation-area" aria-label="牛舎の操作">
- <div class="stage panel"><div class="stage-toolbar"><div id="scenario-tabs" class="segments"></div><div class="segments modes"><button data-mode="3d">3D</button><button data-mode="2d">2D</button></div></div>
+ <div class="stage panel"><div class="stage-toolbar"><div id="scenario-tabs" class="segments"></div><div class="segments modes"><button data-mode="3d">標準3D</button><button data-render="realistic">リアル3D</button><button data-mode="2d">2D</button></div></div>
  <div class="stage-subhead"><div class="metric-tabs"><button data-metric="deficit">放熱不足</button><button data-metric="delta">放熱改善</button><button data-metric="speed">風速</button><button data-metric="temperature">気温</button></div><span>色は60分平均・全案共通目盛り</span></div>
- <div class="scene-wrap"><div id="scene"></div><div class="scene-top-left"><span class="scene-label">操作できるモデル牛舎</span><strong id="scene-selection">採食7</strong></div><div class="camera-buttons"><button data-camera="overview" title="全体を見る">全体</button><button data-camera="top">上面</button><button data-camera="side">側面</button></div><div class="scene-bottom-left"><span class="mouse-hint">設備をドラッグして移動<br>背景で回転 / ホイールで拡大</span></div><div id="scene-live" class="scene-live"></div><div id="scene-busy" class="scene-busy" hidden>変更した条件で再計算中…</div></div>
- <div class="stage-footer"><div id="legend"></div><div class="scene-switches"><label><input id="show-roof" type="checkbox" data-view="roof">屋根断面</label><label><input id="show-flow" type="checkbox" data-view="flow">風</label><label><input id="show-particles" type="checkbox" data-view="particles">散水</label><label><input id="show-analysis" type="checkbox" data-view="analysis">分析表示</label></div></div>
+ <div class="scene-wrap"><div id="scene"></div><div class="scene-top-left"><span class="scene-label">操作できるモデル牛舎</span><strong id="scene-selection">採食7</strong></div><div class="camera-buttons"><button data-camera="overview" title="全体を見る">全体</button><button data-camera="top">上面</button><button data-camera="side">側面</button></div><div class="scene-bottom-left"><span class="mouse-hint">設備をドラッグして移動<br>背景で回転 / ホイールで拡大</span></div><div id="scene-live" class="scene-live"></div><div id="realistic-note" class="realistic-note" hidden>風・水滴は作用の模式表現 · 時刻で運転状態を切替</div><div id="scene-busy" class="scene-busy" hidden>変更した条件で再計算中…</div></div>
+ <div class="stage-footer"><div id="legend"></div><div class="scene-switches"><label><input id="show-roof" type="checkbox" data-view="roof">屋根断面</label><label><input id="show-flow" type="checkbox" data-view="flow">風</label><label><input id="show-particles" type="checkbox" data-view="particles">散水</label><label id="heatmap-switch" hidden><input id="show-heatmap" type="checkbox" data-view="heatmap">ヒートマップ</label><label><input id="show-analysis" type="checkbox" data-view="analysis">分析表示</label></div></div>
  <div class="edit-toolbar"><div><button data-action="undo" id="undo-button">↶ 戻す</button><button data-action="redo" id="redo-button">↷ やり直す</button></div><span id="edit-hint">選択 → 移動・高さ・向き → 結果を比較</span><button data-action="copy-scenario" id="copy-scenario">別案へコピー</button><button data-action="reset-active" id="reset-active">基準に戻す</button></div>
  </div>
  <div class="timeline-panel panel"><div class="timeline-heading"><div><span class="eyebrow">02 / TIME</span><h2>散水と放熱の変化 <small>選択地点・0〜60分</small></h2></div><div class="chart-tabs"><button data-chart="qW" class="active">放熱量</button><button data-chart="temperatureC">気温</button><button data-chart="filmKg">保持水</button></div></div><div id="timeline-chart"></div><div class="transport"><button data-action="play" id="play-button">${(0, dom_js_1.icon)('play', 15)} 再生</button><input id="time-slider" type="range" min="0" max="3600" step="1" value="0" aria-label="表示時刻"><output id="time-display">00:00</output><select id="play-speed" aria-label="再生倍率"><option value="60">60倍</option><option value="120" selected>120倍</option><option value="300">300倍</option></select></div><p class="micro">カードと色は60分平均。再生は計算済みの時系列を表示します。乳量・受胎の時間予測ではありません。</p></div>
@@ -10981,9 +11690,14 @@ function renderControls(p) {
     (0, dom_js_1.el)('edit-hint').textContent = disabled ? '基準案は固定です。編集案 A / B に切り替えてください。' : '選択 → 移動・高さ・向き → 比較';
     (0, dom_js_1.el)('reset-active').disabled = disabled;
     (0, dom_js_1.el)('copy-scenario').disabled = disabled;
-    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === p.view.mode));
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === p.view.mode && !(p.view.mode === '3d' && p.view.realistic)));
     document.querySelectorAll('[data-metric]').forEach(b => b.classList.toggle('active', b.dataset.metric === p.view.metric));
-    for (const key of ['roof', 'flow', 'particles', 'analysis'])
+    const realistic = p.view.mode === '3d' && p.view.realistic === true;
+    document.querySelector('[data-render=realistic]')?.classList.toggle('active', realistic);
+    (0, dom_js_1.el)('heatmap-switch').hidden = !realistic;
+    (0, dom_js_1.el)('realistic-note').hidden = !realistic;
+    (0, dom_js_1.el)('legend').hidden = realistic && !p.view.heatmap && !p.view.analysis;
+    for (const key of ['roof', 'flow', 'particles', 'analysis', 'heatmap'])
         (0, dom_js_1.el)('show-' + key).checked = p.view[key] === true;
     const m = p.view.metric;
     (0, dom_js_1.setHTML)('legend', `<span>${m === 'delta' ? '−900 W' : m === 'speed' ? '0 m/s' : m === 'deficit' ? '0 W' : '25℃'}</span><i class="legend-gradient ${m}"></i><span>${m === 'delta' ? '+900 W' : m === 'speed' ? '3 m/s' : m === 'deficit' ? '1200 W以上' : '40℃'}</span><span class="legend-note">斜線=無効・通路等は評価対象外</span>`);
@@ -11298,6 +12012,10 @@ function createCommands(d) {
             patch.metric = args.metric;
         if (args.analysis !== undefined)
             patch.analysis = args.analysis;
+        if (args.realistic !== undefined)
+            patch.realistic = args.realistic;
+        if (args.heatmap !== undefined)
+            patch.heatmap = args.heatmap;
         if (args.roof !== undefined)
             patch.roof = args.roof;
         if (args.flow !== undefined)

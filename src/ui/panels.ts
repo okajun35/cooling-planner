@@ -43,9 +43,12 @@ export function renderControls(p:Project){
  el('scene-selection').textContent=buildLayout(p.template).probes.find(q=>q.id===p.view.selectedProbeId)?.label??'';
  el('edit-hint').textContent=disabled?'基準案は固定です。編集案 A / B に切り替えてください。':'選択 → 移動・高さ・向き → 比較';
  el<HTMLButtonElement>('reset-active').disabled=disabled;el<HTMLButtonElement>('copy-scenario').disabled=disabled;
- document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===p.view.mode));
+ document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===p.view.mode&&!(p.view.mode==='3d'&&p.view.realistic)));
  document.querySelectorAll<HTMLButtonElement>('[data-metric]').forEach(b=>b.classList.toggle('active',b.dataset.metric===p.view.metric));
- for(const key of ['roof','flow','particles','analysis'] as const)el<HTMLInputElement>('show-'+key).checked=p.view[key]===true;
+ const realistic=p.view.mode==='3d'&&p.view.realistic===true;
+ document.querySelector('[data-render=realistic]')?.classList.toggle('active',realistic);
+ el('heatmap-switch').hidden=!realistic;el('realistic-note').hidden=!realistic;el('legend').hidden=realistic&&!p.view.heatmap&&!p.view.analysis;
+ for(const key of ['roof','flow','particles','analysis','heatmap'] as const)el<HTMLInputElement>('show-'+key).checked=p.view[key]===true;
  const m=p.view.metric;setHTML('legend',`<span>${m==='delta'?'−900 W':m==='speed'?'0 m/s':m==='deficit'?'0 W':'25℃'}</span><i class="legend-gradient ${m}"></i><span>${m==='delta'?'+900 W':m==='speed'?'3 m/s':m==='deficit'?'1200 W以上':'40℃'}</span><span class="legend-note">斜線=無効・通路等は評価対象外</span>`);
 }
 function kpi(label:string,value:number|null|undefined,unit:string,before:number|null|undefined,ic:string,description:string){

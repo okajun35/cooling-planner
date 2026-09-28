@@ -38,9 +38,10 @@ function status(){
 }
 function syncScene(){
  const p=store.project;
- if(!scene||mode!==p.view.mode){scene?.dispose();scene=null;mode=p.view.mode;
+ const requestedMode=p.view.mode==='3d'&&p.view.realistic?'realistic':p.view.mode;
+ if(!scene||mode!==requestedMode){scene?.dispose();scene=null;mode=requestedMode;
   const cb:ViewCallbacks={selectDevice:id=>safe(()=>store.setView({selectedDeviceId:id})),selectProbe:id=>safe(()=>store.setView({selectedProbeId:id})),begin:()=>store.begin(),preview:(id,patch)=>store.previewDevice(id,patch),commit:()=>store.commit(),cancel:()=>store.cancel(),camera:c=>store.setView({camera:c}),error:message=>{showError(message);if(store.project.view.mode==='3d'){store.setView({mode:'2d'})}}};
-  if(mode==='3d'){try{scene=new Viewport3D(el('scene'),cb)}catch{mode='2d';scene=new SVG2D(el('scene'),cb);queueMicrotask(()=>store.setView({mode:'2d'}));toast('3Dを初期化できないため、2Dで続行します。')}}else scene=new SVG2D(el('scene'),cb);
+  if(mode==='3d'||mode==='realistic'){try{scene=new Viewport3D(el('scene'),cb,undefined,mode==='realistic')}catch{mode='2d';scene=new SVG2D(el('scene'),cb);queueMicrotask(()=>store.setView({mode:'2d'}));toast('3Dを初期化できないため、2Dで続行します。')}}else scene=new SVG2D(el('scene'),cb);
  }
  scene.sync(p,currentResult());
 }
@@ -120,7 +121,7 @@ document.addEventListener('click',event=>{
  if(areaRow){const id=areaRow.getAttribute('data-area');safe(()=>store.setView({selectedAreaId:store.project.view.selectedAreaId===id?null:id}));return}
  const b=(event.target as Element).closest<HTMLButtonElement>('button');if(!b||b.disabled)return;safe(()=>{
  const p=store.project,id=p.view.selectedDeviceId;
- if(b.dataset.scenario){stopPlayback();store.switchScenario(b.dataset.scenario);return}if(b.dataset.mode){store.setView({mode:b.dataset.mode as '2d'|'3d'});return}if(b.dataset.metric){store.setView({metric:b.dataset.metric as Project['view']['metric']});return}if(b.dataset.camera){scene?.preset?.(b.dataset.camera as 'overview'|'top'|'side');return}
+ if(b.dataset.scenario){stopPlayback();store.switchScenario(b.dataset.scenario);return}if(b.dataset.mode){store.setView({mode:b.dataset.mode as '2d'|'3d',...(b.dataset.mode==='3d'?{realistic:false}:{})});return}if(b.dataset.render==='realistic'){store.setView({mode:'3d',realistic:true});return}if(b.dataset.metric){store.setView({metric:b.dataset.metric as Project['view']['metric']});return}if(b.dataset.camera){scene?.preset?.(b.dataset.camera as 'overview'|'top'|'side');return}
  if(b.dataset.chart){chart=b.dataset.chart as ChartMetric;document.querySelectorAll<HTMLElement>('[data-chart]').forEach(x=>x.classList.toggle('active',x.dataset.chart===chart));renderTimeline(p,currentResult(),chart);return}
  if(b.dataset.close){el<HTMLDialogElement>(b.dataset.close).close();return}
  switch(b.dataset.action){
@@ -149,7 +150,7 @@ document.addEventListener('keydown',e=>{
  if(!(e.ctrlKey||e.metaKey)||e.altKey||(e.target as Element).closest('input,select,textarea,[contenteditable]'))return;
  if(e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?store.redo():store.undo()}else if(e.key.toLowerCase()==='y'){e.preventDefault();store.redo()}
 });
-Object.defineProperty(window,'__DCS__',{value:{snapshot:()=>structuredClone(store.project),result:()=>structuredClone(currentResult()),hash:()=>inputHash(store.committed),screenPoint:(x:number,h:number,y:number)=>scene?.screenPoint?.([x,h,y]),metrics:()=>({lastCalculationMs,renderer:scene?.rendererName,undoCount:store.undoCount,redoCount:store.redoCount,workerFailed,calculating})},writable:false});
+Object.defineProperty(window,'__DCS__',{value:{snapshot:()=>structuredClone(store.project),result:()=>structuredClone(currentResult()),hash:()=>inputHash(store.committed),screenPoint:(x:number,h:number,y:number)=>scene?.screenPoint?.([x,h,y]),metrics:()=>({lastCalculationMs,renderer:scene?.rendererName,undoCount:store.undoCount,redoCount:store.redoCount,workerFailed,calculating,graphics:scene?.diagnostics?.()??{}})},writable:false});
 makeWorker();recalculate();render();
 if(location.protocol==='http:'&&new URLSearchParams(location.search).get('mcp')==='1'){
  const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback});
