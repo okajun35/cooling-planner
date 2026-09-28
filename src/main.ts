@@ -11,7 +11,7 @@ import {SVG2D} from './views/svg2d.js';
 import type {SceneView,ViewCallbacks} from './views/common.js';
 import {layout} from './ui/layout.js';
 import {el,icon} from './ui/dom.js';
-import {renderControls,renderResults,renderSettings,renderReference,renderEvidence} from './ui/panels.js';
+import {renderControls,renderResults,renderSettings,renderReference,renderEvidence,renderAreas} from './ui/panels.js';
 import {renderTimeline,updateTime} from './ui/timeline.js';
 import type {ChartMetric} from './ui/timeline.js';
 
@@ -43,7 +43,7 @@ function syncScene(){
  scene.sync(p,currentResult());
 }
 function render(){
- renderControls(store.project);renderResults(store.project,currentResult());renderTimeline(store.project,currentResult(),chart);updateTime(store.project,currentResult());
+ renderControls(store.project);renderResults(store.project,currentResult());renderAreas(store.project,currentResult());renderTimeline(store.project,currentResult(),chart);updateTime(store.project,currentResult());
  for(const [id,fn]of [['settings-dialog',()=>renderSettings(store.project)],['reference-dialog',()=>renderReference(store.project)],['evidence-dialog',()=>renderEvidence(store.project,currentResult())]] as const)if(el<HTMLDialogElement>(id).open)fn();
  syncScene();status();
 }
@@ -56,7 +56,7 @@ function makeWorker(){
    if(d.kind==='error'){calculating=false;lastCalculationMs=performance.now()-startTime;workerFailed=true;result=null;showError(d.error)}
    else if(d.kind==='thermal-result'){result=d.result;workerFailed=false/* keep calculating until the daily stage */}
    else if(d.kind==='daily-result'){if(result&&result.inputHash===d.inputHash)mergeDaily(result,d.daily,d.dailyMilkStatus);calculating=false;lastCalculationMs=performance.now()-startTime}
-   renderResults(store.project,currentResult());renderTimeline(store.project,currentResult(),chart);updateTime(store.project,currentResult());syncScene();status();
+   renderResults(store.project,currentResult());renderAreas(store.project,currentResult());renderTimeline(store.project,currentResult(),chart);updateTime(store.project,currentResult());syncScene();status();
   };
   worker.onerror=()=>{calculating=false;workerFailed=true;showError('計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。');status()};
  }catch(e){workerFailed=true;showError(String(e));status()}
@@ -113,7 +113,10 @@ document.addEventListener('change',event=>{
  }catch(e){invalid=true;pending=false;i.classList.add('bad-input');showError(e instanceof Error?e.message:String(e));status()}
 });
 function download(name:string,object:unknown){const url=URL.createObjectURL(new Blob([typeof object==='string'?object:JSON.stringify(object,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-document.addEventListener('click',event=>{const b=(event.target as Element).closest<HTMLButtonElement>('button');if(!b||b.disabled)return;safe(()=>{
+document.addEventListener('click',event=>{
+ const areaRow=(event.target as Element).closest('[data-area]');
+ if(areaRow){const id=areaRow.getAttribute('data-area');safe(()=>store.setView({selectedAreaId:store.project.view.selectedAreaId===id?null:id}));return}
+ const b=(event.target as Element).closest<HTMLButtonElement>('button');if(!b||b.disabled)return;safe(()=>{
  const p=store.project,id=p.view.selectedDeviceId;
  if(b.dataset.scenario){stopPlayback();store.switchScenario(b.dataset.scenario);return}if(b.dataset.mode){store.setView({mode:b.dataset.mode as '2d'|'3d'});return}if(b.dataset.metric){store.setView({metric:b.dataset.metric as Project['view']['metric']});return}if(b.dataset.camera){scene?.preset?.(b.dataset.camera as 'overview'|'top'|'side');return}
  if(b.dataset.chart){chart=b.dataset.chart as ChartMetric;document.querySelectorAll<HTMLElement>('[data-chart]').forEach(x=>x.classList.toggle('active',x.dataset.chart===chart));renderTimeline(p,currentResult(),chart);return}

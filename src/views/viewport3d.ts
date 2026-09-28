@@ -7,6 +7,8 @@ import {ThreeBackend} from './threeBackend.js';
 import type {RenderBackend} from './common.js';
 import {matrix,project,planeAt} from './math3d.js';
 import type {Camera} from './math3d.js';
+import {buildFaces} from '../template/faces.js';
+import {buildLayout} from '../template/layout.js';
 export class Viewport3D implements SceneView{
  private canvas:HTMLCanvasElement;private backend:RenderBackend;private p:Project|null=null;private result:SimulationResult|null=null;private batch:Batch|null=null;private observer:ResizeObserver;private abort=new AbortController();private camera:Camera={azimuth:-.28,elevation:.6,distance:42,target:[18.2,0,11.75]};
  private pointer:{x:number;y:number;lastX:number;lastY:number;id:number;deviceId:string|null;height:number;offset:Vec3;started:boolean;pan:boolean;startCamera:Camera}|null=null;
@@ -27,6 +29,17 @@ export class Viewport3D implements SceneView{
   const hits=this.batch.hits.map(hit=>({...hit,screen:project(hit.position,m,w,h)})).filter(hit=>hit.screen.visible&&Math.hypot(hit.screen.x-x,hit.screen.y-y)<(hit.kind==='device'?16:10)).sort((a,b)=>{const delta=Math.hypot(a.screen.x-x,a.screen.y-y)-Math.hypot(b.screen.x-x,b.screen.y-y);return Math.abs(delta)<1?(b.priority??0)-(a.priority??0)||delta:delta});
   const hit=e.button===0&&!e.shiftKey?hits[0]:null;
   if(hit?.kind==='probe'){this.cb.selectProbe(hit.id);return}
+  // Face selection: clicking a colored area face selects its representative probe.
+  // Faces render at their own elevation (FaceRect.surfaceY), so intersect the click ray
+  // with each elevation — projecting onto y=0 lands in a neighbouring face in oblique views.
+  if(e.button===0&&!e.shiftKey&&!hit){
+   const faces=buildFaces(buildLayout(this.p.template));
+   for(const fy of [...new Set(faces.map(f=>f.surfaceY))].sort((a,b)=>b-a)){
+    const q=planeAt(x,y,w,h,this.camera,fy);if(!q)continue;
+    const face=faces.find(f=>f.surfaceY===fy&&q[0]>=f.x&&q[0]<=f.x+f.widthM&&q[2]>=f.y&&q[2]<=f.y+f.depthM);
+    if(face){this.cb.selectProbe(face.probeId);return}
+   }
+  }
   let deviceId:string|null=null,height=0,offset:Vec3=[0,0,0];
   if(hit?.kind==='device'){this.cb.selectDevice(hit.id);if(!activeScenario(this.p).readOnly){deviceId=hit.id;height=hit.position[1];const q=planeAt(x,y,w,h,this.camera,height);if(q)offset=[hit.position[0]-q[0],0,hit.position[2]-q[2]]}}
   this.pointer={x,y,lastX:x,lastY:y,id:e.pointerId,deviceId,height,offset,started:false,pan:e.shiftKey||e.button===2,startCamera:structuredClone(this.camera)};this.canvas.setPointerCapture(e.pointerId);

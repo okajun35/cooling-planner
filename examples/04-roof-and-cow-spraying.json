@@ -2078,14 +2078,16 @@
   ],
   "view": {
     "mode": "3d",
-    "metric": "delta",
+    "metric": "deficit",
     "timeSec": 0,
     "selectedProbeId": "feed-07",
     "selectedDeviceId": "soaker-1",
     "roof": false,
     "flow": true,
     "particles": true,
-    "camera": null
+    "camera": null,
+    "analysis": false,
+    "selectedAreaId": null
   },
   "prices": {
     "electricityYenKwh": 27,

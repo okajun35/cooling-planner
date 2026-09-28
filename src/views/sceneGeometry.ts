@@ -1,9 +1,11 @@
 import type {Project,SimulationResult,Vec3} from '../domain/project.js';
 import {activeScenario} from '../domain/project.js';
 import {buildLayout} from '../template/layout.js';
+import {buildFaces,buildAreas} from '../template/faces.js';
+import {deficitUnreached} from '../model/areaStats.js';
 import {world,direction,normalize,cross,sprayDirections,rayAtHeight,windAt} from '../model/geometry.js';
 import {isOn} from '../model/physics.js';
-import {zoneColor,metricColor} from './common.js';
+import {zoneColor,metricColor,metricValue} from './common.js';
 export interface Batch {triangles:Float32Array;lines:Float32Array;hits:{id:string;kind:'device'|'probe';position:Vec3;priority?:number}[]}
 const rgb=(s:string):Vec3=>[parseInt(s.slice(1,3),16)/255,parseInt(s.slice(3,5),16)/255,parseInt(s.slice(5,7),16)/255];
 export function sceneGeometry(p:Project,result:SimulationResult|null):Batch{
@@ -25,14 +27,31 @@ export function sceneGeometry(p:Project,result:SimulationResult|null):Batch{
   const x=cell.x,y=cell.y;box(x+.07,.03,y+.1,cell.widthM-.14,.12,cell.depthM-.2,'#edf1e9');
   for(const dx of [0,cell.widthM]){segment([x+dx,.25,y+.05],[x+dx,.65,y+.4],'#a4b5ac');segment([x+dx,.65,y+.4],[x+dx,.65,y+2.1],'#a4b5ac');segment([x+dx,.65,y+2.1],[x+dx,.2,y+2.4],'#a4b5ac')}
   // Simple resting-cow silhouettes are presentation only, never flow obstacles.
-  box(x+.29,.16,y+.64,.62,.42,1.30,'#fcfcf7');box(x+.42,.58,y+1.05,.36,.025,.45,'#778b80');box(x+.35,.33,y+.35,.5,.34,.43,'#455d51');
+  if(!p.view.analysis){box(x+.29,.16,y+.64,.62,.42,1.30,'#fcfcf7');box(x+.42,.58,y+1.05,.36,.025,.45,'#778b80');box(x+.35,.33,y+.35,.5,.34,.43,'#455d51')}
  }
  const robot=layout.zones.find(z=>z.kind==='robot')!;box(robot.x+.4,.05,robot.y+.4,2.2,1.5,1.9,'#62938c');box(robot.x+.8,1.56,robot.y+.55,1.4,.3,1.5,'#d8e4db');
- if(p.view.roof){const roofColor=scenario.roof.reflectance>.5?'#f6f8fc':'#b9c2d0';quad([0,8.7,W/2],[L,8.7,W/2],[L,4,W],[0,4,W],roofColor);if(scenario.roof.insulationM>0)segment([0,8.57,W/2],[L,8.57,W/2],'#e8ae54');for(let x=0;x<=L+.1;x+=L/6){segment([x,0,0],[x,4,0],'#9bafa4');segment([x,0,W],[x,4,W],'#9bafa4');segment([x,4,0],[x,8.7,W/2],'#acbeb1');segment([x,8.7,W/2],[x,4,W],'#acbeb1')}for(const [h,z]of [[4,0],[4,W],[8.7,W/2]])segment([0,h,z],[L,h,z],'#a3b8ab')}
+ if(p.view.roof&&!p.view.analysis){const roofColor=scenario.roof.reflectance>.5?'#f6f8fc':'#b9c2d0';quad([0,8.7,W/2],[L,8.7,W/2],[L,4,W],[0,4,W],roofColor);if(scenario.roof.insulationM>0)segment([0,8.57,W/2],[L,8.57,W/2],'#e8ae54');for(let x=0;x<=L+.1;x+=L/6){segment([x,0,0],[x,4,0],'#9bafa4');segment([x,0,W],[x,4,W],'#9bafa4');segment([x,4,0],[x,8.7,W/2],'#acbeb1');segment([x,8.7,W/2],[x,4,W],'#acbeb1')}for(const [h,z]of [[4,0],[4,W],[8.7,W/2]])segment([0,h,z],[L,h,z],'#a3b8ab')}
+ // Area faces (v0.1): flat quads at floor level, one per representative probe.
+ const selectedArea=p.view.selectedAreaId?buildAreas(layout).find(a=>a.id===p.view.selectedAreaId)??null:null;
+ for(const f of buildFaces(layout)){
+  const q=out?.points.find(r=>r.probeId===f.probeId),valid=!!q&&q.status==='valid';
+  const color=!q?'#cdd4de':valid?metricColor(metricValue(q,p.view.metric),p.view.metric):'#cdd4de';
+  const fy=f.surfaceY;// stall faces sit just above the stall base block
+  quad([f.x+.03,fy,f.y+.03],[f.x+f.widthM-.03,fy,f.y+.03],[f.x+f.widthM-.03,fy,f.y+f.depthM-.03],[f.x+.03,fy,f.y+f.depthM-.03],color);
+  if(q&&!valid)segment([f.x+.08,fy+.006,f.y+.08],[f.x+f.widthM-.08,fy+.006,f.y+f.depthM-.08],'#8d99a8');
+  if(q&&deficitUnreached(q)){
+   segment([f.x+.08,fy+.006,f.y+.08],[f.x+f.widthM-.08,fy+.006,f.y+f.depthM-.08],'#c2512b');
+   ring([f.x+f.widthM/2,fy+.008,f.y+f.depthM/2],[1,0,0],[0,0,1],Math.min(f.widthM,f.depthM)*.28,'#c2512b');
+  }
+  if(selectedArea?.probeIds.includes(f.probeId)){
+   segment([f.x+.04,fy+.008,f.y+.04],[f.x+f.widthM-.04,fy+.008,f.y+.04],'#dc9144');segment([f.x+f.widthM-.04,fy+.008,f.y+.04],[f.x+f.widthM-.04,fy+.008,f.y+f.depthM-.04],'#dc9144');
+   segment([f.x+f.widthM-.04,fy+.008,f.y+f.depthM-.04],[f.x+.04,fy+.008,f.y+f.depthM-.04],'#dc9144');segment([f.x+.04,fy+.008,f.y+f.depthM-.04],[f.x+.04,fy+.008,f.y+.04],'#dc9144');
+  }
+ }
  const profile=p.model.profiles.find(x=>x.id==='reference')!;
  for(const q of layout.probes){
-  const value=out?.points.find(r=>r.probeId===q.id),selected=q.id===p.view.selectedProbeId,center:Vec3=[q.x,q.heightM+.1,q.y],color=metricColor(p.view.metric==='speed'?(value?.meanSpeedMps??null):p.view.metric==='temperature'?(value?.meanAirTemperatureC??null):(value?.deltaQrefW??null),p.view.metric);
-  if(q.kind==='stall')box(q.x-.49,.17,q.y-.86,.98,.015,1.72,color);else disk([q.x,.08,q.y],.6,color);disk(center,selected?.46:.28,color);if(selected){ring([q.x,q.heightM+.12,q.y],[1,0,0],[0,0,1],.58,'#dc9144');segment([q.x,.1,q.y],[q.x,q.heightM+.1,q.y],'#ce934f')}hits.push({id:q.id,kind:'probe',position:center});
+  const value=out?.points.find(r=>r.probeId===q.id),selected=q.id===p.view.selectedProbeId,center:Vec3=[q.x,q.heightM+.1,q.y],color=metricColor(metricValue(value,p.view.metric),p.view.metric);
+  disk(center,selected?.46:.28,color);if(selected){ring([q.x,q.heightM+.12,q.y],[1,0,0],[0,0,1],.58,'#dc9144');segment([q.x,.1,q.y],[q.x,q.heightM+.1,q.y],'#ce934f')}hits.push({id:q.id,kind:'probe',position:center});
   if(p.view.flow){const v=windAt(scenario.fans,world(q),p.environment,p.model,profile,layout.solids),f=scenario.fans.find(f=>f.id===v.dominant);if(f&&v.speed>.35){const d=direction(f.yawDeg,f.pitchDownDeg),len=Math.min(2.6,v.speed),start:Vec3=[q.x,.25,q.y],end:Vec3=[q.x+d[0]*len,.25,q.y+d[2]*len];segment(start,end,'#238abf');segment(end,[end[0]-d[0]*.3-d[2]*.16,.25,end[2]-d[2]*.3+d[0]*.16],'#238abf');segment(end,[end[0]-d[0]*.3+d[2]*.16,.25,end[2]-d[2]*.3-d[0]*.16],'#238abf')}}
  }
  for(const f of scenario.fans){

@@ -4,7 +4,7 @@ to exercise an HTTP deployment instead. Both exercise WebGL, Workers and editing
 They do not verify a mobile device GPU or scientific accuracy.
 """
 from pathlib import Path
-import json, os
+import json, math, os
 import pytest
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[2]
@@ -275,6 +275,89 @@ def test_E22_daily_milk_card_updates_and_probe_choice_does_not_change_it(page):
     # daily start time is part of the physics input hash
     page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-start',6)
     assert fan(snap(page))['dailyStartHour']==6
+
+def test_E23_area_faces_deficit_metric_and_face_selection(page):
+    r=result(page)
+    pt=r['scenarios'][1]['points'][0]
+    # AV01: improvement zero (identical to baseline) while heat deficit stays absolute
+    assert pt['deltaQrefW']==0 and pt['meanDeficitW']>0
+    assert page.locator('[data-metric=deficit]').get_attribute('class').strip()=='active'
+    # AV02: exactly 70 faces in 2D, zones stay underneath
+    page.locator('[data-mode="2d"]').click();ready(page)
+    assert page.locator('svg rect[data-face]').count()==70
+    # AV04: clicking a face selects its probe; the dropdown stays in sync
+    # (device/probe hit areas take precedence at their centres — click a face edge)
+    page.locator('[data-face="face-wait-1"]').click(position={'x':3,'y':3})
+    assert snap(page)['view']['selectedProbeId']=='wait-1'
+    page.locator('#probe-select').select_option('stall-A-01')
+    assert snap(page)['view']['selectedProbeId']=='stall-A-01'
+    text=page.locator('#results').inner_text()
+    assert '放熱不足' in text and '設備の作用' in text and '濡れ方' in text
+    # area table: 6 areas + stall subtotal; row click highlights faces
+    rows=page.locator('#area-summary [data-area]')
+    assert rows.count()==7
+    rows.first.click()
+    assert snap(page)['view']['selectedAreaId']=='stall-A'
+    assert page.locator('#area-summary tr.selected').count()==1
+    # AV03: same metric across view modes; display switches never recalc physics
+    h=page.evaluate('window.__DCS__.hash()')
+    page.locator('[data-mode="3d"]').click();ready(page)
+    page.locator('#show-analysis').check()
+    assert snap(page)['view']['analysis'] is True
+    assert page.evaluate('window.__DCS__.hash()')==h
+    # 3D face click resolves to its probe via floor projection
+    pos=point(page,{'x':33.4,'heightM':.05,'y':13.0})
+    if pos['visible']:
+        page.mouse.click(pos['x'],pos['y'])
+        assert snap(page)['view']['selectedProbeId']=='wait-3'
+    page.screenshot(path=str(OUT/'area-analysis.png'),full_page=True)
+
+def probe_hit_points(page):
+    """Screen positions of every probe/device hit marker (they take click precedence)."""
+    t=snap(page)['template'];L=t['lengthM'];W=t['widthM'];a=(W-18.5)/2
+    hits=[]
+    for row,y,n in [('A',8,13),('B',10.5+a,12),('C',13+a,13),('D',15.5+2*a,12)]:
+        start=2.5+((L-11)-(n*1.2+2.5))/2;left=(n+1)//2
+        for i in range(n):
+            x=start+i*1.2+(2.5 if i>=left else 0)
+            hits.append((f'stall-{row}-{i+1:02d}',{'x':x+.6,'heightM':.6,'y':y+1.25},10))
+    for i in range(12):hits.append((f'feed-{i+1:02d}',{'x':2.5+(i+.5)*(L-11)/12,'heightM':1.4,'y':5.75},10))
+    for j in range(4):
+        for i in range(2):hits.append((f'wait-{j*2+i+1}',{'x':L-6+(i+.5)*3,'heightM':1.4,'y':11+(j+.5)*(W-15)/4},10))
+    for f in snap(page)['scenarios'][1]['fans']:hits.append((f['id'],{'x':f['x'],'heightM':f['heightM'],'y':f['y']},16))
+    for w in snap(page)['scenarios'][1]['waterSystems']:
+        for n in w['nozzles']:hits.append((n['id'],{'x':n['x'],'heightM':n['heightM'],'y':n['y']},16))
+    return hits
+
+def test_E25_3d_face_click_intersects_face_elevation(page):
+    # Face quads render at their own elevation (stalls .158, zones .052) — projecting the
+    # click onto y=0 selects a neighbouring stall in oblique views.
+    page.locator('#show-analysis').check();ready(page)
+    page.locator('[data-camera=side]').click()
+    # stall-A-02 face: x 7.35..8.55, z 8..10.5 at y=.158. Its floor-level projection lands
+    # several stalls away (~+4 m in x at this shallow angle), inside stall-A-05.
+    pos=point(page,{'x':7.5,'heightM':.158,'y':8.2})
+    assert pos['visible']
+    for hid,d,radius in probe_hit_points(page):
+        h=point(page,d)
+        assert not h['visible'] or math.hypot(pos['x']-h['x'],pos['y']-h['y'])>radius,f'click inside hit circle of {hid}'
+    page.mouse.click(pos['x'],pos['y'])
+    assert snap(page)['view']['selectedProbeId']=='stall-A-02'
+
+def test_E24_invalid_device_shows_hatched_faces_and_unevaluated_areas(page):
+    page.locator('[data-mode="2d"]').click();ready(page)
+    p=snap(page);orig=(fan(p)['x'],fan(p)['y'])
+    page.locator('#device-select').select_option('fan-feeding-1')
+    number(page,'#device-x',34.5);number(page,'#device-y',9.5)
+    r=result(page)
+    assert r['scenarios'][1]['points'][0]['status']=='invalid'
+    assert r['scenarios'][1]['points'][0]['meanDeficitW'] is None
+    assert page.locator('svg rect[data-face]').count()==70
+    assert page.locator('svg rect[data-face][fill="url(#invalid-hatch)"]').count()==70
+    assert '未評価' in page.locator('#area-summary').inner_text()
+    assert '放熱不足' in page.locator('#results').inner_text()
+    number(page,'#device-x',orig[0]);number(page,'#device-y',orig[1])
+    assert result(page)['scenarios'][1]['points'][0]['status']=='valid'
 
 def test_E21_webgl_unavailable_fallback_still_drags_calculates_and_saves(browser):
     ctx=browser.new_context(viewport={'width':1280,'height':900},accept_downloads=True);pg=ctx.new_page()

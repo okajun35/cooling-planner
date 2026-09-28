@@ -4,6 +4,8 @@ import {buildLayout} from '../template/layout.js';
 import {thi} from '../model/physics.js';
 import {MILK_ROWS,milkReference,fertilityReference,FERTILITY_OR} from '../model/references.js';
 import {esc,num,signed,icon,field,toggle,setHTML,el} from './dom.js';
+import {buildAreas} from '../template/faces.js';
+import {areaStats,deficitUnreached} from '../model/areaStats.js';
 
 export function selectedResults(p:Project,r:SimulationResult|null){
  const scenario=r?.scenarios.find(s=>s.id===p.activeScenarioId),base=r?.scenarios.find(s=>s.id===p.baselineScenarioId);
@@ -43,8 +45,8 @@ export function renderControls(p:Project){
  el<HTMLButtonElement>('reset-active').disabled=disabled;el<HTMLButtonElement>('copy-scenario').disabled=disabled;
  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===p.view.mode));
  document.querySelectorAll<HTMLButtonElement>('[data-metric]').forEach(b=>b.classList.toggle('active',b.dataset.metric===p.view.metric));
- for(const key of ['roof','flow','particles'] as const)el<HTMLInputElement>('show-'+(key==='particles'?'particles':key)).checked=p.view[key];
- const m=p.view.metric;setHTML('legend',`<span>${m==='delta'?'−900 W':m==='speed'?'0 m/s':'25℃'}</span><i class="legend-gradient ${m}"></i><span>${m==='delta'?'+900 W':m==='speed'?'3 m/s':'40℃'}</span>`);
+ for(const key of ['roof','flow','particles','analysis'] as const)el<HTMLInputElement>('show-'+key).checked=p.view[key]===true;
+ const m=p.view.metric;setHTML('legend',`<span>${m==='delta'?'−900 W':m==='speed'?'0 m/s':m==='deficit'?'0 W':'25℃'}</span><i class="legend-gradient ${m}"></i><span>${m==='delta'?'+900 W':m==='speed'?'3 m/s':m==='deficit'?'1200 W以上':'40℃'}</span><span class="legend-note">斜線=無効・通路等は評価対象外</span>`);
 }
 function kpi(label:string,value:number|null|undefined,unit:string,before:number|null|undefined,ic:string,description:string){
  const diff=value!=null&&before!=null?value-before:null;
@@ -84,10 +86,23 @@ export function renderResults(p:Project,r:SimulationResult|null){
  const {point:q,baseline:b,scenario:s,base}=selectedResults(p,r),fert=q?.fertility,delta=q?.deltaQrefW??null;
  const fdelta=fert?.probability!=null&&b?.fertility.probability!=null?(fert.probability-b.fertility.probability)*100:null;
  const res=s?.dailyMilk?.resources??null;
+ const probe=buildLayout(p.template).probes.find(x=>x.id===p.view.selectedProbeId);
+ const fractions=(v:number|null|undefined)=>v==null?'—':`${num(v*100,0)}%`;
  setHTML('results',`<div class="hero-result"><span>${icon('cow',18)} 牛の放熱改善 <small>参考</small></span><div class="hero-value">${signed(delta,0)}<small>W</small></div><p>基準案と同じ代表牛の表面を比較</p><div class="range">仮定を変えた範囲 ${q?.parameterEnvelopeW?`${signed(q.parameterEnvelopeW[0],0)} 〜 ${signed(q.parameterEnvelopeW[1],0)} W`:'—'}</div></div>
+ ${kpi('放熱不足',q?.meanDeficitW,'W',b?.meanDeficitW,'temp',`Qref ${num(p.milkSimulation.referenceCoolingWPerCow,0)} W に対する秒積算の平均。0は不足なし`)}
  ${kpi('牛位置の気温',q?.meanAirTemperatureC,'℃',b?.meanAirTemperatureC,'temp',`局所湿度 ${num(q?.meanRelativeHumidityPct)}%`)}
  ${kpi('屋根裏の温度',s?.roof.meanUnderC,'℃',base?.roof.meanUnderC,'roof',`平均放射温度 ${num(q?.meanRadiantC)}℃`)}
  ${kpi('送風体感温度',q?.meanFeelsLikeC,'℃',b?.meanFeelsLikeC,'fan',`全酪連掲載式 · 風速 ${num(q?.meanSpeedMps,2)}m/s`)}
+ <details id="probe-detail" class="probe-detail"><summary>濡れ方・放熱内訳・設備の作用</summary><table class="micro-table"><tbody>
+ <tr><th>評価高さ</th><td>${num(probe?.heightM,2)} m（${esc(probe?.label??'')}）</td></tr>
+ <tr><th>濡れ方</th><td>捕水 ${num(q?.film?.capturedKg,3)} kg・凝縮 ${num(q?.film?.condensedKg,3)} kg・蒸発 ${num(q?.film?.evaporatedKg,3)} kg・流出 ${num(q?.film?.runoffKg,3)} kg（60分累積）</td></tr>
+ <tr><th>保持水</th><td>平均 ${num(q?.meanFilmKg,3)} kg・終端 ${num(q?.film?.finalKg,3)} kg・最大残差 ${num(q?.film?.maxResidualKg,4)} kg</td></tr>
+ <tr><th>放熱内訳</th><td>対流 ${num(q?.components?.convectionW)} + 放射 ${num(q?.components?.radiationW)} + 通常蒸発 ${num(q?.components?.baseEvaporationW)} + 散水蒸発 ${num(q?.components?.soakerEvaporationW)} + 結露 ${num(q?.components?.condensationW)} W（符号付きの60分平均）</td></tr>
+ <tr><th>設備の作用</th><td>ファン増分 ${fractions(q?.fanActionFraction)}・ソーカー到達 ${fractions(q?.soakerArrivalFraction)}・ミスト蒸発 ${fractions(q?.mistEvaporationActionFraction)}（供給 ${fractions(q?.mistSupplyFraction)}）— 60分中の時間割合</td></tr>
+ ${q?.status==='invalid'?`<tr><th>無効理由</th><td>${q.warnings.map(esc).join('<br>')}</td></tr>`:''}
+ </tbody></table>
+ ${q&&deficitUnreached(q)?'<p class="micro warn">放熱不足が残り、局所設備の作用はありません（面の位置・向きを変えて試せます）。作用=届いた診断で、効果とは別です。</p>':''}
+ <p class="micro">濡れ方の内訳は60分累積kg、保持水の平均はkgです。放熱改善0は「不足がない」とは別の意味です。</p></details>
  ${milkCard(p,r,s)}
  <div class="reference-card"><div class="reference-heading">${icon('heart',17)}<h3>受胎率シナリオ</h3></div><div class="fertility-value">${num(fert?.probability==null?null:fert.probability*100)}<small>%</small><span class="tag">${p.references.fertility.mode==='manual'?'独立した代表環境':'地点の温湿度を適用'}</span></div><p>${p.references.fertility.mode==='manual'?`代表 ${p.references.fertility.temperatureC}℃ / ${p.references.fertility.relativeHumidityPct}%RH`: `基準案との差 ${signed(fdelta,2)}ポイント · ${fdelta===0?'同じ参照区分':'温湿度区分の比較'}`}<br>授精前21日〜後30日の代表条件を仮定。基準受胎率 ${num(p.references.fertility.p0*100,0)}%。日乳量とは別の時間モデルです。</p><button data-action="references" class="text-button">期間の仮定・入力を確認 →</button></div>
  <div class="resource-cards"><div>${icon('drop',18)}<span>水 <small>案全体 / 日</small></span><strong>${res===null?'未計算':num(res.waterLPerDay,0)}${res===null?'':'<small>L</small>'}</strong></div><div>${icon('bolt',18)}<span>電力 <small>案全体 / 日</small></span><strong>${res===null?'未計算':num(res.totalKwhPerDay,1)}${res===null?'':'<small>kWh</small>'}</strong></div></div>
@@ -101,6 +116,15 @@ export function renderComparison(p:Project,r:SimulationResult|null){
  setHTML('comparison',`<div class="comparison-grid">${p.scenarios.map(sc=>{const s=r?.scenarios.find(v=>v.id===sc.id),q=s?.points.find(v=>v.probeId===qid),dres=s?.dailyMilk?.resources??null,cost=dres&&p.prices.electricityYenKwh!==null&&p.prices.waterYenM3!==null?dres.totalKwhPerDay*p.prices.electricityYenKwh+dres.waterLPerDay/1000*p.prices.waterYenM3:null,dm=s?.dailyMilk;
  const milkLine=dm?.status==='available'?`日乳量 <b>${num(dm.yieldKgPerCowDay)}</b> kg（${dm.deltaKgPerCowDay===null?'—':signed(dm.deltaKgPerCowDay)}）`:dm?`日乳量 <b>計算不可</b>`:'日乳量 <b>計算中…</b>';
  return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id===p.activeScenarioId?'active':''}"><h3>${esc(sc.name)}</h3><div><strong>${signed(q?.deltaQrefW,0)}</strong><small>W 放熱改善</small></div><p>局所気温 <b>${num(q?.meanAirTemperatureC)}℃</b><br>${milkLine}<br>日運転費 <b>${num(cost,0)}円</b></p><span class="micro">${sc.roof.reflectance>.5?'遮熱あり':'遮熱なし'} / ${sc.roof.insulationM>0?'断熱あり':'断熱なし'}</span></button>`}).join('')}</div><p class="micro">運転費は入力単価による試算。初期設備費・投資回収は計算しません。日乳量は仮説モデルの牛群平均です。</p>`);
+}
+export function renderAreas(p:Project,r:SimulationResult|null){
+ const l=buildLayout(p.template),s=r?.scenarios.find(x=>x.id===p.activeScenarioId);
+ if(!s){setHTML('area-summary','<p class="micro">計算待ち</p>');return}
+ const rows=buildAreas(l).map(a=>{
+  const st=areaStats(s.points,a);
+  return `<tr data-area="${esc(a.id)}" class="${p.view.selectedAreaId===a.id?'selected':''}${a.subtotal?' subtotal':''}"><th>${esc(a.label)}</th><td>${st.meanDeficitW===null?`未評価 ${st.validCount}/${st.probeCount}`:`${num(st.meanDeficitW,0)} W`}</td><td>${st.meanImprovementW===null?'—':signed(st.meanImprovementW,0)}</td><td>${st.deficitCount}/${st.probeCount}</td><td>${st.deficitNoActionCount}</td><td>${st.topDeficit.map(t=>esc(t.probeId)).join('、')||'—'}</td></tr>`;
+ }).join('');
+ setHTML('area-summary',`<div class="table-scroll"><table class="area-table"><thead><tr><th>エリア</th><th>不足</th><th>改善</th><th>不足点</th><th>未到達</th><th>不足上位3</th></tr></thead><tbody>${rows}</tbody></table></div><p class="micro">行をクリックすると対象の面を強調します。不足=Qrefに対する秒積算平均 / 未到達=不足があり局所設備の作用もない地点数。代表点の単純平均で、滞在時間・頭数の重みではありません。1点でも無効なら未評価です。</p>`);
 }
 export function renderSettings(p:Project){setHTML('settings-body',`<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${field('barn-length','長さ',p.template.lengthM,'m','data-template="lengthM"',32,48,.1)}${field('barn-width','幅',p.template.widthM,'m','data-template="widthM"',23.5,30,.1)}${field('background-wind','背景風速',p.environment.backgroundSpeedMps,'m/s','data-env="backgroundSpeedMps"',0,10,.01)}${field('ventilation','空気交換',p.environment.ventilationM3sPerM2,'m³/s/m²','data-env="ventilationM3sPerM2"',.0001,1,.001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p><h3>日運転費の試算単価</h3><div class="field-grid">${field('price-electricity','電力',p.prices.electricityYenKwh,'円/kWh','data-price="electricityYenKwh"',0,1e6,1)}${field('price-water','水',p.prices.waterYenM3,'円/m³','data-price="waterYenM3"',0,1e6,1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><p>新しい保存形式はschemaVersion 9です。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`)}
 export function renderReference(p:Project){

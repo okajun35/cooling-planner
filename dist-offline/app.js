@@ -97,6 +97,7 @@ function syncScene() {
 function render() {
     (0, panels_js_1.renderControls)(store.project);
     (0, panels_js_1.renderResults)(store.project, currentResult());
+    (0, panels_js_1.renderAreas)(store.project, currentResult());
     (0, timeline_js_1.renderTimeline)(store.project, currentResult(), chart);
     (0, timeline_js_1.updateTime)(store.project, currentResult());
     for (const [id, fn] of [['settings-dialog', () => (0, panels_js_1.renderSettings)(store.project)], ['reference-dialog', () => (0, panels_js_1.renderReference)(store.project)], ['evidence-dialog', () => (0, panels_js_1.renderEvidence)(store.project, currentResult())]])
@@ -139,6 +140,7 @@ function makeWorker() {
                 lastCalculationMs = performance.now() - startTime;
             }
             (0, panels_js_1.renderResults)(store.project, currentResult());
+            (0, panels_js_1.renderAreas)(store.project, currentResult());
             (0, timeline_js_1.renderTimeline)(store.project, currentResult(), chart);
             (0, timeline_js_1.updateTime)(store.project, currentResult());
             syncScene();
@@ -326,6 +328,12 @@ document.addEventListener('change', event => {
 });
 function download(name, object) { const url = URL.createObjectURL(new Blob([typeof object === 'string' ? object : JSON.stringify(object, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 document.addEventListener('click', event => {
+    const areaRow = event.target.closest('[data-area]');
+    if (areaRow) {
+        const id = areaRow.getAttribute('data-area');
+        safe(() => store.setView({ selectedAreaId: store.project.view.selectedAreaId === id ? null : id }));
+        return;
+    }
     const b = event.target.closest('button');
     if (!b || b.disabled)
         return;
@@ -549,7 +557,7 @@ function createProject() {
     const soaker = { ...structuredClone(baseline), id: 'working-soaker', name: '編集案 A', readOnly: false };
     const mist = { ...structuredClone(baseline), id: 'working-mist', name: '編集案 B', readOnly: false };
     mist.waterSystems.forEach(w => w.enabled = w.kind === 'mist');
-    return { schemaVersion: 9, references: { milkModel: 'milk-table-cowbell178-v1', baselineMilkKgPerDay: 35, fertility: { model: 'fertility-thi-period-or-baccouri2025-v1', p0: .4, mode: 'manual', exposureAssumed: true, temperatureC: 26, relativeHumidityPct: 70, profileVersion: 1 } }, milkSimulation: structuredClone(milk_js_1.DEFAULT_MILK_SIMULATION), appVersion: exports.APP_VERSION, template, environment: { temperatureC: 32, relativeHumidityPct: 70, pressurePa: 101325, backgroundSpeedMps: .2, ventilationM3sPerM2: .015, solarRoofWm2: 800 }, model: structuredClone(exports.MODEL), baselineScenarioId: 'baseline', activeScenarioId: 'working-soaker', scenarios: [baseline, soaker, mist], view: { mode: '3d', metric: 'delta', timeSec: 0, selectedProbeId: 'feed-07', selectedDeviceId: null, roof: false, flow: true, particles: true, camera: null }, prices: { electricityYenKwh: 27, waterYenM3: 300 }, provenance: [
+    return { schemaVersion: 9, references: { milkModel: 'milk-table-cowbell178-v1', baselineMilkKgPerDay: 35, fertility: { model: 'fertility-thi-period-or-baccouri2025-v1', p0: .4, mode: 'manual', exposureAssumed: true, temperatureC: 26, relativeHumidityPct: 70, profileVersion: 1 } }, milkSimulation: structuredClone(milk_js_1.DEFAULT_MILK_SIMULATION), appVersion: exports.APP_VERSION, template, environment: { temperatureC: 32, relativeHumidityPct: 70, pressurePa: 101325, backgroundSpeedMps: .2, ventilationM3sPerM2: .015, solarRoofWm2: 800 }, model: structuredClone(exports.MODEL), baselineScenarioId: 'baseline', activeScenarioId: 'working-soaker', scenarios: [baseline, soaker, mist], view: { mode: '3d', metric: 'deficit', timeSec: 0, selectedProbeId: 'feed-07', selectedDeviceId: null, roof: false, flow: true, particles: true, camera: null, analysis: false, selectedAreaId: null }, prices: { electricityYenKwh: 27, waterYenM3: 300 }, provenance: [
             { id: 'dimensions', classification: 'adapted-reference', note: '原事例36.4×23.5m・70頭の外形を参考に、内部を50床の独自配置へ変更。設計推奨ではない。', url: 'https://holstein.pl/nowoczesna-obora-w-gospodarstwie-rodzinnym/' },
             { id: 'layout', classification: 'adapted-reference', note: '採食・休息・搾乳の区画関係を参考にした独自配置。原図やメーカー3Dデータは同梱しない。', url: 'https://www.orionkikai.co.jp/rakuno/how_to/auto-milking-system/' },
             { id: 'psychrometrics', classification: 'source-based', note: 'SIの飽和蒸気圧・湿度比・エンタルピー・比体積の関係。仮換気量の妥当性を保証するものではない。', url: 'https://psychrometrics.github.io/psychrolib/api_docs.html' },
@@ -1157,10 +1165,14 @@ function validateProject(input) {
         if (s.readOnly !== (s.id === p.baselineScenarioId))
             fail('readOnly', '基準だけを読取専用にしてください');
     const v = record(p.view, 'view');
-    if (!['2d', '3d'].includes(v.mode) || !['delta', 'speed', 'temperature'].includes(v.metric))
+    if (!['2d', '3d'].includes(v.mode) || !['delta', 'deficit', 'speed', 'temperature'].includes(v.metric))
         fail('view', '表示設定が不正です');
     for (const k of ['roof', 'flow', 'particles'])
         bool(v[k], `view.${k}`);
+    if (v.analysis !== undefined)
+        bool(v.analysis, 'view.analysis');
+    if (v.selectedAreaId !== undefined && v.selectedAreaId !== null)
+        id(v.selectedAreaId, 'view.selectedAreaId');
     number(v.timeSec, 0, 3600, 'view.timeSec');
     if (!layout.probes.some(q => q.id === v.selectedProbeId))
         fail('selectedProbeId', '地点がありません');
@@ -1331,7 +1343,7 @@ function mistDistribution(p, s, layout, rays) {
     return water;
 }
 /** Geometry and film physics are v0.4 reuse; this orchestrator connects v0.5/6/7. */
-function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
+function runScenario(p, s, layout, profile, dt, rays, hash, roof, collectQSeries = false) {
     const e = p.environment, m = p.model, soaker = s.waterSystems.find(w => w.kind === 'soaker'), mist = s.waterSystems.find(w => w.kind === 'mist');
     const invalidDevices = [...s.fans.filter(f => f.enabled && f.hoursPerDay > 0), ...s.waterSystems.filter(w => w.enabled && w.hoursPerDay > 0 && w.onSec > 0).flatMap(w => w.nozzles.filter(n => n.enabled && n.flowLpm > 0))].filter(d => layout.solids.some(box => (0, geometry_js_1.insideBox)((0, geometry_js_1.world)(d), box)));
     const warnings = [];
@@ -1347,7 +1359,7 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
     const airCache = new Map();
     const points = layout.probes.map((q) => {
         const cellId = `cell-${Math.min(Math.floor(q.x / 2), Math.ceil(p.template.lengthM / 2) - 1)}-${Math.min(Math.floor(q.y / 2), Math.ceil(p.template.widthM / 2) - 1)}`;
-        const blank = { probeId: q.id, inputHash: hash, modelVersion: m.version, meanSpeedMps: null, meanAirTemperatureC: null, meanRelativeHumidityPct: null, meanQrefW: null, deltaQrefW: null, components: null, parameterEnvelopeW: null, profileDeltas: {}, status: 'invalid', warnings: [], cellId, captureFraction: 0, film: null, meanRadiantC: null, meanFeelsLikeC: null, milk: { status: 'out_of_scope', ratioPct: null, kgPerDay: null, reasons: ['地点の計算が無効です'] }, fertility: (0, references_js_1.fertilityReference)(p.references.fertility, null, null), series: [] };
+        const blank = { probeId: q.id, inputHash: hash, modelVersion: m.version, meanSpeedMps: null, meanAirTemperatureC: null, meanRelativeHumidityPct: null, meanQrefW: null, deltaQrefW: null, components: null, parameterEnvelopeW: null, profileDeltas: {}, status: 'invalid', warnings: [], cellId, captureFraction: 0, film: null, meanRadiantC: null, meanFeelsLikeC: null, milk: { status: 'out_of_scope', ratioPct: null, kgPerDay: null, reasons: ['地点の計算が無効です'] }, fertility: (0, references_js_1.fertilityReference)(p.references.fertility, null, null), series: [], meanDeficitW: null, meanFilmKg: null, fanActionFraction: null, soakerArrivalFraction: null, mistEvaporationActionFraction: null, mistSupplyFraction: null };
         if (invalidDevices.length) {
             blank.warnings.push('管理室内の設備を移動してください');
             return blank;
@@ -1366,6 +1378,11 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
         const comp = { convectionW: 0, radiationW: 0, baseEvaporationW: 0, soakerEvaporationW: 0, condensationW: 0 };
         const filmLedger = { capturedKg: 0, condensedKg: 0, evaporatedKg: 0, runoffKg: 0, finalKg: 0, maxResidualKg: 0 };
         let mass = 0, speedSum = 0, tempSum = 0, rhSum = 0, feelSum = 0;
+        const qref = p.milkSimulation.referenceCoolingWPerCow;
+        // Area visualization v0.1: per-second aggregates. These are integrated in the same
+        // loop as the physics — never reconstructed from the stored 60-second series.
+        let deficitWs = 0, filmMassWs = 0, fanActionS = 0, soakerArrivalS = 0, mistSupplyS = 0, mistEvapS = 0;
+        const qSeries = collectQSeries ? new Float64Array(n) : undefined;
         let firstT = 0, firstRH = 0, firstSpeed = 0, staticInputs = true;
         const series = [];
         for (let i = 0; i < n; i++) {
@@ -1408,6 +1425,20 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
             tempSum += ta * dt;
             rhSum += rh * dt;
             feelSum += (ta - 6 * Math.sqrt(speed)) * dt;
+            const qW = terms.components.convectionW + terms.components.radiationW + terms.components.baseEvaporationW + terms.components.condensationW + film.heatW;
+            // AV05/§4: clamp per second BEFORE any spatial or time averaging.
+            deficitWs += Math.max(0, qref - qW) * dt;
+            filmMassWs += mass * dt;
+            if (wind.speed - e.backgroundSpeedMps > 1e-6)
+                fanActionS += dt;
+            if (soakerOn && capturedFlow > 1e-12)
+                soakerArrivalS += dt;
+            if (flow > 0)
+                mistSupplyS += dt;
+            if (air.evaporatedKgs > 1e-12)
+                mistEvapS += dt;
+            if (qSeries)
+                qSeries[i] = qW;
             if (i === 0) {
                 firstT = ta;
                 firstRH = rh;
@@ -1416,12 +1447,12 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
             else if (Math.abs(ta - firstT) > 1e-9 || Math.abs(rh - firstRH) > 1e-9 || Math.abs(speed - firstSpeed) > 1e-9)
                 staticInputs = false;
             if (profile.id === 'reference' && (i === 0 || (i + 1) * dt % 60 === 0))
-                series.push({ timeSec: (i + 1) * dt, temperatureC: ta, relativeHumidityPct: rh, speedMps: speed, filmKg: mass, qW: terms.components.convectionW + terms.components.radiationW + terms.components.baseEvaporationW + terms.components.condensationW + film.heatW, deltaW: null, soakerOn, mistOn });
+                series.push({ timeSec: (i + 1) * dt, temperatureC: ta, relativeHumidityPct: rh, speedMps: speed, filmKg: mass, qW, deltaW: null, soakerOn, mistOn });
         }
         for (const key of Object.keys(comp))
             comp[key] /= 3600;
         filmLedger.finalKg = mass;
-        return { ...blank, status: 'valid', meanSpeedMps: speedSum / 3600, meanAirTemperatureC: tempSum / 3600, meanRelativeHumidityPct: rhSum / 3600, meanQrefW: Object.values(comp).reduce((a, b) => a + b, 0), meanRadiantC: roof.result.meanRadiantC, meanFeelsLikeC: feelSum / 3600, components: comp, film: filmLedger, captureFraction: maxFraction, series, milk: (0, references_js_1.milkReference)(firstT, firstRH, firstSpeed, p.references.baselineMilkKgPerDay, staticInputs), fertility: (0, references_js_1.fertilityReference)(p.references.fertility, tempSum / 3600, rhSum / 3600) };
+        return { ...blank, status: 'valid', meanSpeedMps: speedSum / 3600, meanAirTemperatureC: tempSum / 3600, meanRelativeHumidityPct: rhSum / 3600, meanQrefW: Object.values(comp).reduce((a, b) => a + b, 0), meanRadiantC: roof.result.meanRadiantC, meanFeelsLikeC: feelSum / 3600, components: comp, film: filmLedger, captureFraction: maxFraction, series, milk: (0, references_js_1.milkReference)(firstT, firstRH, firstSpeed, p.references.baselineMilkKgPerDay, staticInputs), fertility: (0, references_js_1.fertilityReference)(p.references.fertility, tempSum / 3600, rhSum / 3600), meanDeficitW: deficitWs / (n * dt), meanFilmKg: filmMassWs / (n * dt), fanActionFraction: fanActionS / (n * dt), soakerArrivalFraction: soakerArrivalS / (n * dt), mistEvaporationActionFraction: mistEvapS / (n * dt), mistSupplyFraction: mistSupplyS / (n * dt), qSeries };
     });
     return { id: s.id, points, resources: resources(s, p), warnings, roof: roof.result, ...trialResources(s, p), dailyMilk: null };
 }
@@ -1444,7 +1475,7 @@ function simulate(p, opts = {}) {
                     roof = (0, roof_js_1.roofTimeline)(p, s, dt);
                     roofCache.set(rk, roof);
                 }
-                result = runScenario(p, s, layout, profile, dt, rays, hash, roof);
+                result = runScenario(p, s, layout, profile, dt, rays, hash, roof, opts.collectQSeries === true);
                 cache.set(key, result);
             }
             return { ...result, id: s.id, points: result.points.map(q => ({ ...q, profileDeltas: {}, series: q.series.map(st => ({ ...st })) })) };
@@ -2090,6 +2121,8 @@ const project_js_1 = require("../domain/project.js");
 const sceneGeometry_js_1 = require("./sceneGeometry.js");
 const threeBackend_js_1 = require("./threeBackend.js");
 const math3d_js_1 = require("./math3d.js");
+const faces_js_1 = require("../template/faces.js");
+const layout_js_1 = require("../template/layout.js");
 class Viewport3D {
     container;
     cb;
@@ -2165,6 +2198,22 @@ class Viewport3D {
         if (hit?.kind === 'probe') {
             this.cb.selectProbe(hit.id);
             return;
+        }
+        // Face selection: clicking a colored area face selects its representative probe.
+        // Faces render at their own elevation (FaceRect.surfaceY), so intersect the click ray
+        // with each elevation — projecting onto y=0 lands in a neighbouring face in oblique views.
+        if (e.button === 0 && !e.shiftKey && !hit) {
+            const faces = (0, faces_js_1.buildFaces)((0, layout_js_1.buildLayout)(this.p.template));
+            for (const fy of [...new Set(faces.map(f => f.surfaceY))].sort((a, b) => b - a)) {
+                const q = (0, math3d_js_1.planeAt)(x, y, w, h, this.camera, fy);
+                if (!q)
+                    continue;
+                const face = faces.find(f => f.surfaceY === fy && q[0] >= f.x && q[0] <= f.x + f.widthM && q[2] >= f.y && q[2] <= f.y + f.depthM);
+                if (face) {
+                    this.cb.selectProbe(face.probeId);
+                    return;
+                }
+            }
         }
         let deviceId = null, height = 0, offset = [0, 0, 0];
         if (hit?.kind === 'device') {
@@ -2256,6 +2305,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sceneGeometry = sceneGeometry;
 const project_js_1 = require("../domain/project.js");
 const layout_js_1 = require("../template/layout.js");
+const faces_js_1 = require("../template/faces.js");
+const areaStats_js_1 = require("../model/areaStats.js");
 const geometry_js_1 = require("../model/geometry.js");
 const physics_js_1 = require("../model/physics.js");
 const common_js_1 = require("./common.js");
@@ -2306,14 +2357,16 @@ function sceneGeometry(p, result) {
             segment([x + dx, .65, y + 2.1], [x + dx, .2, y + 2.4], '#a4b5ac');
         }
         // Simple resting-cow silhouettes are presentation only, never flow obstacles.
-        box(x + .29, .16, y + .64, .62, .42, 1.30, '#fcfcf7');
-        box(x + .42, .58, y + 1.05, .36, .025, .45, '#778b80');
-        box(x + .35, .33, y + .35, .5, .34, .43, '#455d51');
+        if (!p.view.analysis) {
+            box(x + .29, .16, y + .64, .62, .42, 1.30, '#fcfcf7');
+            box(x + .42, .58, y + 1.05, .36, .025, .45, '#778b80');
+            box(x + .35, .33, y + .35, .5, .34, .43, '#455d51');
+        }
     }
     const robot = layout.zones.find(z => z.kind === 'robot');
     box(robot.x + .4, .05, robot.y + .4, 2.2, 1.5, 1.9, '#62938c');
     box(robot.x + .8, 1.56, robot.y + .55, 1.4, .3, 1.5, '#d8e4db');
-    if (p.view.roof) {
+    if (p.view.roof && !p.view.analysis) {
         const roofColor = scenario.roof.reflectance > .5 ? '#f6f8fc' : '#b9c2d0';
         quad([0, 8.7, W / 2], [L, 8.7, W / 2], [L, 4, W], [0, 4, W], roofColor);
         if (scenario.roof.insulationM > 0)
@@ -2327,13 +2380,29 @@ function sceneGeometry(p, result) {
         for (const [h, z] of [[4, 0], [4, W], [8.7, W / 2]])
             segment([0, h, z], [L, h, z], '#a3b8ab');
     }
+    // Area faces (v0.1): flat quads at floor level, one per representative probe.
+    const selectedArea = p.view.selectedAreaId ? (0, faces_js_1.buildAreas)(layout).find(a => a.id === p.view.selectedAreaId) ?? null : null;
+    for (const f of (0, faces_js_1.buildFaces)(layout)) {
+        const q = out?.points.find(r => r.probeId === f.probeId), valid = !!q && q.status === 'valid';
+        const color = !q ? '#cdd4de' : valid ? (0, common_js_1.metricColor)((0, common_js_1.metricValue)(q, p.view.metric), p.view.metric) : '#cdd4de';
+        const fy = f.surfaceY; // stall faces sit just above the stall base block
+        quad([f.x + .03, fy, f.y + .03], [f.x + f.widthM - .03, fy, f.y + .03], [f.x + f.widthM - .03, fy, f.y + f.depthM - .03], [f.x + .03, fy, f.y + f.depthM - .03], color);
+        if (q && !valid)
+            segment([f.x + .08, fy + .006, f.y + .08], [f.x + f.widthM - .08, fy + .006, f.y + f.depthM - .08], '#8d99a8');
+        if (q && (0, areaStats_js_1.deficitUnreached)(q)) {
+            segment([f.x + .08, fy + .006, f.y + .08], [f.x + f.widthM - .08, fy + .006, f.y + f.depthM - .08], '#c2512b');
+            ring([f.x + f.widthM / 2, fy + .008, f.y + f.depthM / 2], [1, 0, 0], [0, 0, 1], Math.min(f.widthM, f.depthM) * .28, '#c2512b');
+        }
+        if (selectedArea?.probeIds.includes(f.probeId)) {
+            segment([f.x + .04, fy + .008, f.y + .04], [f.x + f.widthM - .04, fy + .008, f.y + .04], '#dc9144');
+            segment([f.x + f.widthM - .04, fy + .008, f.y + .04], [f.x + f.widthM - .04, fy + .008, f.y + f.depthM - .04], '#dc9144');
+            segment([f.x + f.widthM - .04, fy + .008, f.y + f.depthM - .04], [f.x + .04, fy + .008, f.y + f.depthM - .04], '#dc9144');
+            segment([f.x + .04, fy + .008, f.y + f.depthM - .04], [f.x + .04, fy + .008, f.y + .04], '#dc9144');
+        }
+    }
     const profile = p.model.profiles.find(x => x.id === 'reference');
     for (const q of layout.probes) {
-        const value = out?.points.find(r => r.probeId === q.id), selected = q.id === p.view.selectedProbeId, center = [q.x, q.heightM + .1, q.y], color = (0, common_js_1.metricColor)(p.view.metric === 'speed' ? (value?.meanSpeedMps ?? null) : p.view.metric === 'temperature' ? (value?.meanAirTemperatureC ?? null) : (value?.deltaQrefW ?? null), p.view.metric);
-        if (q.kind === 'stall')
-            box(q.x - .49, .17, q.y - .86, .98, .015, 1.72, color);
-        else
-            disk([q.x, .08, q.y], .6, color);
+        const value = out?.points.find(r => r.probeId === q.id), selected = q.id === p.view.selectedProbeId, center = [q.x, q.heightM + .1, q.y], color = (0, common_js_1.metricColor)((0, common_js_1.metricValue)(value, p.view.metric), p.view.metric);
         disk(center, selected ? .46 : .28, color);
         if (selected) {
             ring([q.x, q.heightM + .12, q.y], [1, 0, 0], [0, 0, 1], .58, '#dc9144');
@@ -2397,14 +2466,92 @@ function sceneGeometry(p, result) {
 }
 
 },
+"template/faces.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.areaOfProbe = exports.FACE_SURFACE_Y = void 0;
+exports.buildFaces = buildFaces;
+exports.buildAreas = buildAreas;
+/** Rendered elevation of each face in 3D. Stall faces sit just above the .15 m stall
+ * base block; feeding/waiting faces just above the floor. Clicks must intersect the
+ * face at this height — projecting onto y=0 selects a neighbouring face in oblique views. */
+exports.FACE_SURFACE_Y = { stall: .158, other: .052 };
+function buildFaces(l) {
+    const faces = [];
+    for (const st of l.stalls) {
+        const q = l.probes.find(q => q.id === st.id);
+        faces.push({ id: `face-${st.id}`, probeId: st.id, label: q?.label ?? st.id, kind: 'stall', x: st.x, y: st.y, widthM: st.widthM, depthM: st.depthM, surfaceY: exports.FACE_SURFACE_Y.stall });
+    }
+    const feedZone = l.zones.find(z => z.kind === 'feeding'), feed = l.probes.filter(q => q.kind === 'feeding');
+    for (let i = 0; i < feed.length; i++)
+        faces.push({ id: `face-${feed[i].id}`, probeId: feed[i].id, label: feed[i].label, kind: 'feeding', x: feedZone.x + i * feedZone.widthM / feed.length, y: feedZone.y, widthM: feedZone.widthM / feed.length, depthM: feedZone.depthM, surfaceY: exports.FACE_SURFACE_Y.other });
+    const waitZone = l.zones.find(z => z.kind === 'waiting'), wait = l.probes.filter(q => q.kind === 'waiting');
+    for (let k = 0; k < wait.length; k++)
+        faces.push({ id: `face-${wait[k].id}`, probeId: wait[k].id, label: wait[k].label, kind: 'waiting', x: waitZone.x + (k % 2) * waitZone.widthM / 2, y: waitZone.y + Math.floor(k / 2) * waitZone.depthM / 4, widthM: waitZone.widthM / 2, depthM: waitZone.depthM / 4, surfaceY: exports.FACE_SURFACE_Y.other });
+    return faces;
+}
+/** Display areas: stall rows A-D, feeding, waiting, plus the all-stall subtotal. */
+function buildAreas(l) {
+    const out = [];
+    for (const row of ['A', 'B', 'C', 'D'])
+        out.push({ id: `stall-${row}`, label: `牛床 ${row}`, probeIds: l.probes.filter(q => q.zoneId === `stall-${row}`).map(q => q.id) });
+    out.push({ id: 'feeding', label: '採食帯', probeIds: l.probes.filter(q => q.kind === 'feeding').map(q => q.id) });
+    out.push({ id: 'waiting', label: '待機場所', probeIds: l.probes.filter(q => q.kind === 'waiting').map(q => q.id) });
+    out.push({ id: 'stalls', label: '牛床全体（小計）', subtotal: true, probeIds: l.probes.filter(q => q.kind === 'stall').map(q => q.id) });
+    return out;
+}
+/** Which display area a probe belongs to (used for area-row highlighting). */
+const areaOfProbe = (l, probeId) => buildAreas(l).find(a => a.probeIds.includes(probeId)) ?? null;
+exports.areaOfProbe = areaOfProbe;
+
+},
+"model/areaStats.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.deficitUnreached = exports.noLocalAction = exports.hasDeficit = void 0;
+exports.areaStats = areaStats;
+/** Display-only flags from area-cooling-visualization-v0.1. The tiny epsilons are
+ * numerical-zero guards, never health or adequacy thresholds. */
+const hasDeficit = (q) => q.meanDeficitW != null && q.meanDeficitW > 1e-6;
+exports.hasDeficit = hasDeficit;
+const noLocalAction = (q) => (q.fanActionFraction ?? 0) <= 0 && (q.soakerArrivalFraction ?? 0) <= 0 && (q.mistEvaporationActionFraction ?? 0) <= 0;
+exports.noLocalAction = noLocalAction;
+const deficitUnreached = (q) => (0, exports.hasDeficit)(q) && (0, exports.noLocalAction)(q);
+exports.deficitUnreached = deficitUnreached;
+/**
+ * Point-wise (unweighted) means over an area's representative points. If ANY member
+ * is invalid the area mean is reported as unevaluated — never a silent partial mean.
+ * The same applies per metric: a valid point whose metric is null (e.g. deltaQrefW
+ * when the baseline is unevaluated) makes that area mean null rather than a silent zero.
+ * These are layout diagnostics, not herd or occupancy-weighted averages.
+ */
+function areaStats(points, area) {
+    const members = area.probeIds.map(id => points.find(q => q.probeId === id));
+    const valid = members.filter((q) => !!q && q.status === 'valid');
+    const allValid = valid.length === area.probeIds.length;
+    const mean = (f) => allValid && valid.every(q => f(q) !== null) ? valid.reduce((a, q) => a + f(q), 0) / valid.length : null;
+    return {
+        id: area.id, label: area.label, probeCount: area.probeIds.length, validCount: valid.length, invalidCount: area.probeIds.length - valid.length,
+        meanDeficitW: mean(q => q.meanDeficitW), meanImprovementW: mean(q => q.deltaQrefW),
+        meanSpeedMps: mean(q => q.meanSpeedMps), meanAirTemperatureC: mean(q => q.meanAirTemperatureC), meanRelativeHumidityPct: mean(q => q.meanRelativeHumidityPct),
+        maxDeficitW: valid.length ? Math.max(...valid.map(q => q.meanDeficitW ?? 0)) : null,
+        deficitCount: valid.filter(exports.hasDeficit).length, noActionCount: valid.filter(exports.noLocalAction).length, deficitNoActionCount: valid.filter(exports.deficitUnreached).length,
+        topDeficit: [...valid].sort((a, b) => (b.meanDeficitW ?? 0) - (a.meanDeficitW ?? 0) || a.probeId.localeCompare(b.probeId)).filter(exports.hasDeficit).slice(0, 3).map(q => ({ probeId: q.probeId, value: q.meanDeficitW }))
+    };
+}
+
+},
 "views/common.js":function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.zoneColor = exports.escapeHtml = void 0;
+exports.metricValue = exports.zoneColor = exports.escapeHtml = void 0;
 exports.metricColor = metricColor;
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 exports.escapeHtml = escapeHtml;
 exports.zoneColor = { feed: '#ddd6c1', feeding: '#e6eee8', stall: '#d8e3ee', aisle: '#ecf0f5', robot: '#8cbed3', utility: '#b9c7d5', waiting: '#e1e9f1', isolation: '#d2dce9' };
+/** Metric shown on faces/probes. 'deficit' = per-second mean of max(0, Qref − Q) [W]. */
+const metricValue = (q, metric) => !q || q.status !== 'valid' ? null : metric === 'speed' ? q.meanSpeedMps : metric === 'temperature' ? q.meanAirTemperatureC : metric === 'deficit' ? q.meanDeficitW : q.deltaQrefW;
+exports.metricValue = metricValue;
 function metricColor(value, metric) {
     if (value === null)
         return '#cdd4de';
@@ -2413,6 +2560,9 @@ function metricColor(value, metric) {
         return interpolate([64, 169, 224], [238, 98, 65], (value - 25) / 15);
     if (metric === 'speed')
         return interpolate([226, 231, 240], [39, 115, 216], value / 3);
+    // Fixed legend 0..1200 W; values beyond clamp to the endpoint (AV14).
+    if (metric === 'deficit')
+        return interpolate([233, 238, 241], [222, 99, 32], value / 1200);
     return value >= 0 ? interpolate([221, 229, 239], [12, 153, 138], value / 900) : interpolate([221, 229, 239], [232, 111, 68], -value / 900);
 }
 
@@ -10546,6 +10696,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SVG2D = void 0;
 const project_js_1 = require("../domain/project.js");
 const layout_js_1 = require("../template/layout.js");
+const faces_js_1 = require("../template/faces.js");
+const areaStats_js_1 = require("../model/areaStats.js");
 const common_js_1 = require("./common.js");
 class SVG2D {
     cb;
@@ -10589,13 +10741,25 @@ class SVG2D {
         const l = (0, layout_js_1.buildLayout)(p.template), s = (0, project_js_1.activeScenario)(p), out = r?.scenarios.find(x => x.id === s.id), L = p.template.lengthM, W = p.template.widthM;
         this.svg.setAttribute('viewBox', `-1 -1 ${L + 2} ${W + 2}`);
         let html = `<rect x="-.5" y="-.5" width="${L + 1}" height="${W + 1}" rx=".3" fill="#c6d5cc"/><rect width="${L}" height="${W}" fill="#eef1e9"/>`;
+        html += `<defs><pattern id="invalid-hatch" width=".35" height=".35" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width=".35" height=".35" fill="#cdd4de"/><line x1="0" y1="0" x2="0" y2=".35" stroke="#97a4b3" stroke-width=".1"/></pattern></defs>`;
         for (const z of l.zones)
             html += `<g><rect x="${z.x}" y="${z.y}" width="${z.widthM}" height="${z.depthM}" fill="${common_js_1.zoneColor[z.kind]}" stroke="#ffffff" stroke-width=".05"/><text x="${z.x + .4}" y="${z.y + .7}" font-size=".48" fill="#668075">${(0, common_js_1.escapeHtml)(z.name)}</text></g>`;
-        for (const st of l.stalls)
-            html += `<rect x="${st.x + .04}" y="${st.y + .06}" width="${st.widthM - .08}" height="${st.depthM - .12}" rx=".12" fill="#f4f5ec" stroke="#9eb5a7" stroke-width=".035"/>`;
+        // Area faces (v0.1): each face shows its single representative probe's value.
+        const selectedArea = p.view.selectedAreaId ? (0, faces_js_1.buildAreas)(l).find(a => a.id === p.view.selectedAreaId) ?? null : null;
+        for (const f of (0, faces_js_1.buildFaces)(l)) {
+            const q = out?.points.find(v => v.probeId === f.probeId), valid = !!q && q.status === 'valid';
+            const fill = !q ? '#cdd4de' : valid ? (0, common_js_1.metricColor)((0, common_js_1.metricValue)(q, p.view.metric), p.view.metric) : 'url(#invalid-hatch)';
+            const unreached = q ? (0, areaStats_js_1.deficitUnreached)(q) : false, inArea = !!selectedArea && selectedArea.probeIds.includes(f.probeId);
+            const over = p.view.metric === 'deficit' && q?.meanDeficitW != null && q.meanDeficitW > 1200;
+            html += `<rect data-face="${(0, common_js_1.escapeHtml)(f.id)}" data-probe="${(0, common_js_1.escapeHtml)(f.probeId)}" x="${f.x + .02}" y="${f.y + .02}" width="${f.widthM - .04}" height="${f.depthM - .04}" rx=".06" fill="${fill}" stroke="${unreached ? '#c2512b' : inArea ? '#dc9144' : '#ffffff'}" stroke-width="${unreached || inArea ? '.09' : '.04'}"${unreached ? ' stroke-dasharray=".16 .1"' : ''}/>`;
+            if (!valid && q)
+                html += `<line data-probe="${(0, common_js_1.escapeHtml)(f.probeId)}" x1="${f.x + .08}" y1="${f.y + .08}" x2="${f.x + f.widthM - .08}" y2="${f.y + f.depthM - .08}" stroke="#97a4b3" stroke-width=".06" pointer-events="none"/>`;
+            if (over)
+                html += `<text x="${f.x + f.widthM - .12}" y="${f.y + .32}" font-size=".3" fill="#8a3d12" text-anchor="end" pointer-events="none">!</text>`;
+        }
         for (const q of l.probes) {
-            const value = out?.points.find(v => v.probeId === q.id), val = p.view.metric === 'speed' ? value?.meanSpeedMps : p.view.metric === 'temperature' ? value?.meanAirTemperatureC : value?.deltaQrefW;
-            html += `<g data-probe="${(0, common_js_1.escapeHtml)(q.id)}" tabindex="0" role="button" aria-label="${(0, common_js_1.escapeHtml)(q.label)}"><circle cx="${q.x}" cy="${q.y}" r=".4" fill="${(0, common_js_1.metricColor)(val ?? null, p.view.metric)}" stroke="${p.view.selectedProbeId === q.id ? '#da973f' : '#ffffff'}" stroke-width="${p.view.selectedProbeId === q.id ? '.16' : '.06'}"/><circle cx="${q.x}" cy="${q.y}" r=".65" fill="transparent"/></g>`;
+            const value = out?.points.find(v => v.probeId === q.id), val = (0, common_js_1.metricValue)(value, p.view.metric);
+            html += `<g data-probe="${(0, common_js_1.escapeHtml)(q.id)}" tabindex="0" role="button" aria-label="${(0, common_js_1.escapeHtml)(q.label)}"><circle cx="${q.x}" cy="${q.y}" r=".4" fill="${(0, common_js_1.metricColor)(val, p.view.metric)}" stroke="${p.view.selectedProbeId === q.id ? '#da973f' : '#ffffff'}" stroke-width="${p.view.selectedProbeId === q.id ? '.16' : '.06'}"/><circle cx="${q.x}" cy="${q.y}" r=".65" fill="transparent"/></g>`;
         }
         for (const f of s.fans) {
             const a = f.yawDeg * Math.PI / 180;
@@ -10680,13 +10844,14 @@ function layout() {
 <aside class="equipment-panel panel"><div class="panel-heading"><span class="eyebrow">01 / EQUIPMENT</span><h2>対策を選ぶ・配置する</h2></div><div id="equipment-controls"></div><div class="inspector"><h3>選択中の設備</h3><div id="device-selector"></div><div id="device-properties"></div></div></aside>
 <section class="simulation-area" aria-label="牛舎の操作">
  <div class="stage panel"><div class="stage-toolbar"><div id="scenario-tabs" class="segments"></div><div class="segments modes"><button data-mode="3d">3D</button><button data-mode="2d">2D</button></div></div>
- <div class="stage-subhead"><div class="metric-tabs"><button data-metric="delta">放熱改善</button><button data-metric="speed">風速</button><button data-metric="temperature">気温</button></div><span>色は60分平均・全案共通目盛り</span></div>
+ <div class="stage-subhead"><div class="metric-tabs"><button data-metric="deficit">放熱不足</button><button data-metric="delta">放熱改善</button><button data-metric="speed">風速</button><button data-metric="temperature">気温</button></div><span>色は60分平均・全案共通目盛り</span></div>
  <div class="scene-wrap"><div id="scene"></div><div class="scene-top-left"><span class="scene-label">操作できるモデル牛舎</span><strong id="scene-selection">採食7</strong></div><div class="camera-buttons"><button data-camera="overview" title="全体を見る">全体</button><button data-camera="top">上面</button><button data-camera="side">側面</button></div><div class="scene-bottom-left"><span class="mouse-hint">設備をドラッグして移動<br>背景で回転 / ホイールで拡大</span></div><div id="scene-live" class="scene-live"></div><div id="scene-busy" class="scene-busy" hidden>変更した条件で再計算中…</div></div>
- <div class="stage-footer"><div id="legend"></div><div class="scene-switches"><label><input id="show-roof" type="checkbox" data-view="roof">屋根断面</label><label><input id="show-flow" type="checkbox" data-view="flow">風</label><label><input id="show-particles" type="checkbox" data-view="particles">散水</label></div></div>
+ <div class="stage-footer"><div id="legend"></div><div class="scene-switches"><label><input id="show-roof" type="checkbox" data-view="roof">屋根断面</label><label><input id="show-flow" type="checkbox" data-view="flow">風</label><label><input id="show-particles" type="checkbox" data-view="particles">散水</label><label><input id="show-analysis" type="checkbox" data-view="analysis">分析表示</label></div></div>
  <div class="edit-toolbar"><div><button data-action="undo" id="undo-button">↶ 戻す</button><button data-action="redo" id="redo-button">↷ やり直す</button></div><span id="edit-hint">選択 → 移動・高さ・向き → 結果を比較</span><button data-action="copy-scenario" id="copy-scenario">別案へコピー</button><button data-action="reset-active" id="reset-active">基準に戻す</button></div>
  </div>
  <div class="timeline-panel panel"><div class="timeline-heading"><div><span class="eyebrow">02 / TIME</span><h2>散水と放熱の変化 <small>選択地点・0〜60分</small></h2></div><div class="chart-tabs"><button data-chart="qW" class="active">放熱量</button><button data-chart="temperatureC">気温</button><button data-chart="filmKg">保持水</button></div></div><div id="timeline-chart"></div><div class="transport"><button data-action="play" id="play-button">${(0, dom_js_1.icon)('play', 15)} 再生</button><input id="time-slider" type="range" min="0" max="3600" step="1" value="0" aria-label="表示時刻"><output id="time-display">00:00</output><select id="play-speed" aria-label="再生倍率"><option value="60">60倍</option><option value="120" selected>120倍</option><option value="300">300倍</option></select></div><p class="micro">カードと色は60分平均。再生は計算済みの時系列を表示します。乳量・受胎の時間予測ではありません。</p></div>
  <div class="comparison-panel panel"><div class="timeline-heading"><div><span class="eyebrow">03 / COMPARE</span><h2>同じ条件で、案を比較</h2></div><button data-action="export-results" class="quiet small">結果JSON</button></div><div id="comparison"></div></div>
+ <div class="area-panel panel"><div class="timeline-heading"><div><span class="eyebrow">04 / AREAS</span><h2>エリア別の平均 <small>代表点の単純平均</small></h2></div></div><div id="area-summary"></div></div>
 </section>
 <aside class="results-panel panel"><div class="panel-heading"><span class="eyebrow">RESULT / 60 MIN AVERAGE</span><h2>この場所の変化</h2><label class="sr-only" for="probe-select">比較する地点</label><select id="probe-select"></select></div><div id="results"></div></aside>
 </main>
@@ -10757,6 +10922,7 @@ exports.selectedResults = selectedResults;
 exports.renderControls = renderControls;
 exports.renderResults = renderResults;
 exports.renderComparison = renderComparison;
+exports.renderAreas = renderAreas;
 exports.renderSettings = renderSettings;
 exports.renderReference = renderReference;
 exports.renderEvidence = renderEvidence;
@@ -10765,6 +10931,8 @@ const layout_js_1 = require("../template/layout.js");
 const physics_js_1 = require("../model/physics.js");
 const references_js_1 = require("../model/references.js");
 const dom_js_1 = require("./dom.js");
+const faces_js_1 = require("../template/faces.js");
+const areaStats_js_1 = require("../model/areaStats.js");
 function selectedResults(p, r) {
     const scenario = r?.scenarios.find(s => s.id === p.activeScenarioId), base = r?.scenarios.find(s => s.id === p.baselineScenarioId);
     return { scenario, base, point: scenario?.points.find(q => q.probeId === p.view.selectedProbeId), baseline: base?.points.find(q => q.probeId === p.view.selectedProbeId) };
@@ -10806,10 +10974,10 @@ function renderControls(p) {
     (0, dom_js_1.el)('copy-scenario').disabled = disabled;
     document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === p.view.mode));
     document.querySelectorAll('[data-metric]').forEach(b => b.classList.toggle('active', b.dataset.metric === p.view.metric));
-    for (const key of ['roof', 'flow', 'particles'])
-        (0, dom_js_1.el)('show-' + (key === 'particles' ? 'particles' : key)).checked = p.view[key];
+    for (const key of ['roof', 'flow', 'particles', 'analysis'])
+        (0, dom_js_1.el)('show-' + key).checked = p.view[key] === true;
     const m = p.view.metric;
-    (0, dom_js_1.setHTML)('legend', `<span>${m === 'delta' ? '−900 W' : m === 'speed' ? '0 m/s' : '25℃'}</span><i class="legend-gradient ${m}"></i><span>${m === 'delta' ? '+900 W' : m === 'speed' ? '3 m/s' : '40℃'}</span>`);
+    (0, dom_js_1.setHTML)('legend', `<span>${m === 'delta' ? '−900 W' : m === 'speed' ? '0 m/s' : m === 'deficit' ? '0 W' : '25℃'}</span><i class="legend-gradient ${m}"></i><span>${m === 'delta' ? '+900 W' : m === 'speed' ? '3 m/s' : m === 'deficit' ? '1200 W以上' : '40℃'}</span><span class="legend-note">斜線=無効・通路等は評価対象外</span>`);
 }
 function kpi(label, value, unit, before, ic, description) {
     const diff = value != null && before != null ? value - before : null;
@@ -10851,10 +11019,23 @@ function renderResults(p, r) {
     const { point: q, baseline: b, scenario: s, base } = selectedResults(p, r), fert = q?.fertility, delta = q?.deltaQrefW ?? null;
     const fdelta = fert?.probability != null && b?.fertility.probability != null ? (fert.probability - b.fertility.probability) * 100 : null;
     const res = s?.dailyMilk?.resources ?? null;
+    const probe = (0, layout_js_1.buildLayout)(p.template).probes.find(x => x.id === p.view.selectedProbeId);
+    const fractions = (v) => v == null ? '—' : `${(0, dom_js_1.num)(v * 100, 0)}%`;
     (0, dom_js_1.setHTML)('results', `<div class="hero-result"><span>${(0, dom_js_1.icon)('cow', 18)} 牛の放熱改善 <small>参考</small></span><div class="hero-value">${(0, dom_js_1.signed)(delta, 0)}<small>W</small></div><p>基準案と同じ代表牛の表面を比較</p><div class="range">仮定を変えた範囲 ${q?.parameterEnvelopeW ? `${(0, dom_js_1.signed)(q.parameterEnvelopeW[0], 0)} 〜 ${(0, dom_js_1.signed)(q.parameterEnvelopeW[1], 0)} W` : '—'}</div></div>
+ ${kpi('放熱不足', q?.meanDeficitW, 'W', b?.meanDeficitW, 'temp', `Qref ${(0, dom_js_1.num)(p.milkSimulation.referenceCoolingWPerCow, 0)} W に対する秒積算の平均。0は不足なし`)}
  ${kpi('牛位置の気温', q?.meanAirTemperatureC, '℃', b?.meanAirTemperatureC, 'temp', `局所湿度 ${(0, dom_js_1.num)(q?.meanRelativeHumidityPct)}%`)}
  ${kpi('屋根裏の温度', s?.roof.meanUnderC, '℃', base?.roof.meanUnderC, 'roof', `平均放射温度 ${(0, dom_js_1.num)(q?.meanRadiantC)}℃`)}
  ${kpi('送風体感温度', q?.meanFeelsLikeC, '℃', b?.meanFeelsLikeC, 'fan', `全酪連掲載式 · 風速 ${(0, dom_js_1.num)(q?.meanSpeedMps, 2)}m/s`)}
+ <details id="probe-detail" class="probe-detail"><summary>濡れ方・放熱内訳・設備の作用</summary><table class="micro-table"><tbody>
+ <tr><th>評価高さ</th><td>${(0, dom_js_1.num)(probe?.heightM, 2)} m（${(0, dom_js_1.esc)(probe?.label ?? '')}）</td></tr>
+ <tr><th>濡れ方</th><td>捕水 ${(0, dom_js_1.num)(q?.film?.capturedKg, 3)} kg・凝縮 ${(0, dom_js_1.num)(q?.film?.condensedKg, 3)} kg・蒸発 ${(0, dom_js_1.num)(q?.film?.evaporatedKg, 3)} kg・流出 ${(0, dom_js_1.num)(q?.film?.runoffKg, 3)} kg（60分累積）</td></tr>
+ <tr><th>保持水</th><td>平均 ${(0, dom_js_1.num)(q?.meanFilmKg, 3)} kg・終端 ${(0, dom_js_1.num)(q?.film?.finalKg, 3)} kg・最大残差 ${(0, dom_js_1.num)(q?.film?.maxResidualKg, 4)} kg</td></tr>
+ <tr><th>放熱内訳</th><td>対流 ${(0, dom_js_1.num)(q?.components?.convectionW)} + 放射 ${(0, dom_js_1.num)(q?.components?.radiationW)} + 通常蒸発 ${(0, dom_js_1.num)(q?.components?.baseEvaporationW)} + 散水蒸発 ${(0, dom_js_1.num)(q?.components?.soakerEvaporationW)} + 結露 ${(0, dom_js_1.num)(q?.components?.condensationW)} W（符号付きの60分平均）</td></tr>
+ <tr><th>設備の作用</th><td>ファン増分 ${fractions(q?.fanActionFraction)}・ソーカー到達 ${fractions(q?.soakerArrivalFraction)}・ミスト蒸発 ${fractions(q?.mistEvaporationActionFraction)}（供給 ${fractions(q?.mistSupplyFraction)}）— 60分中の時間割合</td></tr>
+ ${q?.status === 'invalid' ? `<tr><th>無効理由</th><td>${q.warnings.map(dom_js_1.esc).join('<br>')}</td></tr>` : ''}
+ </tbody></table>
+ ${q && (0, areaStats_js_1.deficitUnreached)(q) ? '<p class="micro warn">放熱不足が残り、局所設備の作用はありません（面の位置・向きを変えて試せます）。作用=届いた診断で、効果とは別です。</p>' : ''}
+ <p class="micro">濡れ方の内訳は60分累積kg、保持水の平均はkgです。放熱改善0は「不足がない」とは別の意味です。</p></details>
  ${milkCard(p, r, s)}
  <div class="reference-card"><div class="reference-heading">${(0, dom_js_1.icon)('heart', 17)}<h3>受胎率シナリオ</h3></div><div class="fertility-value">${(0, dom_js_1.num)(fert?.probability == null ? null : fert.probability * 100)}<small>%</small><span class="tag">${p.references.fertility.mode === 'manual' ? '独立した代表環境' : '地点の温湿度を適用'}</span></div><p>${p.references.fertility.mode === 'manual' ? `代表 ${p.references.fertility.temperatureC}℃ / ${p.references.fertility.relativeHumidityPct}%RH` : `基準案との差 ${(0, dom_js_1.signed)(fdelta, 2)}ポイント · ${fdelta === 0 ? '同じ参照区分' : '温湿度区分の比較'}`}<br>授精前21日〜後30日の代表条件を仮定。基準受胎率 ${(0, dom_js_1.num)(p.references.fertility.p0 * 100, 0)}%。日乳量とは別の時間モデルです。</p><button data-action="references" class="text-button">期間の仮定・入力を確認 →</button></div>
  <div class="resource-cards"><div>${(0, dom_js_1.icon)('drop', 18)}<span>水 <small>案全体 / 日</small></span><strong>${res === null ? '未計算' : (0, dom_js_1.num)(res.waterLPerDay, 0)}${res === null ? '' : '<small>L</small>'}</strong></div><div>${(0, dom_js_1.icon)('bolt', 18)}<span>電力 <small>案全体 / 日</small></span><strong>${res === null ? '未計算' : (0, dom_js_1.num)(res.totalKwhPerDay, 1)}${res === null ? '' : '<small>kWh</small>'}</strong></div></div>
@@ -10870,6 +11051,18 @@ function renderComparison(p, r) {
         const milkLine = dm?.status === 'available' ? `日乳量 <b>${(0, dom_js_1.num)(dm.yieldKgPerCowDay)}</b> kg（${dm.deltaKgPerCowDay === null ? '—' : (0, dom_js_1.signed)(dm.deltaKgPerCowDay)}）` : dm ? `日乳量 <b>計算不可</b>` : '日乳量 <b>計算中…</b>';
         return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id === p.activeScenarioId ? 'active' : ''}"><h3>${(0, dom_js_1.esc)(sc.name)}</h3><div><strong>${(0, dom_js_1.signed)(q?.deltaQrefW, 0)}</strong><small>W 放熱改善</small></div><p>局所気温 <b>${(0, dom_js_1.num)(q?.meanAirTemperatureC)}℃</b><br>${milkLine}<br>日運転費 <b>${(0, dom_js_1.num)(cost, 0)}円</b></p><span class="micro">${sc.roof.reflectance > .5 ? '遮熱あり' : '遮熱なし'} / ${sc.roof.insulationM > 0 ? '断熱あり' : '断熱なし'}</span></button>`;
     }).join('')}</div><p class="micro">運転費は入力単価による試算。初期設備費・投資回収は計算しません。日乳量は仮説モデルの牛群平均です。</p>`);
+}
+function renderAreas(p, r) {
+    const l = (0, layout_js_1.buildLayout)(p.template), s = r?.scenarios.find(x => x.id === p.activeScenarioId);
+    if (!s) {
+        (0, dom_js_1.setHTML)('area-summary', '<p class="micro">計算待ち</p>');
+        return;
+    }
+    const rows = (0, faces_js_1.buildAreas)(l).map(a => {
+        const st = (0, areaStats_js_1.areaStats)(s.points, a);
+        return `<tr data-area="${(0, dom_js_1.esc)(a.id)}" class="${p.view.selectedAreaId === a.id ? 'selected' : ''}${a.subtotal ? ' subtotal' : ''}"><th>${(0, dom_js_1.esc)(a.label)}</th><td>${st.meanDeficitW === null ? `未評価 ${st.validCount}/${st.probeCount}` : `${(0, dom_js_1.num)(st.meanDeficitW, 0)} W`}</td><td>${st.meanImprovementW === null ? '—' : (0, dom_js_1.signed)(st.meanImprovementW, 0)}</td><td>${st.deficitCount}/${st.probeCount}</td><td>${st.deficitNoActionCount}</td><td>${st.topDeficit.map(t => (0, dom_js_1.esc)(t.probeId)).join('、') || '—'}</td></tr>`;
+    }).join('');
+    (0, dom_js_1.setHTML)('area-summary', `<div class="table-scroll"><table class="area-table"><thead><tr><th>エリア</th><th>不足</th><th>改善</th><th>不足点</th><th>未到達</th><th>不足上位3</th></tr></thead><tbody>${rows}</tbody></table></div><p class="micro">行をクリックすると対象の面を強調します。不足=Qrefに対する秒積算平均 / 未到達=不足があり局所設備の作用もない地点数。代表点の単純平均で、滞在時間・頭数の重みではありません。1点でも無効なら未評価です。</p>`);
 }
 function renderSettings(p) { (0, dom_js_1.setHTML)('settings-body', `<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${(0, dom_js_1.field)('barn-length', '長さ', p.template.lengthM, 'm', 'data-template="lengthM"', 32, 48, .1)}${(0, dom_js_1.field)('barn-width', '幅', p.template.widthM, 'm', 'data-template="widthM"', 23.5, 30, .1)}${(0, dom_js_1.field)('background-wind', '背景風速', p.environment.backgroundSpeedMps, 'm/s', 'data-env="backgroundSpeedMps"', 0, 10, .01)}${(0, dom_js_1.field)('ventilation', '空気交換', p.environment.ventilationM3sPerM2, 'm³/s/m²', 'data-env="ventilationM3sPerM2"', .0001, 1, .001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p><h3>日運転費の試算単価</h3><div class="field-grid">${(0, dom_js_1.field)('price-electricity', '電力', p.prices.electricityYenKwh, '円/kWh', 'data-price="electricityYenKwh"', 0, 1e6, 1)}${(0, dom_js_1.field)('price-water', '水', p.prices.waterYenM3, '円/m³', 'data-price="waterYenM3"', 0, 1e6, 1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><p>新しい保存形式はschemaVersion 9です。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`); }
 function renderReference(p) {

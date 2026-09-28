@@ -39,7 +39,11 @@ export interface DailyMilkResult {
   resources:Resources|null;
   waterCheck:{roofStartKg:number;filmStartKg:number;roofResidualKg:number;filmResidualKg:number}|null;
 }
-export interface View {mode:'3d'|'2d';metric:'delta'|'speed'|'temperature';timeSec:number;selectedProbeId:string;selectedDeviceId:string|null;roof:boolean;flow:boolean;particles:boolean;camera:{azimuth:number;elevation:number;distance:number;target:Vec3}|null}
+export interface View {mode:'3d'|'2d';metric:'delta'|'deficit'|'speed'|'temperature';timeSec:number;selectedProbeId:string;selectedDeviceId:string|null;roof:boolean;flow:boolean;particles:boolean;camera:{azimuth:number;elevation:number;distance:number;target:Vec3}|null;
+ /** analysis view: hide roof/cow silhouettes so area faces stay readable. Optional for v9 load-compat. */
+ analysis?:boolean;
+ /** highlighted display area; excluded from the physics input hash. Optional for v9 load-compat. */
+ selectedAreaId?:string|null}
 export interface Project {schemaVersion:9;references:ReferenceSettings;milkSimulation:MilkSimulation;appVersion:string;template:Template;environment:Environment;model:Model;baselineScenarioId:string;activeScenarioId:string;scenarios:Scenario[];view:View;prices:{electricityYenKwh:number|null;waterYenM3:number|null};provenance:{id:string;classification:string;note:string;url?:string}[]}
 export interface Zone {id:string;name:string;x:number;y:number;widthM:number;depthM:number;kind:'feed'|'feeding'|'stall'|'aisle'|'robot'|'utility'|'waiting'|'isolation';solid?:boolean}
 export interface Probe {id:string;label:string;x:number;y:number;heightM:number;zoneId:string;patchYawDeg:number;kind:'stall'|'feeding'|'waiting'}
@@ -49,7 +53,11 @@ export interface Box3 {min:Vec3;max:Vec3}
 export interface AirCell {id:string;ix:number;iy:number;x:number;y:number;widthM:number;depthM:number;areaM2:number}
 export interface HeatComponents {convectionW:number;radiationW:number;baseEvaporationW:number;soakerEvaporationW:number;condensationW:number}
 export interface FilmLedger {capturedKg:number;condensedKg:number;evaporatedKg:number;runoffKg:number;finalKg:number;maxResidualKg:number}
-export interface PointResult {probeId:string;inputHash:string;modelVersion:string;meanSpeedMps:number|null;meanAirTemperatureC:number|null;meanRelativeHumidityPct:number|null;meanQrefW:number|null;deltaQrefW:number|null;components:HeatComponents|null;parameterEnvelopeW:[number,number]|null;profileDeltas:Record<string,number>;status:'valid'|'invalid';warnings:string[];cellId:string;captureFraction:number;film:FilmLedger|null;meanRadiantC:number|null;meanFeelsLikeC:number|null;milk:MilkReference;fertility:FertilityReference;series:PointSample[]}
+export interface PointResult {probeId:string;inputHash:string;modelVersion:string;meanSpeedMps:number|null;meanAirTemperatureC:number|null;meanRelativeHumidityPct:number|null;meanQrefW:number|null;deltaQrefW:number|null;components:HeatComponents|null;parameterEnvelopeW:[number,number]|null;profileDeltas:Record<string,number>;status:'valid'|'invalid';warnings:string[];cellId:string;captureFraction:number;film:FilmLedger|null;meanRadiantC:number|null;meanFeelsLikeC:number|null;milk:MilkReference;fertility:FertilityReference;series:PointSample[];
+ /** Area visualization v0.1: per-second aggregates over the 60-minute reference profile. */
+ meanDeficitW:number|null;meanFilmKg:number|null;fanActionFraction:number|null;soakerArrivalFraction:number|null;mistEvaporationActionFraction:number|null;mistSupplyFraction:number|null;
+ /** Test hook: per-second net Q [W]. Populated only when simulate({collectQSeries:true}) — never used by the app or worker. */
+ qSeries?:Float64Array}
 export interface Resources {waterLPerDay:number;fanKwhPerDay:number;pumpKwhPerDay:number;totalKwhPerDay:number;systems:{kind:string;waterL:number;pumpKwh:number;onTotalSec:number}[]}
 export interface ScenarioResult {id:string;points:PointResult[];resources:Resources;warnings:string[];roof:RoofResult;trialWaterL:number;trialKwh:number;dailyMilk:DailyMilkResult|null}
 export interface SimulationResult {inputHash:string;modelVersion:string;scenarios:ScenarioResult[];profiles:string[];timeStepSec:number;rayCount:number;durationSec:3600;dailyMilkStatus:'pending'|'complete'|'error'}

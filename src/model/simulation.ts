@@ -43,7 +43,7 @@ export function mistDistribution(p:Project,s:Scenario,layout:Layout,rays:number)
   return water;
 }
 /** Geometry and film physics are v0.4 reuse; this orchestrator connects v0.5/6/7. */
-function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:number,rays:number,hash:string,roof:ReturnType<typeof roofTimeline>):ScenarioResult {
+function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:number,rays:number,hash:string,roof:ReturnType<typeof roofTimeline>,collectQSeries=false):ScenarioResult {
   const e=p.environment,m=p.model,soaker=s.waterSystems.find(w=>w.kind==='soaker')!,mist=s.waterSystems.find(w=>w.kind==='mist')!;
   const invalidDevices=[...s.fans.filter(f=>f.enabled&&f.hoursPerDay>0),...s.waterSystems.filter(w=>w.enabled&&w.hoursPerDay>0&&w.onSec>0).flatMap(w=>w.nozzles.filter(n=>n.enabled&&n.flowLpm>0))].filter(d=>layout.solids.some(box=>insideBox(world(d),box)));
   const warnings:string[]=[];
@@ -56,7 +56,7 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
   const airCache=new Map<string,ReturnType<typeof mistAir>>();
   const points=layout.probes.map((q):PointResult=>{
     const cellId=`cell-${Math.min(Math.floor(q.x/2),Math.ceil(p.template.lengthM/2)-1)}-${Math.min(Math.floor(q.y/2),Math.ceil(p.template.widthM/2)-1)}`;
-    const blank:PointResult={probeId:q.id,inputHash:hash,modelVersion:m.version,meanSpeedMps:null,meanAirTemperatureC:null,meanRelativeHumidityPct:null,meanQrefW:null,deltaQrefW:null,components:null,parameterEnvelopeW:null,profileDeltas:{},status:'invalid',warnings:[],cellId,captureFraction:0,film:null,meanRadiantC:null,meanFeelsLikeC:null,milk:{status:'out_of_scope',ratioPct:null,kgPerDay:null,reasons:['地点の計算が無効です']},fertility:fertilityReference(p.references.fertility,null,null),series:[]};
+    const blank:PointResult={probeId:q.id,inputHash:hash,modelVersion:m.version,meanSpeedMps:null,meanAirTemperatureC:null,meanRelativeHumidityPct:null,meanQrefW:null,deltaQrefW:null,components:null,parameterEnvelopeW:null,profileDeltas:{},status:'invalid',warnings:[],cellId,captureFraction:0,film:null,meanRadiantC:null,meanFeelsLikeC:null,milk:{status:'out_of_scope',ratioPct:null,kgPerDay:null,reasons:['地点の計算が無効です']},fertility:fertilityReference(p.references.fertility,null,null),series:[],meanDeficitW:null,meanFilmKg:null,fanActionFraction:null,soakerArrivalFraction:null,mistEvaporationActionFraction:null,mistSupplyFraction:null};
     if(invalidDevices.length){blank.warnings.push('管理室内の設備を移動してください');return blank}
     let capturedFlow=0,maxFraction=0;
     if(soaker.enabled)for(const nozzle of soaker.nozzles){if(!nozzle.enabled||nozzle.flowLpm<=0)continue;const f=captureFraction(nozzle,q,m,layout.solids,rays);capturedFlow+=nozzle.flowLpm/60*f;maxFraction=Math.max(maxFraction,f)}
@@ -65,6 +65,11 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
     const comp:HeatComponents={convectionW:0,radiationW:0,baseEvaporationW:0,soakerEvaporationW:0,condensationW:0};
     const filmLedger:FilmLedger={capturedKg:0,condensedKg:0,evaporatedKg:0,runoffKg:0,finalKg:0,maxResidualKg:0};
     let mass=0,speedSum=0,tempSum=0,rhSum=0,feelSum=0;
+    const qref=p.milkSimulation.referenceCoolingWPerCow;
+    // Area visualization v0.1: per-second aggregates. These are integrated in the same
+    // loop as the physics — never reconstructed from the stored 60-second series.
+    let deficitWs=0,filmMassWs=0,fanActionS=0,soakerArrivalS=0,mistSupplyS=0,mistEvapS=0;
+    const qSeries=collectQSeries?new Float64Array(n):undefined;
     let firstT=0,firstRH=0,firstSpeed=0,staticInputs=true;
     const series:PointSample[]=[];
     for(let i=0;i<n;i++){
@@ -82,23 +87,32 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
       filmLedger.capturedKg+=film.capturedKg;filmLedger.condensedKg+=film.condensedKg;filmLedger.evaporatedKg+=film.evaporatedKg;filmLedger.runoffKg+=film.runoffKg;filmLedger.maxResidualKg=Math.max(filmLedger.maxResidualKg,Math.abs(film.residualKg));
       comp.convectionW+=terms.components.convectionW*dt;comp.radiationW+=terms.components.radiationW*dt;comp.baseEvaporationW+=terms.components.baseEvaporationW*dt;comp.condensationW+=terms.components.condensationW*dt;comp.soakerEvaporationW+=film.evaporatedKg*m.latentHeatJkg;
       speedSum+=speed*dt;tempSum+=ta*dt;rhSum+=rh*dt;feelSum+=(ta-6*Math.sqrt(speed))*dt;
+      const qW=terms.components.convectionW+terms.components.radiationW+terms.components.baseEvaporationW+terms.components.condensationW+film.heatW;
+      // AV05/§4: clamp per second BEFORE any spatial or time averaging.
+      deficitWs+=Math.max(0,qref-qW)*dt;
+      filmMassWs+=mass*dt;
+      if(wind.speed-e.backgroundSpeedMps>1e-6)fanActionS+=dt;
+      if(soakerOn&&capturedFlow>1e-12)soakerArrivalS+=dt;
+      if(flow>0)mistSupplyS+=dt;
+      if(air.evaporatedKgs>1e-12)mistEvapS+=dt;
+      if(qSeries)qSeries[i]=qW;
       if(i===0){firstT=ta;firstRH=rh;firstSpeed=speed}else if(Math.abs(ta-firstT)>1e-9||Math.abs(rh-firstRH)>1e-9||Math.abs(speed-firstSpeed)>1e-9)staticInputs=false;
-      if(profile.id==='reference'&&(i===0||(i+1)*dt%60===0))series.push({timeSec:(i+1)*dt,temperatureC:ta,relativeHumidityPct:rh,speedMps:speed,filmKg:mass,qW:terms.components.convectionW+terms.components.radiationW+terms.components.baseEvaporationW+terms.components.condensationW+film.heatW,deltaW:null,soakerOn,mistOn});
+      if(profile.id==='reference'&&(i===0||(i+1)*dt%60===0))series.push({timeSec:(i+1)*dt,temperatureC:ta,relativeHumidityPct:rh,speedMps:speed,filmKg:mass,qW,deltaW:null,soakerOn,mistOn});
     }
     for(const key of Object.keys(comp) as (keyof HeatComponents)[])comp[key]/=3600;
     filmLedger.finalKg=mass;
-    return {...blank,status:'valid',meanSpeedMps:speedSum/3600,meanAirTemperatureC:tempSum/3600,meanRelativeHumidityPct:rhSum/3600,meanQrefW:Object.values(comp).reduce((a,b)=>a+b,0),meanRadiantC:roof.result.meanRadiantC,meanFeelsLikeC:feelSum/3600,components:comp,film:filmLedger,captureFraction:maxFraction,series,milk:milkReference(firstT,firstRH,firstSpeed,p.references.baselineMilkKgPerDay,staticInputs),fertility:fertilityReference(p.references.fertility,tempSum/3600,rhSum/3600)};
+    return {...blank,status:'valid',meanSpeedMps:speedSum/3600,meanAirTemperatureC:tempSum/3600,meanRelativeHumidityPct:rhSum/3600,meanQrefW:Object.values(comp).reduce((a,b)=>a+b,0),meanRadiantC:roof.result.meanRadiantC,meanFeelsLikeC:feelSum/3600,components:comp,film:filmLedger,captureFraction:maxFraction,series,milk:milkReference(firstT,firstRH,firstSpeed,p.references.baselineMilkKgPerDay,staticInputs),fertility:fertilityReference(p.references.fertility,tempSum/3600,rhSum/3600),meanDeficitW:deficitWs/(n*dt),meanFilmKg:filmMassWs/(n*dt),fanActionFraction:fanActionS/(n*dt),soakerArrivalFraction:soakerArrivalS/(n*dt),mistEvaporationActionFraction:mistEvapS/(n*dt),mistSupplyFraction:mistSupplyS/(n*dt),qSeries};
   });
   return {id:s.id,points,resources:resources(s,p),warnings,roof:roof.result,...trialResources(s,p),dailyMilk:null};
 }
-export function simulate(p:Project,opts:{dt?:number;rays?:number;envelope?:boolean}={}):SimulationResult{
+export function simulate(p:Project,opts:{dt?:number;rays?:number;envelope?:boolean;collectQSeries?:boolean}={}):SimulationResult{
   const dt=opts.dt??1,rays=opts.rays??256;if(dt!==1&&dt!==.5)throw Error('時間刻みは1秒または0.5秒です');if(![256,1024].includes(rays))throw Error('積分レイ数は256または1024です');
   const hash=inputHash(p),layout=buildLayout(p.template),profiles=opts.envelope===false?p.model.profiles.filter(x=>x.id==='reference'):[...p.model.profiles].sort((a,b)=>a.id==='reference'?-1:b.id==='reference'?1:0);
   const roofCache=new Map<string,ReturnType<typeof roofTimeline>>(),cache=new Map<string,ScenarioResult>(),all=new Map<string,ScenarioResult[]>();
   for(const profile of profiles){
     const results=p.scenarios.map(s=>{
       const key=profile.id+stableStringify(scenarioInput(s));let result=cache.get(key);
-      if(!result){const rk=stableStringify(s.roof);let roof=roofCache.get(rk);if(!roof){roof=roofTimeline(p,s,dt);roofCache.set(rk,roof)}result=runScenario(p,s,layout,profile,dt,rays,hash,roof);cache.set(key,result)}
+      if(!result){const rk=stableStringify(s.roof);let roof=roofCache.get(rk);if(!roof){roof=roofTimeline(p,s,dt);roofCache.set(rk,roof)}result=runScenario(p,s,layout,profile,dt,rays,hash,roof,opts.collectQSeries===true);cache.set(key,result)}
       return {...result,id:s.id,points:result.points.map(q=>({...q,profileDeltas:{},series:q.series.map(st=>({...st}))}))};
     });
     const base=results.find(s=>s.id===p.baselineScenarioId)!;

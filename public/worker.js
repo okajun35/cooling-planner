@@ -100,7 +100,7 @@ function mistDistribution(p, s, layout, rays) {
     return water;
 }
 /** Geometry and film physics are v0.4 reuse; this orchestrator connects v0.5/6/7. */
-function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
+function runScenario(p, s, layout, profile, dt, rays, hash, roof, collectQSeries = false) {
     const e = p.environment, m = p.model, soaker = s.waterSystems.find(w => w.kind === 'soaker'), mist = s.waterSystems.find(w => w.kind === 'mist');
     const invalidDevices = [...s.fans.filter(f => f.enabled && f.hoursPerDay > 0), ...s.waterSystems.filter(w => w.enabled && w.hoursPerDay > 0 && w.onSec > 0).flatMap(w => w.nozzles.filter(n => n.enabled && n.flowLpm > 0))].filter(d => layout.solids.some(box => (0, geometry_js_1.insideBox)((0, geometry_js_1.world)(d), box)));
     const warnings = [];
@@ -116,7 +116,7 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
     const airCache = new Map();
     const points = layout.probes.map((q) => {
         const cellId = `cell-${Math.min(Math.floor(q.x / 2), Math.ceil(p.template.lengthM / 2) - 1)}-${Math.min(Math.floor(q.y / 2), Math.ceil(p.template.widthM / 2) - 1)}`;
-        const blank = { probeId: q.id, inputHash: hash, modelVersion: m.version, meanSpeedMps: null, meanAirTemperatureC: null, meanRelativeHumidityPct: null, meanQrefW: null, deltaQrefW: null, components: null, parameterEnvelopeW: null, profileDeltas: {}, status: 'invalid', warnings: [], cellId, captureFraction: 0, film: null, meanRadiantC: null, meanFeelsLikeC: null, milk: { status: 'out_of_scope', ratioPct: null, kgPerDay: null, reasons: ['地点の計算が無効です'] }, fertility: (0, references_js_1.fertilityReference)(p.references.fertility, null, null), series: [] };
+        const blank = { probeId: q.id, inputHash: hash, modelVersion: m.version, meanSpeedMps: null, meanAirTemperatureC: null, meanRelativeHumidityPct: null, meanQrefW: null, deltaQrefW: null, components: null, parameterEnvelopeW: null, profileDeltas: {}, status: 'invalid', warnings: [], cellId, captureFraction: 0, film: null, meanRadiantC: null, meanFeelsLikeC: null, milk: { status: 'out_of_scope', ratioPct: null, kgPerDay: null, reasons: ['地点の計算が無効です'] }, fertility: (0, references_js_1.fertilityReference)(p.references.fertility, null, null), series: [], meanDeficitW: null, meanFilmKg: null, fanActionFraction: null, soakerArrivalFraction: null, mistEvaporationActionFraction: null, mistSupplyFraction: null };
         if (invalidDevices.length) {
             blank.warnings.push('管理室内の設備を移動してください');
             return blank;
@@ -135,6 +135,11 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
         const comp = { convectionW: 0, radiationW: 0, baseEvaporationW: 0, soakerEvaporationW: 0, condensationW: 0 };
         const filmLedger = { capturedKg: 0, condensedKg: 0, evaporatedKg: 0, runoffKg: 0, finalKg: 0, maxResidualKg: 0 };
         let mass = 0, speedSum = 0, tempSum = 0, rhSum = 0, feelSum = 0;
+        const qref = p.milkSimulation.referenceCoolingWPerCow;
+        // Area visualization v0.1: per-second aggregates. These are integrated in the same
+        // loop as the physics — never reconstructed from the stored 60-second series.
+        let deficitWs = 0, filmMassWs = 0, fanActionS = 0, soakerArrivalS = 0, mistSupplyS = 0, mistEvapS = 0;
+        const qSeries = collectQSeries ? new Float64Array(n) : undefined;
         let firstT = 0, firstRH = 0, firstSpeed = 0, staticInputs = true;
         const series = [];
         for (let i = 0; i < n; i++) {
@@ -177,6 +182,20 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
             tempSum += ta * dt;
             rhSum += rh * dt;
             feelSum += (ta - 6 * Math.sqrt(speed)) * dt;
+            const qW = terms.components.convectionW + terms.components.radiationW + terms.components.baseEvaporationW + terms.components.condensationW + film.heatW;
+            // AV05/§4: clamp per second BEFORE any spatial or time averaging.
+            deficitWs += Math.max(0, qref - qW) * dt;
+            filmMassWs += mass * dt;
+            if (wind.speed - e.backgroundSpeedMps > 1e-6)
+                fanActionS += dt;
+            if (soakerOn && capturedFlow > 1e-12)
+                soakerArrivalS += dt;
+            if (flow > 0)
+                mistSupplyS += dt;
+            if (air.evaporatedKgs > 1e-12)
+                mistEvapS += dt;
+            if (qSeries)
+                qSeries[i] = qW;
             if (i === 0) {
                 firstT = ta;
                 firstRH = rh;
@@ -185,12 +204,12 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof) {
             else if (Math.abs(ta - firstT) > 1e-9 || Math.abs(rh - firstRH) > 1e-9 || Math.abs(speed - firstSpeed) > 1e-9)
                 staticInputs = false;
             if (profile.id === 'reference' && (i === 0 || (i + 1) * dt % 60 === 0))
-                series.push({ timeSec: (i + 1) * dt, temperatureC: ta, relativeHumidityPct: rh, speedMps: speed, filmKg: mass, qW: terms.components.convectionW + terms.components.radiationW + terms.components.baseEvaporationW + terms.components.condensationW + film.heatW, deltaW: null, soakerOn, mistOn });
+                series.push({ timeSec: (i + 1) * dt, temperatureC: ta, relativeHumidityPct: rh, speedMps: speed, filmKg: mass, qW, deltaW: null, soakerOn, mistOn });
         }
         for (const key of Object.keys(comp))
             comp[key] /= 3600;
         filmLedger.finalKg = mass;
-        return { ...blank, status: 'valid', meanSpeedMps: speedSum / 3600, meanAirTemperatureC: tempSum / 3600, meanRelativeHumidityPct: rhSum / 3600, meanQrefW: Object.values(comp).reduce((a, b) => a + b, 0), meanRadiantC: roof.result.meanRadiantC, meanFeelsLikeC: feelSum / 3600, components: comp, film: filmLedger, captureFraction: maxFraction, series, milk: (0, references_js_1.milkReference)(firstT, firstRH, firstSpeed, p.references.baselineMilkKgPerDay, staticInputs), fertility: (0, references_js_1.fertilityReference)(p.references.fertility, tempSum / 3600, rhSum / 3600) };
+        return { ...blank, status: 'valid', meanSpeedMps: speedSum / 3600, meanAirTemperatureC: tempSum / 3600, meanRelativeHumidityPct: rhSum / 3600, meanQrefW: Object.values(comp).reduce((a, b) => a + b, 0), meanRadiantC: roof.result.meanRadiantC, meanFeelsLikeC: feelSum / 3600, components: comp, film: filmLedger, captureFraction: maxFraction, series, milk: (0, references_js_1.milkReference)(firstT, firstRH, firstSpeed, p.references.baselineMilkKgPerDay, staticInputs), fertility: (0, references_js_1.fertilityReference)(p.references.fertility, tempSum / 3600, rhSum / 3600), meanDeficitW: deficitWs / (n * dt), meanFilmKg: filmMassWs / (n * dt), fanActionFraction: fanActionS / (n * dt), soakerArrivalFraction: soakerArrivalS / (n * dt), mistEvaporationActionFraction: mistEvapS / (n * dt), mistSupplyFraction: mistSupplyS / (n * dt), qSeries };
     });
     return { id: s.id, points, resources: resources(s, p), warnings, roof: roof.result, ...trialResources(s, p), dailyMilk: null };
 }
@@ -213,7 +232,7 @@ function simulate(p, opts = {}) {
                     roof = (0, roof_js_1.roofTimeline)(p, s, dt);
                     roofCache.set(rk, roof);
                 }
-                result = runScenario(p, s, layout, profile, dt, rays, hash, roof);
+                result = runScenario(p, s, layout, profile, dt, rays, hash, roof, opts.collectQSeries === true);
                 cache.set(key, result);
             }
             return { ...result, id: s.id, points: result.points.map(q => ({ ...q, profileDeltas: {}, series: q.series.map(st => ({ ...st })) })) };
@@ -1257,10 +1276,14 @@ function validateProject(input) {
         if (s.readOnly !== (s.id === p.baselineScenarioId))
             fail('readOnly', '基準だけを読取専用にしてください');
     const v = record(p.view, 'view');
-    if (!['2d', '3d'].includes(v.mode) || !['delta', 'speed', 'temperature'].includes(v.metric))
+    if (!['2d', '3d'].includes(v.mode) || !['delta', 'deficit', 'speed', 'temperature'].includes(v.metric))
         fail('view', '表示設定が不正です');
     for (const k of ['roof', 'flow', 'particles'])
         bool(v[k], `view.${k}`);
+    if (v.analysis !== undefined)
+        bool(v.analysis, 'view.analysis');
+    if (v.selectedAreaId !== undefined && v.selectedAreaId !== null)
+        id(v.selectedAreaId, 'view.selectedAreaId');
     number(v.timeSec, 0, 3600, 'view.timeSec');
     if (!layout.probes.some(q => q.id === v.selectedProbeId))
         fail('selectedProbeId', '地点がありません');
@@ -1339,7 +1362,7 @@ function createProject() {
     const soaker = { ...structuredClone(baseline), id: 'working-soaker', name: '編集案 A', readOnly: false };
     const mist = { ...structuredClone(baseline), id: 'working-mist', name: '編集案 B', readOnly: false };
     mist.waterSystems.forEach(w => w.enabled = w.kind === 'mist');
-    return { schemaVersion: 9, references: { milkModel: 'milk-table-cowbell178-v1', baselineMilkKgPerDay: 35, fertility: { model: 'fertility-thi-period-or-baccouri2025-v1', p0: .4, mode: 'manual', exposureAssumed: true, temperatureC: 26, relativeHumidityPct: 70, profileVersion: 1 } }, milkSimulation: structuredClone(milk_js_1.DEFAULT_MILK_SIMULATION), appVersion: exports.APP_VERSION, template, environment: { temperatureC: 32, relativeHumidityPct: 70, pressurePa: 101325, backgroundSpeedMps: .2, ventilationM3sPerM2: .015, solarRoofWm2: 800 }, model: structuredClone(exports.MODEL), baselineScenarioId: 'baseline', activeScenarioId: 'working-soaker', scenarios: [baseline, soaker, mist], view: { mode: '3d', metric: 'delta', timeSec: 0, selectedProbeId: 'feed-07', selectedDeviceId: null, roof: false, flow: true, particles: true, camera: null }, prices: { electricityYenKwh: 27, waterYenM3: 300 }, provenance: [
+    return { schemaVersion: 9, references: { milkModel: 'milk-table-cowbell178-v1', baselineMilkKgPerDay: 35, fertility: { model: 'fertility-thi-period-or-baccouri2025-v1', p0: .4, mode: 'manual', exposureAssumed: true, temperatureC: 26, relativeHumidityPct: 70, profileVersion: 1 } }, milkSimulation: structuredClone(milk_js_1.DEFAULT_MILK_SIMULATION), appVersion: exports.APP_VERSION, template, environment: { temperatureC: 32, relativeHumidityPct: 70, pressurePa: 101325, backgroundSpeedMps: .2, ventilationM3sPerM2: .015, solarRoofWm2: 800 }, model: structuredClone(exports.MODEL), baselineScenarioId: 'baseline', activeScenarioId: 'working-soaker', scenarios: [baseline, soaker, mist], view: { mode: '3d', metric: 'deficit', timeSec: 0, selectedProbeId: 'feed-07', selectedDeviceId: null, roof: false, flow: true, particles: true, camera: null, analysis: false, selectedAreaId: null }, prices: { electricityYenKwh: 27, waterYenM3: 300 }, provenance: [
             { id: 'dimensions', classification: 'adapted-reference', note: '原事例36.4×23.5m・70頭の外形を参考に、内部を50床の独自配置へ変更。設計推奨ではない。', url: 'https://holstein.pl/nowoczesna-obora-w-gospodarstwie-rodzinnym/' },
             { id: 'layout', classification: 'adapted-reference', note: '採食・休息・搾乳の区画関係を参考にした独自配置。原図やメーカー3Dデータは同梱しない。', url: 'https://www.orionkikai.co.jp/rakuno/how_to/auto-milking-system/' },
             { id: 'psychrometrics', classification: 'source-based', note: 'SIの飽和蒸気圧・湿度比・エンタルピー・比体積の関係。仮換気量の妥当性を保証するものではない。', url: 'https://psychrometrics.github.io/psychrolib/api_docs.html' },
