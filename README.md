@@ -119,6 +119,17 @@ devin mcp add cooling-planner -- node /home/hddwm390/tmp/cooling-planner/scripts
 
 ブラウザ結合確認：`CHROMIUM_PATH` を指定し `python3 -m pytest tests/e2e/test_mcp.py`（実際のMCP stdio会話で画面が変わることまで確認します）。
 
+## AWS へのデプロイ
+
+実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `describe_model`（操作語彙はローカル版と同一）。
+
+```sh
+cd aws && npm ci && cd ..
+npm run deploy:aws   # サイトbuild → Lambda bundle → cdk deploy → Amplify zip deploy
+```
+
+デプロイ状態（Bearerトークン・URL）は `aws/deploy.local.json`（git管理外）に保存されます。初回はCDK bootstrapが必要な場合自動で実行します。GitHub からの自動デプロイは、Amplifyコンソールで一度リポジトリを接続すると有効になります（`amplify.yml` 同梱済み）。
+
 ## 保存形式
 
 `schemaVersion: 9`。配置・屋根条件・気象・係数・参照モデルの仮定・日運転開始時刻・乳量モデル設定・表示設定を保存します。v8・v4のJSONは自動変換せず拒否し、現在の案を保持します。既存のv8本体・データを別途残してください。

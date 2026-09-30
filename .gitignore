@@ -12,3 +12,7 @@ __pycache__/
 !.env.example
 evidence/
 *.log
+aws/dist/
+aws/deploy.local.json
+aws/cdk-outputs.json
+aws/infra/cdk.out/

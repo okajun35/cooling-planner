@@ -31,7 +31,7 @@ export interface GetResultsArgs{scenarioId?:string;probeId?:string}
 const CONFIRM_INPUT='画面の入力を確定してください';
 
 /** Short guidance also embedded in the MCP server instructions and tool descriptions. */
-const MODEL_NOTES=[
+export const MODEL_NOTES=[
  '最初にget_stateで現状・ID・選択対象を確認する。「この牛」は選択地点として解釈する。',
  '座標はx=牛舎の長さ方向、y=幅方向、heightM=高さ。長さはm、向きはdeg。',
  '編集は現在の案へ適用する。基準案は読取専用。update_environmentは全案に効く。',
@@ -97,6 +97,115 @@ function resultStatus(d:CommandDeps):{status:ResultStatus;reason?:string}{
  return{status:'calculating'};
 }
 
+/** Applies one edit operation to the given store. Shared by `edit` (live store),
+ * `evaluate` (throwaway clone), and the AWS Lambda adapters (aws/lambda/core.ts). */
+export function applyOperation(s:ProjectStore,args:EditArgs):Record<string,unknown>{
+ const p=()=>s.committed;
+ switch(args.operation){
+  case'switch_scenario':{
+   if(!args.scenarioId)throw Error('scenarioIdが必要です');
+   s.switchScenario(args.scenarioId);
+   return{scenario:activeScenario(p()).id};
+  }
+  case'copy_to_other':{
+   s.copyActiveToOther();
+   return{scenario:activeScenario(p()).id,name:activeScenario(p()).name};
+  }
+  case'update_device':{
+   const dev=deviceById(p(),args.deviceId);
+   const patch=checkPatch(args.patch,isFan(dev)?PATCH_FIELDS.fan:PATCH_FIELDS.nozzle,isFan(dev)?'ファン':'ノズル');
+   s.updateDevice(dev.id,patch as Partial<Device>);
+   return{deviceId:dev.id,applied:deviceById(p(),dev.id)};
+  }
+  case'update_roof':{
+   const patch=checkPatch(args.patch,PATCH_FIELDS.roof,'屋根');
+   s.updateRoof(patch as Partial<RoofSettings>);
+   return{applied:activeScenario(p()).roof};
+  }
+  case'update_system':{
+   if(!activeScenario(p()).waterSystems.some(w=>w.id===args.systemId))throw Error(`系統が見つかりません: ${args.systemId}`);
+   const patch=checkPatch(args.patch,PATCH_FIELDS.system,'水系統');
+   s.updateSystem(args.systemId!,patch);
+   return{systemId:args.systemId,applied:activeScenario(p()).waterSystems.find(w=>w.id===args.systemId)};
+  }
+  case'update_environment':{
+   const patch=checkPatch(args.patch,PATCH_FIELDS.environment,'共通気象');
+   s.updateEnvironment(patch);
+   return{applied:p().environment};
+  }
+  case'update_model':{
+   const patch=checkPatch(args.patch,PATCH_FIELDS.model,'モデル');
+   const roof=patch.roof as Record<string,unknown>|undefined;
+   if(roof){const bad=Object.keys(roof).filter(k=>!PATCH_FIELDS.modelRoof.has(k));if(bad.length)throw Error(`モデル屋根のpatchに許可されないフィールドがあります: ${bad.join(', ')}`)}
+   const profiles=patch.profiles as Record<string,Record<string,unknown>>|undefined;
+   if(profiles)for(const[id,sub]of Object.entries(profiles)){
+    if(!p().model.profiles.some(x=>x.id===id))throw Error(`プロファイルが見つかりません: ${id}`);
+    const bad=Object.keys(sub).filter(k=>!PATCH_FIELDS.profile.has(k));if(bad.length)throw Error(`プロファイル${id}のpatchに許可されないフィールドがあります: ${bad.join(', ')}`)}
+   s.updateModel(patch);
+   return{applied:p().model};
+  }
+  case'update_milk':{
+   const patch=checkPatch(args.patch,PATCH_FIELDS.milk,'乳量モデル');
+   s.updateMilk(patch as Partial<Project['milkSimulation']>);
+   return{applied:p().milkSimulation};
+  }
+  case'update_references':{
+   const patch=checkPatch(args.patch,PATCH_FIELDS.references,'参照');
+   const{fertility,...flat}=patch;
+   const merged:Record<string,unknown>={...flat};
+   if(fertility){
+    const bad=Object.keys(fertility).filter(k=>!PATCH_FIELDS.fertility.has(k));if(bad.length)throw Error(`受胎参照のpatchに許可されないフィールドがあります: ${bad.join(', ')}`);
+    merged.fertility={...p().references.fertility,...fertility};
+   }
+   s.updateReferences(merged);
+   return{applied:p().references};
+  }
+  case'add_device':{
+   if(args.kind!=='fan'&&args.kind!=='soaker'&&args.kind!=='mist')throw Error(`不明な設備種別です: ${args.kind}`);
+   if((args.x!=null)!==(args.y!=null))throw Error('xとyは両方指定してください');
+   const pose=args.x!=null?{x:args.x,y:args.y!}:undefined;
+   const id=args.kind==='fan'?s.addFan(pose):s.addNozzle(args.kind,pose);
+   return{deviceId:id,applied:deviceById(p(),id)};
+  }
+  case'duplicate_device':{
+   deviceById(p(),args.deviceId);
+   const id=s.duplicateDevice(args.deviceId!);
+   return{deviceId:id,applied:deviceById(p(),id)};
+  }
+  case'remove_device':{
+   deviceById(p(),args.deviceId);
+   s.removeDevice(args.deviceId!);
+   return{removedDeviceId:args.deviceId};
+  }
+  default:throw Error(`不明なoperationです: ${args.operation}`);
+ }
+}
+
+/** Stateless core of `evaluate`: applies ops to a clone of the given project,
+ * simulates via the injected runner, and returns the result plus the clone so
+ * callers (e.g. aws/lambda/core.ts) can chain further edits with consistent
+ * operation-generated ids. */
+export async function evaluateOnProject(project:Project,args:EvaluateArgs,runEval:(p:Project,o:{daily:boolean})=>Promise<EvalJob>){
+ if(!args||!Array.isArray(args.operations))throw Error('operationsに操作の配列が必要です');
+ const tmp=new ProjectStore(structuredClone(project));
+ if(args.scenarioId&&args.scenarioId!==tmp.committed.activeScenarioId)tmp.switchScenario(args.scenarioId);
+ const applied=args.operations.map(op=>applyOperation(tmp,op));
+ const job=await runEval(tmp.committed,{daily:args.includeDaily===true});
+ if(job.daily)mergeDaily(job.thermal,job.daily,job.dailyMilkStatus);
+ const p=tmp.committed,areas=buildAreas(layout(p));
+ const scenarioOf=(id:string)=>{
+  const sr=job.thermal.scenarios.find(s=>s.id===id);
+  if(!sr)return null;
+  const meta=p.scenarios.find(s=>s.id===id)!,{series:_,...roof}=sr.roof;
+  return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,areas:areas.map(a=>areaStats(sr.points,a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:job.daily?sr.dailyMilk:undefined};
+ };
+ return{
+  scenarioId:p.activeScenarioId,inputHash:inputHash(p),operations:applied,
+  result:scenarioOf(p.activeScenarioId),baseline:scenarioOf(p.baselineScenarioId),
+  dailyIncluded:!!job.daily,project:p,
+ };
+}
+
 export function createCommands(d:CommandDeps){
  const store=d.store;
 
@@ -116,116 +225,17 @@ export function createCommands(d:CommandDeps){
   };
  }
 
-/** Applies one edit operation to the given store. Shared by `edit` (live store) and `evaluate` (throwaway clone). */
- function applyOp(s:ProjectStore,args:EditArgs):Record<string,unknown>{
-  const p=()=>s.committed;
-  switch(args.operation){
-   case'switch_scenario':{
-    if(!args.scenarioId)throw Error('scenarioIdが必要です');
-    s.switchScenario(args.scenarioId);
-    return{scenario:activeScenario(p()).id};
-   }
-   case'copy_to_other':{
-    s.copyActiveToOther();
-    return{scenario:activeScenario(p()).id,name:activeScenario(p()).name};
-   }
-   case'update_device':{
-    const dev=deviceById(p(),args.deviceId);
-    const patch=checkPatch(args.patch,isFan(dev)?PATCH_FIELDS.fan:PATCH_FIELDS.nozzle,isFan(dev)?'ファン':'ノズル');
-    s.updateDevice(dev.id,patch as Partial<Device>);
-    return{deviceId:dev.id,applied:deviceById(p(),dev.id)};
-   }
-   case'update_roof':{
-    const patch=checkPatch(args.patch,PATCH_FIELDS.roof,'屋根');
-    s.updateRoof(patch as Partial<RoofSettings>);
-    return{applied:activeScenario(p()).roof};
-   }
-   case'update_system':{
-    if(!activeScenario(p()).waterSystems.some(w=>w.id===args.systemId))throw Error(`系統が見つかりません: ${args.systemId}`);
-    const patch=checkPatch(args.patch,PATCH_FIELDS.system,'水系統');
-    s.updateSystem(args.systemId!,patch);
-    return{systemId:args.systemId,applied:activeScenario(p()).waterSystems.find(w=>w.id===args.systemId)};
-   }
-   case'update_environment':{
-    const patch=checkPatch(args.patch,PATCH_FIELDS.environment,'共通気象');
-    s.updateEnvironment(patch);
-    return{applied:p().environment};
-   }
-   case'update_model':{
-    const patch=checkPatch(args.patch,PATCH_FIELDS.model,'モデル');
-    const roof=patch.roof as Record<string,unknown>|undefined;
-    if(roof){const bad=Object.keys(roof).filter(k=>!PATCH_FIELDS.modelRoof.has(k));if(bad.length)throw Error(`モデル屋根のpatchに許可されないフィールドがあります: ${bad.join(', ')}`)}
-    const profiles=patch.profiles as Record<string,Record<string,unknown>>|undefined;
-    if(profiles)for(const[id,sub]of Object.entries(profiles)){
-     if(!p().model.profiles.some(x=>x.id===id))throw Error(`プロファイルが見つかりません: ${id}`);
-     const bad=Object.keys(sub).filter(k=>!PATCH_FIELDS.profile.has(k));if(bad.length)throw Error(`プロファイル${id}のpatchに許可されないフィールドがあります: ${bad.join(', ')}`)}
-    s.updateModel(patch);
-    return{applied:p().model};
-   }
-   case'update_milk':{
-    const patch=checkPatch(args.patch,PATCH_FIELDS.milk,'乳量モデル');
-    s.updateMilk(patch as Partial<Project['milkSimulation']>);
-    return{applied:p().milkSimulation};
-   }
-   case'update_references':{
-    const patch=checkPatch(args.patch,PATCH_FIELDS.references,'参照');
-    const{fertility,...flat}=patch;
-    const merged:Record<string,unknown>={...flat};
-    if(fertility){
-     const bad=Object.keys(fertility).filter(k=>!PATCH_FIELDS.fertility.has(k));if(bad.length)throw Error(`受胎参照のpatchに許可されないフィールドがあります: ${bad.join(', ')}`);
-     merged.fertility={...p().references.fertility,...fertility};
-    }
-    s.updateReferences(merged);
-    return{applied:p().references};
-   }
-   case'add_device':{
-    if(args.kind!=='fan'&&args.kind!=='soaker'&&args.kind!=='mist')throw Error(`不明な設備種別です: ${args.kind}`);
-    if((args.x!=null)!==(args.y!=null))throw Error('xとyは両方指定してください');
-    const pose=args.x!=null?{x:args.x,y:args.y!}:undefined;
-    const id=args.kind==='fan'?s.addFan(pose):s.addNozzle(args.kind,pose);
-    return{deviceId:id,applied:deviceById(p(),id)};
-   }
-   case'duplicate_device':{
-    deviceById(p(),args.deviceId);
-    const id=s.duplicateDevice(args.deviceId!);
-    return{deviceId:id,applied:deviceById(p(),id)};
-   }
-   case'remove_device':{
-    deviceById(p(),args.deviceId);
-    s.removeDevice(args.deviceId!);
-    return{removedDeviceId:args.deviceId};
-   }
-   default:throw Error(`不明なoperationです: ${args.operation}`);
-  }
- }
-
  function edit(args:EditArgs){
   ensureEditable(d);
-  const applied=applyOp(store,args);
+  const applied=applyOperation(store,args);
   return{operation:args.operation,activeScenarioId:store.committed.activeScenarioId,inputHash:inputHash(store.committed),undoCount:store.undoCount,...applied};
  }
 
  /** Applies ops to a cloned project, simulates it, and returns results. Never touches the live store. */
  async function evaluate(args:EvaluateArgs){
-  if(!args||!Array.isArray(args.operations))throw Error('operationsに操作の配列が必要です');
-  const tmp=new ProjectStore(structuredClone(store.committed));
-  if(args.scenarioId&&args.scenarioId!==tmp.committed.activeScenarioId)tmp.switchScenario(args.scenarioId);
-  const applied=args.operations.map(op=>applyOp(tmp,op));
-  const job=await d.evaluate(tmp.committed,{daily:args.includeDaily===true});
-  if(job.daily)mergeDaily(job.thermal,job.daily,job.dailyMilkStatus);
-  const p=tmp.committed,areas=buildAreas(layout(p));
-  const scenarioOf=(id:string)=>{
-   const sr=job.thermal.scenarios.find(s=>s.id===id);
-   if(!sr)return null;
-   const meta=p.scenarios.find(s=>s.id===id)!,{series:_,...roof}=sr.roof;
-   return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,areas:areas.map(a=>areaStats(sr.points,a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:job.daily?sr.dailyMilk:undefined};
-  };
-  return{
-   scenarioId:p.activeScenarioId,inputHash:inputHash(p),operations:applied,
-   result:scenarioOf(p.activeScenarioId),baseline:scenarioOf(p.baselineScenarioId),
-   dailyIncluded:!!job.daily,
-   note:'仮の複製へ操作を適用して計算した結果です。画面の案・設備・Undo履歴は変わっていません',
-  };
+  const r=await evaluateOnProject(store.committed,args,d.evaluate);
+  const{project:_,...rest}=r;
+  return{...rest,note:'仮の複製へ操作を適用して計算した結果です。画面の案・設備・Undo履歴は変わっていません'};
  }
 
  function setView(args:SetViewArgs){

@@ -13,7 +13,9 @@
     "build:portable": "npm run build",
     "start": "node scripts/serve.mjs",
     "mcp": "node scripts/mcp-server.mjs",
-    "test:browser": "python3 -m pytest tests/e2e -v"
+    "test:browser": "python3 -m pytest tests/e2e -v",
+    "typecheck:aws": "tsc -p aws/tsconfig.json --noEmit",
+    "deploy:aws": "node aws/deploy.mjs"
   },
   "devDependencies": {
     "@types/three": "0.180.0",
