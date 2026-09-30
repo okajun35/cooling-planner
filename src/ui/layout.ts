@@ -31,9 +31,9 @@ export function layout(){return `
   <label class="rail-toggle" title="牛等を隠して面だけ見る"><input id="show-analysis" type="checkbox" data-view="analysis">${icon('grid',17)}<span>分析</span></label>
   <label class="rail-toggle" id="heatmap-switch" title="床へ計算結果を重ねる（リアル3Dのみ）" hidden><input id="show-heatmap" type="checkbox" data-view="heatmap">${icon('sun',17)}<span>分布</span></label>
  </div>
- <div class="segments modes" role="group" aria-label="表示モード"><button data-mode="3d">標準3D</button><button data-render="realistic">リアル3D</button><button data-mode="2d">2D</button></div>
+ <div class="view-controls"><div class="segments modes" role="group" aria-label="表示モード"><button data-mode="3d">標準3D</button><button data-render="realistic">リアル3D</button><button data-mode="2d">2D</button></div>
+ <div class="camera-buttons" role="group" aria-label="カメラ視点"><button data-camera="overview" title="全体を見る">全体</button><button data-camera="top" title="上面から見る">上面</button><button data-camera="side" title="側面から見る">側面</button></div></div>
  <div id="legend"></div>
- <div class="camera-buttons"><button data-camera="overview" title="全体を見る">全体</button><button data-camera="top">上面</button><button data-camera="side">側面</button></div>
  <div id="scene-live" class="scene-live"></div>
  <div id="realistic-note" class="realistic-note" hidden>風・水滴は作用の模式表現 · 時刻で運転状態を切替</div>
  <div id="scene-busy" class="scene-busy" hidden>変更した条件で再計算中…</div>
