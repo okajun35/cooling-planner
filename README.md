@@ -1,6 +1,6 @@
-# Cooling Planner v0.9 preview
+# Cooling Planner v0.10 preview
 
-モデル牛舎で設備を操作し、環境と牛の放熱を比べるブラウザアプリです。既存v0.4の幾何・物理・編集機能を再利用し、画面と計算の接続を組み直しました。v0.9では、設備変更に連動する牛群平均の代表日乳量（仮説モデル `milk-heat-deficit-v0.1`）を追加しました。
+モデル牛舎で設備を操作し、環境と牛の放熱を比べるブラウザアプリです。既存v0.4の幾何・物理・編集機能を再利用し、画面と計算の接続を組み直しました。v0.9では、設備変更に連動する牛群平均の代表日乳量（仮説モデル `milk-heat-deficit-v0.1`）を追加しました。v0.10では代表日の時刻別気象（24行）と日単位の地点・区画別集計、制約付き候補比較 `compare_candidates` を追加しました。
 
 このリポジトリはDairy Horizonから切り出した独立版です。FastAPI・APIキー・親プロジェクトは不要です。
 Node.js 22.12以上で、初回は `npm ci && npm run build`、以降は `npm start` で起動します。
@@ -8,7 +8,7 @@ Node.js 22.12以上で、初回は `npm ci && npm run build`、以降は `npm st
 
 ## まず動かす
 
-`cooling-planner-v0.9.html` は、CSS・JavaScript・計算Workerを内包した単体ファイルです。ZIPを展開し、PCのChrome/Edge等で開いてください。インターネット接続、ログイン、APIキーは不要な構成です。ブラウザの制限でローカルファイルを開けない場合は、下のローカルHTTP配信を利用してください。
+`cooling-planner-v0.10.html` は、CSS・JavaScript・計算Workerを内包した単体ファイルです。ZIPを展開し、PCのChrome/Edge等で開いてください。インターネット接続、ログイン、APIキーは不要な構成です。ブラウザの制限でローカルファイルを開けない場合は、下のローカルHTTP配信を利用してください。
 
 現在の目的・対象範囲は[現在計画](docs/CURRENT_PLAN.md)、設備操作から案比較までの受入条件案と現行コードの対応は[受入条件](docs/ACCEPTANCE_CRITERIA.md)を参照してください。
 
@@ -49,7 +49,7 @@ npm start
 
 ビルド出力：
 
-- `cooling-planner-v0.9.html`：単体HTML（旧`cooling-planner-v0.8.html`も残しています）。
+- `cooling-planner-v0.10.html`：単体HTML（旧`cooling-planner-v0.9.html`も残しています）。
 - `dist-offline/`：静的配信用のHTML/CSS/app.js/worker.js。フォルダー全体を配信対象にします。
 
 ハッカソンPOCでは、エージェントの検証は型チェック・関連する単体／統合テスト・ビルドを基本とします。E2E・実ブラウザの操作確認は人間とCIが担当し、エージェントは明示的に依頼された場合のみ実行します。
@@ -143,9 +143,9 @@ npm run deploy:aws   # サイトbuild → Lambda bundle → cdk deploy（Lambda�
 
 ## 保存形式
 
-`schemaVersion: 9`。配置・屋根条件・気象・係数・参照モデルの仮定・日運転開始時刻・乳量モデル設定・表示設定を保存します。v8・v4のJSONは自動変換せず拒否し、現在の案を保持します。既存のv8本体・データを別途残してください。
+`schemaVersion: 10`。配置・屋根条件・気象（固定＋代表日の時刻別）・係数・参照モデルの仮定・日運転開始時刻・乳量モデル設定・表示設定を保存します。v8・v4のJSONは自動変換せず拒否し、現在の案を保持します。既存のv8本体・データを別途残してください。
 
-配置JSONに加え、トップレベルに`project`を含むMCPの`evaluate`応答JSONも読込・貼付できます。`project`の配置・気象・係数・基準案を検証して復元し、画面で再計算します。受信した計算結果やハッシュは信用して表示しません。最大2MiB、対応版はschema 9です。
+配置JSONに加え、トップレベルに`project`を含むMCPの`evaluate`応答JSONも読込・貼付できます。`project`の配置・気象・係数・基準案を検証して復元し、画面で再計算します。受信した計算結果やハッシュは信用して表示しません。最大2MiB、対応版はschema 10（v9は自動変換）です。
 
 「結果JSON」はプロジェクトと計算結果を合わせた検証用ファイルです。2MiB以内なら`project`を取り出して復元できますが、結果を含むため通常の受け渡しには配置JSONまたはMCP応答の`project`を使ってください。
 
@@ -170,7 +170,7 @@ npm run deploy:aws   # サイトbuild → Lambda bundle → cdk deploy（Lambda�
 材質と形状はコードで生成しており、写真測量や実写品質の牛モデルではありません。
 実装と検証の詳細は[リアル3D実装記録](docs/REALISTIC_3D_IMPLEMENTATION.md)を参照してください。
 
-[区画別の暑熱・冷却可視化仕様v0.1](docs/AREA_COOLING_VISUALIZATION_V0_1.md)を実装しています。50牛床・採食12区画・待機8区画の面を、放熱不足（Qrefに対する秒積算平均）・放熱改善・風速・気温で色分けします。面や表のクリックで代表地点を選択し、濡れ方・放熱内訳・設備作用の診断を表示します。各面はその地点の代表値であり、面全体の空間計算ではありません。schemaVersionは9のままです。
+[区画別の暑熱・冷却可視化仕様v0.1](docs/AREA_COOLING_VISUALIZATION_V0_1.md)を実装しています。50牛床・採食12区画・待機8区画の面を、放熱不足（Qrefに対する秒積算平均）・放熱改善・風速・気温で色分けします。面や表のクリックで代表地点を選択し、濡れ方・放熱内訳・設備作用の診断を表示します。各面はその地点の代表値であり、面全体の空間計算ではありません。schemaVersionは10です。
 
 ## モデルの対応範囲
 

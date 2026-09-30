@@ -7,15 +7,16 @@
 計算モデルを外部エージェントから呼べるステートレスなリモートMCPを提供している。
 
 - Endpoint: https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/ (streamable HTTP, Bearer auth)
-- Tools: `get_default_project` (既定Project JSON), `evaluate` (操作列を複製へ適用→熱・水・乳量を計算), `describe_model` (モデル構造・仮定・限界), `get_doc` (モデル理論の文書本文)
+- Tools: `get_default_project` (既定Project JSON), `evaluate` (操作列を複製へ適用→熱・水・乳量を計算), `compare_candidates` (1〜3候補の制約付き日結果比較), `describe_model` (モデル構造・仮定・限界), `get_doc` (モデル理論の文書本文)
 - Public demo token (freely usable; rate abuse → rotation): `demo-581fKusGqNgk7YrycFNw6M_5`
 - Client config: `{"type":"http","url":"https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/","headers":{"Authorization":"Bearer demo-581fKusGqNgk7YrycFNw6M_5"}}`
 
 ## Returning a proposal to the browser
 
-- `evaluate` returns the edited `project`. Give this object to the user as a JSON file (schema 9) or JSON text. The browser accepts a plain Project or the full evaluate response containing `project`.
+- `evaluate` returns the edited `project`. Give this object to the user as a JSON file (schema 10) or JSON text. The browser accepts a plain Project or the full evaluate response containing `project` (schema 9 input is auto-migrated).
 - Use the browser’s 「読込」 for a file, or 「MCP案のJSONを読込」 in 「案比較」/「設定・保存」 for pasted JSON. The browser validates inputs and recomputes; supplied results are ignored. Maximum 2 MiB.
 - Mean/max deficits are 60-minute fixed-weather diagnostics across representative points; daily water/power use a separate 24-hour operation schedule. Averages do not establish that every location is adequately cooled.
+- Representative-day hourly weather: set `update_daily_weather` with `mode:"hourly"` and 24 rows (`hour` 0–23, ascending, `temperatureC`/`relativeHumidityPct`/`solarRoofWm2`). It affects only the daily aggregation (`dailyThermal`/`dailyMilk`); the 60-minute points always use the fixed `environment`.
 
 ## Links
 
