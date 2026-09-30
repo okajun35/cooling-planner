@@ -76,6 +76,16 @@ test('DW05: update_daily_weather validates via Store; malformed rows rejected',(
  assert.equal(s.committed.milkSimulation.weatherMode,'constant-environment');
 });
 
+test('DW07: constant mode with hours omitted is normalized to an empty array on load',()=>{
+ const p=JSON.parse(new ProjectStore().serialize());
+ p.dailyWeather={mode:'constant'}; // hours omitted — must not reach runtime as undefined
+ const loaded=parseProject(JSON.stringify(p));
+ assert.deepEqual(loaded.dailyWeather,{mode:'constant',hours:[]});
+ // hourly still requires the 24 rows even after normalization
+ const h=JSON.parse(new ProjectStore().serialize());h.dailyWeather={mode:'hourly'};h.milkSimulation.weatherMode='hourly-representative-day';
+ assert.throws(()=>parseProject(JSON.stringify(h)),/24行/);
+});
+
 test('DW06: dailyWeatherReasons enumerates structural errors',()=>{
  assert.equal(dailyWeatherReasons({mode:'constant',hours:[]}).length,0);
  assert.equal(dailyWeatherReasons(null).length>0,true);

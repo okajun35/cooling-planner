@@ -24,9 +24,15 @@ test('CC01: constraints reject over-budget water and protected-area worsening',(
  assert.match(checkConstraints({...SUM(200,50),allMax:600},start,k).join(' '),/最大不足/);
  // unevaluable candidate is excluded, never treated as zero
  assert.match(checkConstraints({...SUM(0,0),valid:false,status:'calculation_error'},start,k).join(' '),/未評価/);
- // start not evaluable: protect checks skipped, resource limits still apply
+ // start not evaluable + protections requested → incomparable, excluded from ranking
  const badStart={...SUM(0,0),valid:false,areaMean:{},allMax:null};
- assert.equal(checkConstraints(SUM(200,50),badStart,k).length,0);
+ assert.match(checkConstraints(SUM(200,50),badStart,k).join(' '),/開始案/);
+ // without protection requirements, resource limits still apply on their own
+ const resOnly={...k,protectAreas:[],protectWorst:false};
+ assert.equal(checkConstraints(SUM(200,50),badStart,resOnly).length,0);
+ assert.match(checkConstraints(SUM(200,101),badStart,resOnly).join(' '),/冷却水/);
+ // missing values on either side make a protected check incomparable
+ assert.match(checkConstraints({...SUM(200,50),areaMean:{stalls:200,feeding:null}},start,k).join(' '),/feeding.*比較不可/);
 });
 
 test('CC02: ranking modes are deterministic and respect their key order',()=>{

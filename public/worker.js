@@ -1318,6 +1318,9 @@ function validateProject(input) {
     number(e.backgroundSpeedMps, 0, 10, '背景風速');
     number(e.ventilationM3sPerM2, .0001, 1, '換気量');
     number(e.solarRoofWm2, 0, 1200, '屋根面日射');
+    const dwObj = p.dailyWeather;
+    if (dwObj && typeof dwObj === 'object' && !Array.isArray(dwObj) && dwObj.hours === undefined)
+        dwObj.hours = [];
     const dwReasons = (0, dailyWeather_js_1.dailyWeatherReasons)(p.dailyWeather);
     if (dwReasons.length)
         fail('dailyWeather', dwReasons[0]);

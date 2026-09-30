@@ -58,12 +58,20 @@ export function checkConstraints(c:CandidateSummary,start:CandidateSummary,k:Can
  if(!c.valid)return['日計算が未評価です（0不足・0消費にはしません）'];
  if(k.maxWaterLPerDay!=null&&(c.coolingWaterLPerDay??Infinity)>k.maxWaterLPerDay+EPS)v.push(`冷却水 ${c.coolingWaterLPerDay} L/日が上限 ${k.maxWaterLPerDay} を超過`);
  if(k.maxElectricityKwhPerDay!=null&&(c.electricityKwhPerDay??Infinity)>k.maxElectricityKwhPerDay+EPS)v.push(`電力 ${c.electricityKwhPerDay} kWh/日が上限 ${k.maxElectricityKwhPerDay} を超過`);
- if(start.valid)for(const a of k.protectAreas){
-  const cm=c.areaMean[a],sm=start.areaMean[a];
-  if(cm!=null&&sm!=null&&cm>sm+EPS)v.push(`保護区域 ${a} の日平均不足が開始案より増加（${sm}→${cm} W）`);
-  if(cm!=null&&sm==null)v.push(`保護区域 ${a} の開始案値が未評価のため比較不可`);
+ if(k.protectAreas.length||k.protectWorst){
+  if(!start.valid)v.push('開始案の日結果が未評価のため保護条件を確認できません');
+  else{
+   for(const a of k.protectAreas){
+    const cm=c.areaMean[a],sm=start.areaMean[a];
+    if(cm==null||sm==null)v.push(`保護区域 ${a} の日結果が未評価のため比較不可`);
+    else if(cm>sm+EPS)v.push(`保護区域 ${a} の日平均不足が開始案より増加（${sm}→${cm} W）`);
+   }
+   if(k.protectWorst){
+    if(c.allMax==null||start.allMax==null)v.push('全地点の最大不足が未評価のため比較不可');
+    else if(c.allMax>start.allMax+EPS)v.push(`全地点の最大不足が開始案より増加（${start.allMax}→${c.allMax} W）`);
+   }
+  }
  }
- if(k.protectWorst&&start.valid&&c.allMax!=null&&start.allMax!=null&&c.allMax>start.allMax+EPS)v.push(`全地点の最大不足が開始案より増加（${start.allMax}→${c.allMax} W）`);
  return v;
 }
 

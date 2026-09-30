@@ -26,6 +26,8 @@ export function validateProject(input:unknown):asserts input is Project{
  number(t.lengthM,32,48,'牛舎の長さ');number(t.widthM,23.5,30,'牛舎の幅');if(t.eaveHeightM!==4||t.ridgeHeightM!==8.7)fail('屋根','本版は軒4m・棟8.7m固定です');
  const e=record(p.environment,'environment');number(e.temperatureC,20,40,'気温');number(e.relativeHumidityPct,0,100,'湿度');number(e.pressurePa,50000,110000,'気圧');number(e.backgroundSpeedMps,0,10,'背景風速');number(e.ventilationM3sPerM2,.0001,1,'換気量');
  number(e.solarRoofWm2,0,1200,'屋根面日射');
+ const dwObj=p.dailyWeather as Record<string,unknown>|undefined;
+ if(dwObj&&typeof dwObj==='object'&&!Array.isArray(dwObj)&&dwObj.hours===undefined)dwObj.hours=[];
  const dwReasons=dailyWeatherReasons(p.dailyWeather);if(dwReasons.length)fail('dailyWeather',dwReasons[0]);
  const m=record(p.model,'model');if(m.version!==MODEL.version)fail('model','未対応のモデル版です');
  for(const [key,value]of Object.entries(MODEL))if(typeof value==='number')number(m[key],key==='radiantOffsetC'?-20:0,key==='latentHeatJkg'?5e6:key==='vaporGasConstant'?1000:key==='airCpJkgK'?10000:100,`model.${key}`);
