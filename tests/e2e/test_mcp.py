@@ -76,7 +76,7 @@ def test_mcp_01_handshake_tools_and_state_reflects_open_page(client,page):
     assert {t['name'] for t in tools}=={'get_state','edit','evaluate','set_view','get_results','undo','describe_model'}
     err,mi=client.tool('describe_model')
     assert not err
-    assert mi['model']['modelVersion']=='cooling-integrated-v0.9'
+    assert mi['model']['modelVersion']=='cooling-integrated-v0.10'
     assert mi['model']['keyAssumptions']['referenceCoolingWPerCow']==630
     assert len(mi['model']['limits'])>=4
     err,st=client.tool('get_state')

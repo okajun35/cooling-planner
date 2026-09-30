@@ -276,7 +276,7 @@ test('evaluate accepts model-coefficient ops on the clone only',async()=>{
 test('describe_model returns versioned structure with assumptions and limits',()=>{
  const s=new ProjectStore(),c=createCommands(deps(s));
  const m=c.describe_model();
- assert.equal(m.model.modelVersion,'cooling-integrated-v0.9');
+ assert.equal(m.model.modelVersion,'cooling-integrated-v0.10');
  assert.equal(m.model.keyAssumptions.referenceCoolingWPerCow,630);
  assert.ok(m.model.computation.length>=5);
  assert.ok(m.model.limits.length>=4);

@@ -24,9 +24,9 @@ export function resolveProject(input:unknown):Project{
 /** Runs the same two-stage simulation the browser worker performs, synchronously. */
 async function runSimulation(p:Project,opts:{daily:boolean}):Promise<EvalJob>{
  const thermal=simulate(p);
- if(!opts.daily)return{thermal,daily:null,dailyMilkStatus:'complete'};
+ if(!opts.daily)return{thermal,daily:null,dailyThermal:null,dailyMilkStatus:'complete'};
  const out=simulateDaily(p);
- return{thermal,daily:out.daily,dailyMilkStatus:out.status==='error'?'error':'complete'};
+ return{thermal,daily:out.daily,dailyThermal:out.thermal,dailyMilkStatus:out.status==='error'?'error':'complete'};
 }
 
 export interface EvaluateInput{project?:unknown;scenarioId?:string;operations?:EditArgs[];includeDaily?:boolean}

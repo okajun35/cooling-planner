@@ -2,18 +2,23 @@
 export type Vec3 = [number, number, number];
 export interface Template {id:'fs-amr1-50-guided-reference';version:1;lengthM:number;widthM:number;eaveHeightM:4;ridgeHeightM:8.7}
 export interface Environment {temperatureC:number;relativeHumidityPct:number;pressurePa:number;backgroundSpeedMps:number;ventilationM3sPerM2:number;solarRoofWm2:number}
+/** Representative-day hourly weather. `hour` is the 0-23 clock hour; the same 24
+ * rows repeat on the warmup and evaluation days. Constant mode ignores `hours`. */
+export interface DailyWeatherHour {hour:number;temperatureC:number;relativeHumidityPct:number;solarRoofWm2:number}
+export interface DailyWeather {mode:'constant'|'hourly';hours:DailyWeatherHour[]}
 export interface Pose {x:number;y:number;heightM:number;yawDeg:number;pitchDownDeg:number;anchor:{zoneId:string;u:number;v:number}}
 export interface Fan extends Pose {id:string;label:string;enabled:boolean;diameterM:number;outletSpeedMps:number;powerKw:number;hoursPerDay:number;dailyStartHour:number}
 export interface Nozzle extends Pose {id:string;label:string;enabled:boolean;flowLpm:number;halfAngleDeg:number}
 export interface WaterSystem {id:string;kind:'soaker'|'mist';enabled:boolean;onSec:number;offSec:number;hoursPerDay:number;dailyStartHour:number;pumpPowerKw:number;nozzles:Nozzle[]}
 export interface Scenario {id:string;name:string;readOnly:boolean;roof:RoofSettings;fans:Fan[];waterSystems:WaterSystem[]}
 export interface Profile {id:string;name:string;outletMultiplier:number;hcMultiplier:number;mistEfficiency:number;maxFilmKg:number}
-export interface Model {version:'cooling-integrated-v0.9';roof:RoofModel;surfaceTemperatureC:number;areaM2:number;wetAreaM2:number;patchLengthM:number;patchWidthM:number;baseWetFraction:number;emissivity:number;radiantOffsetC:number;kSpread:number;kDecay:number;latentHeatJkg:number;airDensityKgM3:number;airCpJkgK:number;vaporGasConstant:number;hcIntercept:number;hcSlope:number;profiles:Profile[]}
+export interface Model {version:'cooling-integrated-v0.10';roof:RoofModel;surfaceTemperatureC:number;areaM2:number;wetAreaM2:number;patchLengthM:number;patchWidthM:number;baseWetFraction:number;emissivity:number;radiantOffsetC:number;kSpread:number;kDecay:number;latentHeatJkg:number;airDensityKgM3:number;airCpJkgK:number;vaporGasConstant:number;hcIntercept:number;hcSlope:number;profiles:Profile[]}
 /** Milk heat-deficit hypothesis model v0.1 settings (demo assumptions, not measured values). */
 export interface MilkSimulation {
   modelId:'milk-heat-deficit-v0.1';
   mode:'repeated-day';
-  weatherMode:'constant-environment';
+  /** Mirrors dailyWeather.mode — synced on write, validated on load. */
+  weatherMode:'constant-environment'|'hourly-representative-day';
   operationPolicy:'daily-window-reset-v1';
   potentialMilkKgPerCowDay:number;
   referenceCoolingWPerCow:number;
@@ -46,7 +51,7 @@ export interface View {mode:'3d'|'2d';metric:'delta'|'deficit'|'speed'|'temperat
  realistic?:boolean;heatmap?:boolean;
  /** highlighted display area; excluded from the physics input hash. Optional for v9 load-compat. */
  selectedAreaId?:string|null}
-export interface Project {schemaVersion:9;references:ReferenceSettings;milkSimulation:MilkSimulation;appVersion:string;template:Template;environment:Environment;model:Model;baselineScenarioId:string;activeScenarioId:string;scenarios:Scenario[];view:View;prices:{electricityYenKwh:number|null;waterYenM3:number|null};provenance:{id:string;classification:string;note:string;url?:string}[]}
+export interface Project {schemaVersion:10;references:ReferenceSettings;milkSimulation:MilkSimulation;appVersion:string;template:Template;environment:Environment;dailyWeather:DailyWeather;model:Model;baselineScenarioId:string;activeScenarioId:string;scenarios:Scenario[];view:View;prices:{electricityYenKwh:number|null;waterYenM3:number|null};provenance:{id:string;classification:string;note:string;url?:string}[]}
 export interface Zone {id:string;name:string;x:number;y:number;widthM:number;depthM:number;kind:'feed'|'feeding'|'stall'|'aisle'|'robot'|'utility'|'waiting'|'isolation';solid?:boolean}
 export interface Probe {id:string;label:string;x:number;y:number;heightM:number;zoneId:string;patchYawDeg:number;kind:'stall'|'feeding'|'waiting'}
 export interface Stall {id:string;x:number;y:number;widthM:number;depthM:number;row:string}
@@ -61,7 +66,12 @@ export interface PointResult {probeId:string;inputHash:string;modelVersion:strin
  /** Test hook: per-second net Q [W]. Populated only when simulate({collectQSeries:true}) — never used by the app or worker. */
  qSeries?:Float64Array}
 export interface Resources {waterLPerDay:number;fanKwhPerDay:number;pumpKwhPerDay:number;totalKwhPerDay:number;systems:{kind:string;waterL:number;pumpKwh:number;onTotalSec:number}[]}
-export interface ScenarioResult {id:string;points:PointResult[];resources:Resources;warnings:string[];roof:RoofResult;trialWaterL:number;trialKwh:number;dailyMilk:DailyMilkResult|null}
+/** Per-point daily means under the representative-day weather (evaluation day only).
+ * Deficit is still per-second max(0,Qref-Q) before any averaging. */
+export interface DailyThermalPoint {probeId:string;meanDeficitW:number;meanQrefW:number;meanSpeedMps:number;meanAirTemperatureC:number;meanRelativeHumidityPct:number;components:HeatComponents;fanActionFraction:number;soakerArrivalFraction:number;mistEvaporationActionFraction:number;mistSupplyFraction:number}
+export interface DailyThermalArea {id:string;label:string;probeCount:number;validCount:number;meanDeficitW:number|null;maxDeficitW:number|null;topDeficit:{probeId:string;value:number}[]}
+export interface DailyThermalResult {status:'complete'|'invalid_input'|'calculation_error';reasons:string[];evaluationDurationSec:number;weatherMode:string;modelVersion:string;points:DailyThermalPoint[];areas:DailyThermalArea[];all:DailyThermalArea|null;resources:Resources|null}
+export interface ScenarioResult {id:string;points:PointResult[];resources:Resources;warnings:string[];roof:RoofResult;trialWaterL:number;trialKwh:number;dailyMilk:DailyMilkResult|null;dailyThermal:DailyThermalResult|null}
 export interface SimulationResult {inputHash:string;modelVersion:string;scenarios:ScenarioResult[];profiles:string[];timeStepSec:number;rayCount:number;durationSec:3600;dailyMilkStatus:'pending'|'complete'|'error'}
 export type Device = Fan | Nozzle;
 export const activeScenario=(p:Project)=>p.scenarios.find(s=>s.id===p.activeScenarioId)!;

@@ -15,10 +15,10 @@ scope.onmessage = (e) => {
         scope.postMessage({ jobId, inputHash: expected, kind: 'thermal-result', result: (0, simulation_js_1.simulate)(project) });
         try {
             const daily = (0, dailySimulation_js_1.simulateDaily)(project);
-            scope.postMessage({ jobId, inputHash: expected, kind: 'daily-result', daily: daily.daily, dailyMilkStatus: daily.status === 'error' ? 'error' : 'complete' });
+            scope.postMessage({ jobId, inputHash: expected, kind: 'daily-result', daily: daily.daily, thermal: daily.thermal, dailyMilkStatus: daily.status === 'error' ? 'error' : 'complete' });
         }
         catch {
-            scope.postMessage({ jobId, inputHash: expected, kind: 'daily-result', daily: {}, dailyMilkStatus: 'error' });
+            scope.postMessage({ jobId, inputHash: expected, kind: 'daily-result', daily: {}, thermal: {}, dailyMilkStatus: 'error' });
         }
     }
     catch (err) {
@@ -74,7 +74,7 @@ const deviceInput = (d) => Object.fromEntries(Object.entries(d).filter(([k]) => 
 const scenarioInput = (s) => ({ roof: s.roof, fans: s.fans.map(deviceInput), waterSystems: s.waterSystems.map(w => ({ ...w, nozzles: w.nozzles.map(deviceInput) })) });
 exports.scenarioInput = scenarioInput;
 function inputHash(p) {
-    const input = stableStringify({ schema: p.schemaVersion, template: p.template, environment: p.environment, model: p.model, references: p.references, milkSimulation: p.milkSimulation, baselineScenarioId: p.baselineScenarioId, scenarios: p.scenarios.map(s => ({ id: s.id, ...(0, exports.scenarioInput)(s) })) });
+    const input = stableStringify({ schema: p.schemaVersion, template: p.template, environment: p.environment, dailyWeather: p.dailyWeather, model: p.model, references: p.references, milkSimulation: p.milkSimulation, baselineScenarioId: p.baselineScenarioId, scenarios: p.scenarios.map(s => ({ id: s.id, ...(0, exports.scenarioInput)(s) })) });
     let h = 0xcbf29ce484222325n;
     for (let i = 0; i < input.length; i++) {
         h ^= BigInt(input.charCodeAt(i));
@@ -211,7 +211,7 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof, collectQSeries
         filmLedger.finalKg = mass;
         return { ...blank, status: 'valid', meanSpeedMps: speedSum / 3600, meanAirTemperatureC: tempSum / 3600, meanRelativeHumidityPct: rhSum / 3600, meanQrefW: Object.values(comp).reduce((a, b) => a + b, 0), meanRadiantC: roof.result.meanRadiantC, meanFeelsLikeC: feelSum / 3600, components: comp, film: filmLedger, captureFraction: maxFraction, series, milk: (0, references_js_1.milkReference)(firstT, firstRH, firstSpeed, p.references.baselineMilkKgPerDay, staticInputs), fertility: (0, references_js_1.fertilityReference)(p.references.fertility, tempSum / 3600, rhSum / 3600), meanDeficitW: deficitWs / (n * dt), meanFilmKg: filmMassWs / (n * dt), fanActionFraction: fanActionS / (n * dt), soakerArrivalFraction: soakerArrivalS / (n * dt), mistEvaporationActionFraction: mistEvapS / (n * dt), mistSupplyFraction: mistSupplyS / (n * dt), qSeries };
     });
-    return { id: s.id, points, resources: resources(s, p), warnings, roof: roof.result, ...trialResources(s, p), dailyMilk: null };
+    return { id: s.id, points, resources: resources(s, p), warnings, roof: roof.result, ...trialResources(s, p), dailyMilk: null, dailyThermal: null };
 }
 function simulate(p, opts = {}) {
     const dt = opts.dt ?? 1, rays = opts.rays ?? 256;
@@ -497,8 +497,8 @@ const physics_js_1 = require("./physics.js");
 const roofArea = (p) => 2 * p.template.lengthM * Math.hypot(p.template.widthM / 2, p.template.ridgeHeightM - p.template.eaveHeightM);
 exports.roofArea = roofArea;
 /** Direct port of v0.5 roof_state. All numbers in SI; solve zero-storage roof/air balance. */
-function solveRoof(p, s, waterKgM2, dt) {
-    const e = p.environment, m = p.model, k = m.roof, r = k.bareResistance + s.roof.insulationM / k.conductivity;
+function solveRoof(p, s, waterKgM2, dt, env) {
+    const e = env ?? p.environment, m = p.model, k = m.roof, r = k.bareResistance + s.roof.insulationM / k.conductivity;
     const ca = m.airDensityKgM3 * m.airCpJkgK * e.ventilationM3sPerM2 * p.template.lengthM * p.template.widthM, ah = (0, exports.roofArea)(p) * k.hInConv;
     const beta = ah / (ca + ah), b = k.backgroundSensibleW / (ca + ah), c = k.hInConv * (1 - beta) + k.hInRad;
     const pv = e.relativeHumidityPct / 100 * (0, physics_js_1.saturationPressure)(e.temperatureC), km = k.hOutConv / (m.airDensityKgM3 * m.airCpJkgK), wet = waterKgM2 / k.waterCapacityKgM2;
@@ -616,11 +616,13 @@ exports.dailyResources = dailyResources;
 exports.simulateDaily = simulateDaily;
 exports.mergeDaily = mergeDaily;
 const layout_js_1 = require("../template/layout.js");
+const faces_js_1 = require("../template/faces.js");
 const geometry_js_1 = require("./geometry.js");
 const physics_js_1 = require("./physics.js");
 const roof_js_1 = require("./roof.js");
 const simulation_js_1 = require("./simulation.js");
 const dailySchedule_js_1 = require("./dailySchedule.js");
+const dailyWeather_js_1 = require("./dailyWeather.js");
 const milk_js_1 = require("./milk.js");
 const blankDaily = (ms, status, reasons) => ({
     status, reasons, modelId: ms.modelId, mode: ms.mode, weatherMode: ms.weatherMode, operationPolicy: ms.operationPolicy,
@@ -669,6 +671,17 @@ function dailyResources(p, s) {
  * cycle phase) carries across the day boundary. Only the reference profile is used.
  * Seconds where masks and roof state cannot change are processed as one stretch.
  */
+function dailyAreaStats(points, area) {
+    const members = area.probeIds.map(id => points.find(q => q.probeId === id)).filter((q) => !!q);
+    const allValid = members.length === area.probeIds.length && members.length > 0;
+    return { id: area.id, label: area.label, probeCount: area.probeIds.length, validCount: members.length,
+        meanDeficitW: allValid ? members.reduce((a, q) => a + q.meanDeficitW, 0) / members.length : null,
+        maxDeficitW: members.length ? Math.max(...members.map(q => q.meanDeficitW)) : null,
+        topDeficit: [...members].sort((a, b) => b.meanDeficitW - a.meanDeficitW || a.probeId.localeCompare(b.probeId)).filter(q => q.meanDeficitW > 1e-6).slice(0, 3).map(q => ({ probeId: q.probeId, value: q.meanDeficitW })) };
+}
+function blankThermal(p, ms, status, reasons, resources) {
+    return { status, reasons, evaluationDurationSec: ms.evaluationDurationSec, weatherMode: p.dailyWeather.mode, modelVersion: p.model.version, points: [], areas: [], all: null, resources };
+}
 function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
     const e = p.environment, m = p.model, soaker = s.waterSystems.find(w => w.kind === 'soaker'), mist = s.waterSystems.find(w => w.kind === 'mist');
     const invalidDevices = [...s.fans.filter(f => f.enabled && f.hoursPerDay > 0), ...s.waterSystems.filter(w => w.enabled && w.hoursPerDay > 0 && w.onSec > 0).flatMap(w => w.nozzles.filter(n => n.enabled && n.flowLpm > 0))].filter(d => layout.solids.some(box => (0, geometry_js_1.insideBox)((0, geometry_js_1.world)(d), box)));
@@ -681,11 +694,13 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
     const resources = dailyResources(p, s);
     const counts = 'error' in zw ? { stall: 0, feeding: 0, waiting: 0 } : zw.counts;
     if (reasons.length)
-        return { ...blankDaily(ms, 'invalid_input', reasons), resources, zoneCounts: counts };
+        return { ...blankDaily(ms, 'invalid_input', reasons), resources, zoneCounts: counts, thermal: blankThermal(p, ms, 'invalid_input', reasons, resources) };
     const warmup = opts.warmupSec ?? ms.warmupDurationSec, evalLen = opts.evalSec ?? ms.evaluationDurationSec, total = warmup + evalLen;
-    const mistWater = (0, simulation_js_1.mistDistribution)(p, s, layout, rays), pv = e.relativeHumidityPct / 100 * (0, physics_js_1.saturationPressure)(e.temperatureC);
+    const mistWater = (0, simulation_js_1.mistDistribution)(p, s, layout, rays);
     const cap = m.roof.waterCapacityKgM2, area = (0, roof_js_1.roofArea)(p);
-    const dryRoof = (0, roof_js_1.solveRoof)(p, s, 0, 1);
+    // Hourly weather refreshes env/pv/dryRoof at each clock-hour boundary.
+    const hourly = p.dailyWeather.mode === 'hourly';
+    let wIdx = -2, env = e, pv = e.relativeHumidityPct / 100 * (0, physics_js_1.saturationPressure)(e.temperatureC), dryRoof = (0, roof_js_1.solveRoof)(p, s, 0, 1);
     // Static per-probe capture rate (kg/s while the soaker system is ON).
     const probes = layout.probes.map(q => {
         let capturedKgs = 0;
@@ -694,7 +709,7 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
                 capturedKgs += n.flowLpm / 60 * (0, geometry_js_1.captureFraction)(n, q, m, layout.solids, rays);
         const cellId = `cell-${Math.min(Math.floor(q.x / 2), Math.ceil(p.template.lengthM / 2) - 1)}-${Math.min(Math.floor(q.y / 2), Math.ceil(p.template.widthM / 2) - 1)}`;
         const cell = layout.cells.find(c => c.id === cellId);
-        return { probe: q, weight: weights.get(q.id), cellId, cellAreaM2: cell.areaM2, capturedKgs, mass: 0, memoSeq: -1, baseQ: 0, condensing: false, lastTerms: null, windMemo: new Map(), evalFilmStartKg: 0, capturedKg: 0, condensedKg: 0, evaporatedKg: 0, runoffKg: 0, sumQWs: 0, qSeries: opts.collectQSeries ? new Float64Array(evalLen) : null };
+        return { probe: q, weight: weights.get(q.id), cellId, cellAreaM2: cell.areaM2, capturedKgs, mass: 0, memoSeq: -1, baseQ: 0, condensing: false, lastTerms: null, lastWind: null, lastAir: null, windMemo: new Map(), evalFilmStartKg: 0, capturedKg: 0, condensedKg: 0, evaporatedKg: 0, runoffKg: 0, sumQWs: 0, qSeries: opts.collectQSeries ? new Float64Array(evalLen) : null, defWs: 0, spdWs: 0, tmpWs: 0, rhWs: 0, convWs: 0, radWs: 0, evapWs: 0, condWs: 0, soakEvapWs: 0, fanS: 0, soakS: 0, mistSupS: 0, mistEvapS: 0 };
     });
     let roofMass = 0, prevAvail = -1, roofState = dryRoof, prevRoofState = null;
     if (opts.initialState) {
@@ -714,17 +729,27 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
     let t = 0;
     while (t < total) {
         const evalMode = t >= warmup;
+        // Hourly weather boundary: refresh environment, vapor pressure and the dry-roof
+        // solve; cached roof/heat-term results from the previous hour are invalid.
+        const wi = (0, dailyWeather_js_1.weatherIndexAt)(p, t);
+        if (wi !== wIdx) {
+            wIdx = wi;
+            env = (0, dailyWeather_js_1.envAt)(p, t);
+            pv = env.relativeHumidityPct / 100 * (0, physics_js_1.saturationPressure)(env.temperatureC);
+            dryRoof = (0, roof_js_1.solveRoof)(p, s, 0, 1, env);
+            prevAvail = -1;
+        }
         // Masks at t
         const fanMask = s.fans.map(f => (0, dailySchedule_js_1.fanOn)(t, f)), fanKey = fanMask.map(b => b ? 1 : 0).join('');
         const soakerOn = (0, dailySchedule_js_1.waterOn)(t, soaker), mistOn = (0, dailySchedule_js_1.waterOn)(t, mist), roofFlow = (0, dailySchedule_js_1.roofSprayOn)(t, s.roof) && s.roof.flowLpmM2 > 0 ? s.roof.flowLpmM2 / 60 : 0;
-        const maskKey = fanKey + '|' + (soakerOn ? 1 : 0) + (mistOn ? 1 : 0);
+        const maskKey = fanKey + '|' + (soakerOn ? 1 : 0) + (mistOn ? 1 : 0) + '|' + wi;
         // Roof water and state for this second
         let spill = 0;
         if (roofMass > 0 || roofFlow > 0) {
             const received = roofMass + roofFlow;
             spill = Math.max(0, received - cap);
             const avail = Math.min(cap, received);
-            roofState = avail === prevAvail ? roofState : (0, roof_js_1.solveRoof)(p, s, avail, 1);
+            roofState = avail === prevAvail ? roofState : (0, roof_js_1.solveRoof)(p, s, avail, 1, env);
             prevAvail = avail;
             roofMass = Math.max(0, avail - roofState.evaporatedKgsM2);
             if (evalMode) {
@@ -747,6 +772,8 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
                 dur = Math.min(dur, (0, dailySchedule_js_1.secondsToNextToggle)(t, w, true));
         if (s.roof.sprayEnabled && s.roof.hoursPerDay > 0)
             dur = Math.min(dur, (0, dailySchedule_js_1.secondsToNextToggle)(t, { ...s.roof, enabled: s.roof.sprayEnabled }, true));
+        if (hourly)
+            dur = Math.min(dur, (0, dailyWeather_js_1.secondsToWeatherBoundary)(t));
         if (roofMass > 0 || roofFlow > 0)
             dur = 1;
         if (t < warmup && t + dur > warmup)
@@ -764,12 +791,12 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
             const flow = mistOn ? (mistWater.get(cellId) ?? 0) : 0;
             const rh = 100 * pv / (0, physics_js_1.saturationPressure)(st.airC);
             if (flow <= 0)
-                return { temperatureC: st.airC, rhPct: rh };
+                return { temperatureC: st.airC, rhPct: rh, evaporatedKgs: 0 };
             let a = mistAirMemo.get(cellId);
             if (!a) {
                 const cell = layout.cells.find(c => c.id === cellId);
-                const res = (0, physics_js_1.mistAir)(st.airC, rh, e.pressurePa, cell.areaM2 * e.ventilationM3sPerM2, flow, profile.mistEfficiency);
-                a = { temperatureC: res.temperatureC, rhPct: res.rhPct };
+                const res = (0, physics_js_1.mistAir)(st.airC, rh, env.pressurePa, cell.areaM2 * env.ventilationM3sPerM2, flow, profile.mistEfficiency);
+                a = { temperatureC: res.temperatureC, rhPct: res.rhPct, evaporatedKgs: res.evaporatedKgs };
                 mistAirMemo.set(cellId, a);
             }
             return a;
@@ -780,7 +807,7 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
             if (pr.memoSeq !== seq) {
                 let wind = pr.windMemo.get(fanKey);
                 if (!wind) {
-                    wind = (0, geometry_js_1.windAt)(maskedFans, (0, geometry_js_1.world)(pr.probe), e, m, profile, layout.solids, 0);
+                    wind = (0, geometry_js_1.windAt)(maskedFans, (0, geometry_js_1.world)(pr.probe), env, m, profile, layout.solids, 0);
                     pr.windMemo.set(fanKey, wind);
                 }
                 const air = airAt(pr.cellId);
@@ -789,9 +816,32 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
                 pr.baseQ = terms.components.convectionW + terms.components.radiationW + terms.components.baseEvaporationW + terms.components.condensationW;
                 pr.condensing = terms.condensationKgs > 0;
                 pr.lastTerms = terms;
+                pr.lastWind = wind;
+                pr.lastAir = air;
+            }
+            const wind = pr.lastWind, air = pr.lastAir, terms = pr.lastTerms;
+            if (evalOverlap > 0) {
+                // Evaluation-day means for the daily-thermal contract (same definitions as
+                // the 60-minute aggregates; integrated once per constant stretch).
+                pr.spdWs += wind.speed * evalOverlap;
+                pr.tmpWs += air.temperatureC * evalOverlap;
+                pr.rhWs += air.rhPct * evalOverlap;
+                pr.convWs += terms.components.convectionW * evalOverlap;
+                pr.radWs += terms.components.radiationW * evalOverlap;
+                pr.evapWs += terms.components.baseEvaporationW * evalOverlap;
+                pr.condWs += terms.components.condensationW * evalOverlap;
+                if (wind.speed - env.backgroundSpeedMps > 1e-6)
+                    pr.fanS += evalOverlap;
+                if (captured > 1e-12)
+                    pr.soakS += evalOverlap;
+                if (mistOn && (mistWater.get(pr.cellId) ?? 0) > 0)
+                    pr.mistSupS += evalOverlap;
+                if (air.evaporatedKgs > 1e-12)
+                    pr.mistEvapS += evalOverlap;
             }
             if (evalMode && evalOverlap > 0 && pr.mass === 0 && captured === 0 && !pr.condensing) {
                 deficitSum += pr.weight * (0, milk_js_1.deficitW)(pr.baseQ, ms.referenceCoolingWPerCow) * evalOverlap;
+                pr.defWs += (0, milk_js_1.deficitW)(pr.baseQ, ms.referenceCoolingWPerCow) * evalOverlap;
                 pr.sumQWs += pr.baseQ * evalOverlap;
                 if (pr.qSeries)
                     pr.qSeries.fill(pr.baseQ, Math.max(t, warmup) - warmup, Math.min(t + dur, total) - warmup);
@@ -807,7 +857,10 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
                         pr.condensedKg += f.condensedKg;
                         pr.evaporatedKg += f.evaporatedKg;
                         pr.runoffKg += f.runoffKg;
-                        deficitSum += pr.weight * (0, milk_js_1.deficitW)(pr.baseQ + f.heatW, ms.referenceCoolingWPerCow);
+                        const dW = (0, milk_js_1.deficitW)(pr.baseQ + f.heatW, ms.referenceCoolingWPerCow);
+                        deficitSum += pr.weight * dW;
+                        pr.defWs += dW;
+                        pr.soakEvapWs += f.evaporatedKg * m.latentHeatJkg;
                         pr.sumQWs += (pr.baseQ + f.heatW);
                         if (pr.qSeries)
                             pr.qSeries[tt - warmup] = pr.baseQ + f.heatW;
@@ -828,6 +881,14 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
     const filmResidualKg = probes.reduce((a, pr) => a + pr.evalFilmStartKg + pr.capturedKg + pr.condensedKg - pr.evaporatedKg - pr.runoffKg - pr.mass, 0);
     const filmStartKg = probes.reduce((a, pr) => a + pr.evalFilmStartKg, 0);
     const dailyDeficitWPerCow = deficitSum / evalLen;
+    const thermalPoints = probes.map(pr => ({ probeId: pr.probe.id,
+        meanDeficitW: pr.defWs / evalLen, meanQrefW: pr.sumQWs / evalLen,
+        meanSpeedMps: pr.spdWs / evalLen, meanAirTemperatureC: pr.tmpWs / evalLen, meanRelativeHumidityPct: pr.rhWs / evalLen,
+        components: { convectionW: pr.convWs / evalLen, radiationW: pr.radWs / evalLen, baseEvaporationW: pr.evapWs / evalLen, soakerEvaporationW: pr.soakEvapWs / evalLen, condensationW: pr.condWs / evalLen },
+        fanActionFraction: pr.fanS / evalLen, soakerArrivalFraction: pr.soakS / evalLen, mistEvaporationActionFraction: pr.mistEvapS / evalLen, mistSupplyFraction: pr.mistSupS / evalLen }));
+    const thermal = { status: 'complete', reasons: [], evaluationDurationSec: evalLen, weatherMode: p.dailyWeather.mode, modelVersion: m.version, points: thermalPoints,
+        areas: (0, faces_js_1.buildAreas)(layout).map(a => dailyAreaStats(thermalPoints, a)),
+        all: dailyAreaStats(thermalPoints, { id: 'all', label: '全地点', probeIds: layout.probes.map(q => q.id) }), resources };
     const calc = (0, milk_js_1.dailyFromDeficit)(dailyDeficitWPerCow, ms);
     const out = {
         ...blankDaily(ms, 'available', []), zoneCounts: counts, resources,
@@ -836,7 +897,7 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
         sensitivities: (0, milk_js_1.sensitivityYields)(dailyDeficitWPerCow, ms).map(r => ({ beta: r.beta, yieldKgPerCowDay: r.yieldKgPerCowDay, deltaKgPerCowDay: null, lossCapped: r.lossCapped })),
         waterCheck: { roofStartKg: roofEvalStartKg, filmStartKg, roofResidualKg, filmResidualKg }
     };
-    const result = { ...out };
+    const result = { ...out, thermal };
     if (opts.collectQ)
         result.probeQ = new Map(probes.map(pr => [pr.probe.id, pr.sumQWs / evalLen]));
     if (opts.collectQSeries)
@@ -849,13 +910,16 @@ function simulateDaily(p, opts = {}) {
     const ms = p.milkSimulation, layout = (0, layout_js_1.buildLayout)(p.template), profile = p.model.profiles.find(x => x.id === 'reference');
     const settingReasons = (0, milk_js_1.validateMilkSettings)(ms);
     const zw = settingReasons.length ? { error: settingReasons[0] } : (0, milk_js_1.occupancyWeights)(layout.probes, ms.occupancyFractions);
-    const daily = {}, probeQ = {}, probeQSeries = {}, states = {};
+    const daily = {}, thermal = {}, probeQ = {}, probeQSeries = {}, states = {};
     const cache = new Map();
     let status = 'complete', error;
     for (const s of p.scenarios) {
-        const key = (0, simulation_js_1.stableStringify)((0, simulation_js_1.scenarioInput)(s)), cached = cache.get(key);
+        // Weather is project-level, so it must be part of the scenario cache key.
+        const key = (0, simulation_js_1.stableStringify)({ w: p.dailyWeather, ...(0, simulation_js_1.scenarioInput)(s) }), cached = cache.get(key);
         if (cached) {
             daily[s.id] = structuredClone(cached.result);
+            if (cached.thermal)
+                thermal[s.id] = cached.thermal;
             if (cached.probeQ)
                 probeQ[s.id] = cached.probeQ;
             if (cached.probeQSeries)
@@ -865,10 +929,12 @@ function simulateDaily(p, opts = {}) {
             continue;
         }
         try {
-            const r = settingReasons.length ? { ...blankDaily(ms, 'invalid_input', settingReasons), resources: dailyResources(p, s) } : runDaily(p, s, layout, profile, opts.rays ?? 256, zw, ms, opts);
-            const { probeQ: pq, probeQSeries: pqs, stateAtWarmupEnd: st, ...clean } = r;
+            const r = settingReasons.length ? { ...blankDaily(ms, 'invalid_input', settingReasons), resources: dailyResources(p, s), thermal: blankThermal(p, ms, 'invalid_input', settingReasons, dailyResources(p, s)) } : runDaily(p, s, layout, profile, opts.rays ?? 256, zw, ms, opts);
+            const { probeQ: pq, probeQSeries: pqs, stateAtWarmupEnd: st, thermal: th, ...clean } = r;
             daily[s.id] = clean;
-            cache.set(key, { result: clean, probeQ: pq, probeQSeries: pqs, state: st });
+            if (th)
+                thermal[s.id] = th;
+            cache.set(key, { result: clean, thermal: th, probeQ: pq, probeQSeries: pqs, state: st });
             if (pq)
                 probeQ[s.id] = pq;
             if (pqs)
@@ -880,6 +946,7 @@ function simulateDaily(p, opts = {}) {
             status = 'error';
             error = err instanceof Error ? err.message : String(err);
             daily[s.id] = { ...blankDaily(ms, 'calculation_error', ['日乳量の計算に失敗しました']), resources: dailyResources(p, s) };
+            thermal[s.id] = blankThermal(p, ms, 'calculation_error', ['日熱集計に失敗しました'], dailyResources(p, s));
         }
     }
     const base = daily[p.baselineScenarioId];
@@ -892,15 +959,56 @@ function simulateDaily(p, opts = {}) {
             sen.deltaKgPerCowDay = sen.yieldKgPerCowDay != null && bb?.yieldKgPerCowDay != null ? sen.yieldKgPerCowDay - bb.yieldKgPerCowDay : null;
         }
     }
-    return { status, error, daily, probeQ, probeQSeries, states };
+    return { status, error, daily, thermal, probeQ, probeQSeries, states };
 }
 /** Merge a daily-stage reply into the matching 60-minute result. Only called when
  * the gate already accepted the message (same jobId+inputHash). */
-function mergeDaily(result, daily, status) {
-    for (const s of result.scenarios)
+function mergeDaily(result, daily, thermal, status) {
+    for (const s of result.scenarios) {
         s.dailyMilk = daily[s.id] ?? null;
+        s.dailyThermal = thermal[s.id] ?? null;
+    }
     result.dailyMilkStatus = status;
 }
+
+},
+"template/faces.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.areaOfProbe = exports.FACE_SURFACE_Y = void 0;
+exports.buildFaces = buildFaces;
+exports.buildAreas = buildAreas;
+/** Rendered elevation of each face in 3D. Stall faces sit just above the .15 m stall
+ * base block; feeding/waiting faces just above the floor. Clicks must intersect the
+ * face at this height — projecting onto y=0 selects a neighbouring face in oblique views. */
+exports.FACE_SURFACE_Y = { stall: .158, other: .052 };
+function buildFaces(l) {
+    const faces = [];
+    for (const st of l.stalls) {
+        const q = l.probes.find(q => q.id === st.id);
+        faces.push({ id: `face-${st.id}`, probeId: st.id, label: q?.label ?? st.id, kind: 'stall', x: st.x, y: st.y, widthM: st.widthM, depthM: st.depthM, surfaceY: exports.FACE_SURFACE_Y.stall });
+    }
+    const feedZone = l.zones.find(z => z.kind === 'feeding'), feed = l.probes.filter(q => q.kind === 'feeding');
+    for (let i = 0; i < feed.length; i++)
+        faces.push({ id: `face-${feed[i].id}`, probeId: feed[i].id, label: feed[i].label, kind: 'feeding', x: feedZone.x + i * feedZone.widthM / feed.length, y: feedZone.y, widthM: feedZone.widthM / feed.length, depthM: feedZone.depthM, surfaceY: exports.FACE_SURFACE_Y.other });
+    const waitZone = l.zones.find(z => z.kind === 'waiting'), wait = l.probes.filter(q => q.kind === 'waiting');
+    for (let k = 0; k < wait.length; k++)
+        faces.push({ id: `face-${wait[k].id}`, probeId: wait[k].id, label: wait[k].label, kind: 'waiting', x: waitZone.x + (k % 2) * waitZone.widthM / 2, y: waitZone.y + Math.floor(k / 2) * waitZone.depthM / 4, widthM: waitZone.widthM / 2, depthM: waitZone.depthM / 4, surfaceY: exports.FACE_SURFACE_Y.other });
+    return faces;
+}
+/** Display areas: stall rows A-D, feeding, waiting, plus the all-stall subtotal. */
+function buildAreas(l) {
+    const out = [];
+    for (const row of ['A', 'B', 'C', 'D'])
+        out.push({ id: `stall-${row}`, label: `牛床 ${row}`, probeIds: l.probes.filter(q => q.zoneId === `stall-${row}`).map(q => q.id) });
+    out.push({ id: 'feeding', label: '採食帯', probeIds: l.probes.filter(q => q.kind === 'feeding').map(q => q.id) });
+    out.push({ id: 'waiting', label: '待機場所', probeIds: l.probes.filter(q => q.kind === 'waiting').map(q => q.id) });
+    out.push({ id: 'stalls', label: '牛床全体（小計）', subtotal: true, probeIds: l.probes.filter(q => q.kind === 'stall').map(q => q.id) });
+    return out;
+}
+/** Which display area a probe belongs to (used for area-row highlighting). */
+const areaOfProbe = (l, probeId) => buildAreas(l).find(a => a.probeIds.includes(probeId)) ?? null;
+exports.areaOfProbe = areaOfProbe;
 
 },
 "model/dailySchedule.js":function(require,module,exports){
@@ -945,6 +1053,78 @@ function secondsToNextToggle(t, w, cyclic) {
         next = Math.min(next, t + (phase < w.onSec ? w.onSec : period) - phase);
     }
     return next - t;
+}
+
+},
+"model/dailyWeather.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.secondsToWeatherBoundary = exports.WEATHER_STEP_SEC = void 0;
+exports.weatherIndexAt = weatherIndexAt;
+exports.envAt = envAt;
+exports.dailyWeatherReasons = dailyWeatherReasons;
+exports.weatherModeOf = weatherModeOf;
+const dailySchedule_js_1 = require("./dailySchedule.js");
+exports.WEATHER_STEP_SEC = 3600;
+/** Weather changes once per clock hour when mode==='hourly'; -1 under constant. */
+function weatherIndexAt(p, t) {
+    if (p.dailyWeather.mode !== 'hourly')
+        return -1;
+    return Math.floor((t % dailySchedule_js_1.DAY_SEC) / exports.WEATHER_STEP_SEC);
+}
+/** Environment for the representative-day second `t`. Shared fields (pressure,
+ * background wind, ventilation) come from `environment` for every hour. */
+function envAt(p, t) {
+    const dw = p.dailyWeather;
+    if (dw.mode !== 'hourly')
+        return p.environment;
+    const row = dw.hours.find(r => r.hour === weatherIndexAt(p, t));
+    return { ...p.environment, temperatureC: row.temperatureC, relativeHumidityPct: row.relativeHumidityPct, solarRoofWm2: row.solarRoofWm2 };
+}
+/** Seconds until the next hourly boundary; only meaningful when hourly mode is on. */
+const secondsToWeatherBoundary = (t) => exports.WEATHER_STEP_SEC - (t % exports.WEATHER_STEP_SEC);
+exports.secondsToWeatherBoundary = secondsToWeatherBoundary;
+/** Validation reasons for a candidate dailyWeather object. Empty = usable. */
+function dailyWeatherReasons(dw) {
+    const r = [];
+    if (dw === null || typeof dw !== 'object' || Array.isArray(dw))
+        return ['日気象はオブジェクトが必要です'];
+    const w = dw;
+    if (w.mode !== 'constant' && w.mode !== 'hourly')
+        r.push('日気象のモードはconstantまたはhourlyです');
+    if (w.hours !== undefined && !Array.isArray(w.hours))
+        r.push('日気象のhoursは配列が必要です');
+    const rows = (w.hours ?? []);
+    const seen = new Set();
+    let prev = -1;
+    for (const row of rows) {
+        if (row === null || typeof row !== 'object' || Array.isArray(row)) {
+            r.push('日気象の行はオブジェクトが必要です');
+            continue;
+        }
+        const h = row.hour;
+        if (typeof h !== 'number' || !Number.isInteger(h) || h < 0 || h > 23 || seen.has(h) || h <= prev) {
+            r.push('日気象のhourは0〜23の一意・昇順が必要です');
+            continue;
+        }
+        seen.add(h);
+        prev = h;
+        const f = (k, lo, hi, label) => {
+            const v = row[k];
+            if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi)
+                r.push(`日気象${h}時の${label}は${lo}〜${hi}の有限数が必要です`);
+        };
+        f('temperatureC', 20, 40, '気温');
+        f('relativeHumidityPct', 0, 100, '湿度');
+        f('solarRoofWm2', 0, 1200, '屋根面日射');
+    }
+    if (w.mode === 'hourly' && (seen.size !== 24 || !seen.has(0) || !seen.has(23)))
+        r.push('hourlyモードは0〜23時の24行が必要です');
+    return r;
+}
+/** Keep the legacy milk weatherMode consistent with the single weather source. */
+function weatherModeOf(dw) {
+    return dw.mode === 'hourly' ? 'hourly-representative-day' : 'constant-environment';
 }
 
 },
@@ -1029,8 +1209,8 @@ function validateMilkSettings(m) {
         r.push('乳量モデルIDが未対応です');
     if (m.mode !== 'repeated-day')
         r.push('時間モードは代表日の繰り返しのみです');
-    if (m.weatherMode !== 'constant-environment')
-        r.push('気象モードは固定気象のみです');
+    if (m.weatherMode !== 'constant-environment' && m.weatherMode !== 'hourly-representative-day')
+        r.push('気象モードが未対応です');
     if (m.operationPolicy !== 'daily-window-reset-v1')
         r.push('運転ポリシーが未対応です');
     if (m.assumptionClass !== 'demo_assumption')
@@ -1073,6 +1253,7 @@ const layout_js_1 = require("../template/layout.js");
 const defaults_js_1 = require("../data/defaults.js");
 const milk_js_1 = require("../model/milk.js");
 const dailySchedule_js_1 = require("../model/dailySchedule.js");
+const dailyWeather_js_1 = require("../model/dailyWeather.js");
 const fail = (path, message) => { throw new Error(`${path}: ${message}`); };
 const record = (v, path) => {
     if (v === null || typeof v !== 'object' || Array.isArray(v))
@@ -1111,8 +1292,17 @@ function safeTree(v, depth = 0) {
 function validateProject(input) {
     safeTree(input);
     const p = record(input, 'Project');
-    if (p.schemaVersion !== 9)
-        fail('schemaVersion', 'この版では保存形式9のみ対応です。旧形式・未知の形式は未対応のため読み込めません。現在の案は保持します');
+    // v9→v10 in-place migration: old files carried only the constant environment.
+    if (p.schemaVersion === 9) {
+        if (p.model && typeof p.model === 'object' && !Array.isArray(p.model))
+            p.model.version = defaults_js_1.MODEL.version;
+        if (p.milkSimulation && typeof p.milkSimulation === 'object' && !Array.isArray(p.milkSimulation))
+            p.milkSimulation.weatherMode = 'constant-environment';
+        p.dailyWeather = { mode: 'constant', hours: [] };
+        p.schemaVersion = 10;
+    }
+    if (p.schemaVersion !== 10)
+        fail('schemaVersion', 'この版では保存形式10のみ対応です（v9は自動変換）。旧形式・未知の形式は未対応のため読み込めません。現在の案は保持します');
     text(p.appVersion, 'appVersion', 80);
     const t = record(p.template, 'template');
     if (t.id !== 'fs-amr1-50-guided-reference' || t.version !== 1)
@@ -1128,6 +1318,9 @@ function validateProject(input) {
     number(e.backgroundSpeedMps, 0, 10, '背景風速');
     number(e.ventilationM3sPerM2, .0001, 1, '換気量');
     number(e.solarRoofWm2, 0, 1200, '屋根面日射');
+    const dwReasons = (0, dailyWeather_js_1.dailyWeatherReasons)(p.dailyWeather);
+    if (dwReasons.length)
+        fail('dailyWeather', dwReasons[0]);
     const m = record(p.model, 'model');
     if (m.version !== defaults_js_1.MODEL.version)
         fail('model', '未対応のモデル版です');
@@ -1165,6 +1358,8 @@ function validateProject(input) {
     const milkReasons = (0, milk_js_1.validateMilkSettings)(ms);
     if (milkReasons.length)
         fail('milkSimulation', milkReasons[0]);
+    if (ms.weatherMode !== (0, dailyWeather_js_1.weatherModeOf)(p.dailyWeather))
+        fail('milkSimulation.weatherMode', '日気象モードと一致していません');
     if (!Array.isArray(m.profiles) || m.profiles.length !== 3)
         fail('model.profiles', '3プロファイルが必要です');
     const profileIds = new Set();
@@ -1351,8 +1546,8 @@ exports.MODEL = exports.APP_VERSION = void 0;
 exports.createProject = createProject;
 const layout_js_1 = require("../template/layout.js");
 const milk_js_1 = require("../model/milk.js");
-exports.APP_VERSION = '0.9.0-preview.1';
-exports.MODEL = { version: 'cooling-integrated-v0.9', roof: { version: 'cooling-thermal-v0.5-assumptions-1', backgroundSensibleW: 10000, bareResistance: .02, conductivity: .035, hOutConv: 10, hOutRad: 5, hInConv: 3, hInRad: 5, viewFactor: .35, waterCapacityKgM2: .05 }, surfaceTemperatureC: 35, areaM2: 4.5, wetAreaM2: 2, patchLengthM: 2, patchWidthM: .6, baseWetFraction: .06, emissivity: .95, radiantOffsetC: 2, kSpread: .1, kDecay: 4, latentHeatJkg: 2430000, airDensityKgM3: 1.2, airCpJkgK: 1006, vaporGasConstant: 461.5, hcIntercept: 3.5, hcSlope: 4, profiles: [
+exports.APP_VERSION = '0.10.0-preview.1';
+exports.MODEL = { version: 'cooling-integrated-v0.10', roof: { version: 'cooling-thermal-v0.5-assumptions-1', backgroundSensibleW: 10000, bareResistance: .02, conductivity: .035, hOutConv: 10, hOutRad: 5, hInConv: 3, hInRad: 5, viewFactor: .35, waterCapacityKgM2: .05 }, surfaceTemperatureC: 35, areaM2: 4.5, wetAreaM2: 2, patchLengthM: 2, patchWidthM: .6, baseWetFraction: .06, emissivity: .95, radiantOffsetC: 2, kSpread: .1, kDecay: 4, latentHeatJkg: 2430000, airDensityKgM3: 1.2, airCpJkgK: 1006, vaporGasConstant: 461.5, hcIntercept: 3.5, hcSlope: 4, profiles: [
         { id: 'low', name: '低値側の仮定', outletMultiplier: .8, hcMultiplier: .8, mistEfficiency: .4, maxFilmKg: .15 },
         { id: 'reference', name: '基準の仮定', outletMultiplier: 1, hcMultiplier: 1, mistEfficiency: .6, maxFilmKg: .3 },
         { id: 'high', name: '高値側の仮定', outletMultiplier: 1.2, hcMultiplier: 1.2, mistEfficiency: .8, maxFilmKg: .45 }
@@ -1370,7 +1565,7 @@ function createProject() {
     const soaker = { ...structuredClone(baseline), id: 'working-soaker', name: '編集案 A', readOnly: false };
     const mist = { ...structuredClone(baseline), id: 'working-mist', name: '編集案 B', readOnly: false };
     mist.waterSystems.forEach(w => w.enabled = w.kind === 'mist');
-    return { schemaVersion: 9, references: { milkModel: 'milk-table-cowbell178-v1', baselineMilkKgPerDay: 35, fertility: { model: 'fertility-thi-period-or-baccouri2025-v1', p0: .4, mode: 'manual', exposureAssumed: true, temperatureC: 26, relativeHumidityPct: 70, profileVersion: 1 } }, milkSimulation: structuredClone(milk_js_1.DEFAULT_MILK_SIMULATION), appVersion: exports.APP_VERSION, template, environment: { temperatureC: 32, relativeHumidityPct: 70, pressurePa: 101325, backgroundSpeedMps: .2, ventilationM3sPerM2: .015, solarRoofWm2: 800 }, model: structuredClone(exports.MODEL), baselineScenarioId: 'baseline', activeScenarioId: 'working-soaker', scenarios: [baseline, soaker, mist], view: { mode: '3d', metric: 'deficit', timeSec: 0, selectedProbeId: 'feed-07', selectedDeviceId: null, roof: false, flow: true, particles: true, camera: null, analysis: false, selectedAreaId: null }, prices: { electricityYenKwh: 27, waterYenM3: 300 }, provenance: [
+    return { schemaVersion: 10, dailyWeather: { mode: 'constant', hours: [] }, references: { milkModel: 'milk-table-cowbell178-v1', baselineMilkKgPerDay: 35, fertility: { model: 'fertility-thi-period-or-baccouri2025-v1', p0: .4, mode: 'manual', exposureAssumed: true, temperatureC: 26, relativeHumidityPct: 70, profileVersion: 1 } }, milkSimulation: structuredClone(milk_js_1.DEFAULT_MILK_SIMULATION), appVersion: exports.APP_VERSION, template, environment: { temperatureC: 32, relativeHumidityPct: 70, pressurePa: 101325, backgroundSpeedMps: .2, ventilationM3sPerM2: .015, solarRoofWm2: 800 }, model: structuredClone(exports.MODEL), baselineScenarioId: 'baseline', activeScenarioId: 'working-soaker', scenarios: [baseline, soaker, mist], view: { mode: '3d', metric: 'deficit', timeSec: 0, selectedProbeId: 'feed-07', selectedDeviceId: null, roof: false, flow: true, particles: true, camera: null, analysis: false, selectedAreaId: null }, prices: { electricityYenKwh: 27, waterYenM3: 300 }, provenance: [
             { id: 'dimensions', classification: 'adapted-reference', note: '原事例36.4×23.5m・70頭の外形を参考に、内部を50床の独自配置へ変更。設計推奨ではない。', url: 'https://holstein.pl/nowoczesna-obora-w-gospodarstwie-rodzinnym/' },
             { id: 'layout', classification: 'adapted-reference', note: '採食・休息・搾乳の区画関係を参考にした独自配置。原図やメーカー3Dデータは同梱しない。', url: 'https://www.orionkikai.co.jp/rakuno/how_to/auto-milking-system/' },
             { id: 'psychrometrics', classification: 'source-based', note: 'SIの飽和蒸気圧・湿度比・エンタルピー・比体積の関係。仮換気量の妥当性を保証するものではない。', url: 'https://psychrometrics.github.io/psychrolib/api_docs.html' },

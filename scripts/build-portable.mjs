@@ -19,5 +19,5 @@ await writeFile(path.join(out,'llms.txt'),await readFile(path.join(root,'llms.tx
 const portable=html.replace('./src/styles.css','./styles.css').replace('<script type="module" src="./src/main.ts"></script>','<script src="./app.js"></script>');await writeFile(path.join(out,'index.html'),portable);
 const script=s=>s.replace(/<\/script/gi,'<\\/script');
 const standalone=portable.replace('<link rel="stylesheet" href="./styles.css">',`<style>${css}</style>`).replace('<script src="./app.js"></script>',`<script>window.__DCS_WORKER_SOURCE__=${JSON.stringify(worker).replace(/<\/script/gi,'<\\/script')};</script><script>${script(app)}</script>`);
-await writeFile(path.join(root,'cooling-planner-v0.9.html'),standalone);
+await writeFile(path.join(root,'cooling-planner-v0.10.html'),standalone);
 console.log(`Built offline HTTP distribution and standalone HTML (${Math.round(Buffer.byteLength(standalone)/1024)} KiB).`);console.log('Renderer: Three.js r180 (bundled). Runtime is self-contained; no CDN or API server.');

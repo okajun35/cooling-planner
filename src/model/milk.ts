@@ -72,7 +72,7 @@ export function validateMilkSettings(m:MilkSimulation):string[]{
   const r:string[]=[];
   if(m.modelId!==MILK_MODEL_ID)r.push('乳量モデルIDが未対応です');
   if(m.mode!=='repeated-day')r.push('時間モードは代表日の繰り返しのみです');
-  if(m.weatherMode!=='constant-environment')r.push('気象モードは固定気象のみです');
+  if(m.weatherMode!=='constant-environment'&&m.weatherMode!=='hourly-representative-day')r.push('気象モードが未対応です');
   if(m.operationPolicy!=='daily-window-reset-v1')r.push('運転ポリシーが未対応です');
   if(m.assumptionClass!=='demo_assumption')r.push('仮定の分類が不正です');
   if(!Number.isFinite(m.potentialMilkKgPerCowDay)||m.potentialMilkKgPerCowDay<=0)r.push('基準日乳量は正の有限値が必要です');

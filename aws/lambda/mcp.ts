@@ -70,6 +70,8 @@ const REFERENCES_PATCH=z.strictObject({
   temperatureC:z.number().optional(),relativeHumidityPct:z.number().optional(),
  }).optional(),
 });
+const WEATHER_HOUR=z.strictObject({hour:z.number().int().min(0).max(23),temperatureC:z.number().min(20).max(40),relativeHumidityPct:z.number().min(0).max(100),solarRoofWm2:z.number().min(0).max(1200)});
+const DAILY_WEATHER_PATCH=z.strictObject({mode:z.enum(['constant','hourly']),hours:z.array(WEATHER_HOUR).optional()}).describe('代表日気象。mode:"hourly"のときhoursにhour=0〜23の24行を昇順で指定（hourlyは日シミュレーションのみ効き、60分評価はenvironment固定）。constantに戻すときhoursは省略可');
 const OPERATION=z.discriminatedUnion('operation',[
  z.strictObject({operation:z.literal('switch_scenario'),scenarioId:z.string().describe('切替先の案ID。基準案も閲覧用に選択可')}),
  z.strictObject({operation:z.literal('copy_to_other')}).describe('現在の編集案をもう一方の編集案へ上書きコピーし、その案へ切り替える。対象は設備と屋根。共通気象は全案共有で以前の値は残らない'),
@@ -77,6 +79,7 @@ const OPERATION=z.discriminatedUnion('operation',[
  z.strictObject({operation:z.literal('update_roof'),patch:ROOF_PATCH}),
  z.strictObject({operation:z.literal('update_system'),systemId:z.string(),patch:SYSTEM_PATCH}),
  z.strictObject({operation:z.literal('update_environment'),patch:ENV_PATCH}),
+ z.strictObject({operation:z.literal('update_daily_weather'),patch:DAILY_WEATHER_PATCH}).describe('代表日の時刻別気象の設定・解除。全案共有'),
  z.strictObject({operation:z.literal('update_model'),patch:MODEL_PATCH}).describe('物理モデル係数の変更。共通気象と同様に全案へ効く'),
  z.strictObject({operation:z.literal('update_milk'),patch:MILK_PATCH}).describe('乳量仮説モデルの係数変更'),
  z.strictObject({operation:z.literal('update_references'),patch:REFERENCES_PATCH}).describe('参照設定(基準乳量・受胎参照)の変更'),

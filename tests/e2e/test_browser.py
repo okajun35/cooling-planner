@@ -8,7 +8,7 @@ import json, math, os
 import pytest
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[2]
-HTML=(ROOT/'cooling-planner-v0.9.html').read_text()
+HTML=(ROOT/'cooling-planner-v0.10.html').read_text()
 OUT=ROOT/'evidence/browser';OUT.mkdir(parents=True,exist_ok=True)
 (OUT/'test-runs').mkdir(exist_ok=True)
 
@@ -262,7 +262,7 @@ def test_E19_result_export_is_current_and_includes_provenance_and_series(page,tm
     with page.expect_download() as ev:page.locator('[data-action=export-results]').click()
     path=tmp_path/'results.json';ev.value.save_as(path);data=json.loads(path.read_text())
     assert data['result']['inputHash']==page.evaluate('window.__DCS__.hash()')
-    assert data['project']['schemaVersion']==9
+    assert data['project']['schemaVersion']==10
     assert data['result']['dailyMilkStatus']=='complete'
     assert data['project']['provenance']
     assert len(data['result']['scenarios'][1]['points'][0]['series'])==61
@@ -272,7 +272,7 @@ def test_E20_evidence_lists_versions_assumptions_and_non_confidence_envelope(pag
     text=page.locator('#evidence-body').inner_text()
     assert '95%信頼区間ではありません' in text
     assert 'design-assumption' in text
-    assert 'cooling-integrated-v0.9' in text
+    assert 'cooling-integrated-v0.10' in text
     assert '熱v0.5、乳量表v0.6、受胎v0.7' in text
     assert 'milk-heat-deficit-v0.1' in text
 

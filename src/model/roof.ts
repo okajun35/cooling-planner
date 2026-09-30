@@ -4,8 +4,8 @@ import {saturationPressure,isOn} from './physics.js';
 export const roofArea=(p:Pick<Project,'template'>)=>2*p.template.lengthM*Math.hypot(p.template.widthM/2,p.template.ridgeHeightM-p.template.eaveHeightM);
 export interface RoofState {outerC:number;underC:number;airC:number;evaporatedKgsM2:number;residualWm2:number;radiantC:number}
 /** Direct port of v0.5 roof_state. All numbers in SI; solve zero-storage roof/air balance. */
-export function solveRoof(p:Project,s:Scenario,waterKgM2:number,dt:number):RoofState {
-  const e=p.environment,m=p.model,k=m.roof,r=k.bareResistance+s.roof.insulationM/k.conductivity;
+export function solveRoof(p:Project,s:Scenario,waterKgM2:number,dt:number,env?:Project['environment']):RoofState {
+  const e=env??p.environment,m=p.model,k=m.roof,r=k.bareResistance+s.roof.insulationM/k.conductivity;
   const ca=m.airDensityKgM3*m.airCpJkgK*e.ventilationM3sPerM2*p.template.lengthM*p.template.widthM,ah=roofArea(p)*k.hInConv;
   const beta=ah/(ca+ah),b=k.backgroundSensibleW/(ca+ah),c=k.hInConv*(1-beta)+k.hInRad;
   const pv=e.relativeHumidityPct/100*saturationPressure(e.temperatureC),km=k.hOutConv/(m.airDensityKgM3*m.airCpJkgK),wet=waterKgM2/k.waterCapacityKgM2;

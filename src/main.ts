@@ -27,7 +27,7 @@ declare global {interface Window {__DCS_WORKER_SOURCE__?:string;__DCS__?:unknown
 const store=new ProjectStore(createProject()),gate=new ResultGate();
 let result:SimulationResult|null=null,worker:Worker|null=null,scene:SceneView|null=null,mode='',calculating=false,lastCalculationMs=0,startTime=0,workerFailed=false,pending=false,invalid=false,workerError:string|null=null,suppressChange=false;
 let chart:ChartMetric='qW',playing=false,playTimer:number|null=null,speed=120,jobTimer:number|null=null;
-const ROOT_KEY='cooling-planner-project-v9',GUIDE_KEY='cooling-planner-guide-v1';
+const ROOT_KEY='cooling-planner-project-v10',GUIDE_KEY='cooling-planner-guide-v1';
 const ws:Workspace=createWorkspace();
 try{if(localStorage.getItem(GUIDE_KEY)==='done')ws.guide.done=true}catch{}
 let previousFull=store.project;
@@ -100,7 +100,7 @@ function makeWorker(){
   worker.onmessage=(e:MessageEvent<Reply>)=>{if(!gate.accepts(e.data))return;const d=e.data;
    if(d.kind==='error'){calculating=false;lastCalculationMs=performance.now()-startTime;workerFailed=true;workerError=d.error;result=null;showError(d.error)}
    else if(d.kind==='thermal-result'){result=d.result;workerFailed=false;workerError=null/* keep calculating until the daily stage */}
-   else if(d.kind==='daily-result'){if(result&&result.inputHash===d.inputHash)mergeDaily(result,d.daily,d.dailyMilkStatus);calculating=false;lastCalculationMs=performance.now()-startTime}
+   else if(d.kind==='daily-result'){if(result&&result.inputHash===d.inputHash)mergeDaily(result,d.daily,d.thermal,d.dailyMilkStatus);calculating=false;lastCalculationMs=performance.now()-startTime}
    render();
   };
   worker.onerror=()=>{calculating=false;workerFailed=true;workerError='計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。';showError(workerError);status()};
@@ -251,8 +251,8 @@ function evaluateProject(project:Project,opts:{daily:boolean}):Promise<EvalJob>{
   let thermal:SimulationResult|null=null;
   w.onmessage=(e:MessageEvent<Reply>)=>{const d=e.data;
    if(d.kind==='error')done(()=>reject(new Error(d.error)));
-   else if(d.kind==='thermal-result'){const t=d.result;thermal=t;if(!opts.daily)done(()=>resolve({thermal:t,daily:null,dailyMilkStatus:'complete'}))}
-   else if(d.kind==='daily-result'&&thermal)done(()=>resolve({thermal:thermal!,daily:d.daily,dailyMilkStatus:d.dailyMilkStatus}))};
+   else if(d.kind==='thermal-result'){const t=d.result;thermal=t;if(!opts.daily)done(()=>resolve({thermal:t,daily:null,dailyThermal:null,dailyMilkStatus:'complete'}))}
+   else if(d.kind==='daily-result'&&thermal)done(()=>resolve({thermal:thermal!,daily:d.daily,dailyThermal:d.thermal,dailyMilkStatus:d.dailyMilkStatus}))};
   w.onerror=()=>done(()=>reject(new Error('計算Workerエラー')));
   w.postMessage({jobId:1,inputHash:inputHash(project),project});
  });

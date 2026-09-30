@@ -3,6 +3,7 @@ import {buildLayout,positionFromAnchor} from '../template/layout.js';
 import {MODEL} from '../data/defaults.js';
 import {validateMilkSettings} from '../model/milk.js';
 import {validDailyStartHour} from '../model/dailySchedule.js';
+import {dailyWeatherReasons,weatherModeOf} from '../model/dailyWeather.js';
 const fail=(path:string,message:string):never=>{throw new Error(`${path}: ${message}`)};
 const record=(v:unknown,path:string):Record<string,any>=>{if(v===null||typeof v!=='object'||Array.isArray(v))fail(path,'オブジェクトが必要です');return v as Record<string,any>};
 const number=(v:unknown,lo:number,hi:number,path:string)=>{if(typeof v!=='number'||!Number.isFinite(v)||v<lo||v>hi)fail(path,`${lo}〜${hi}の有限数が必要です`)};
@@ -12,18 +13,27 @@ const id=(v:unknown,path:string)=>{if(typeof v!=='string'||!/^[a-zA-Z0-9_.-]{1,9
 function safeTree(v:unknown,depth=0){if(depth>24)fail('JSON','階層が深すぎます');if(v&&typeof v==='object'){if(Array.isArray(v)&&v.length>2000)fail('JSON','配列が大きすぎます');for(const [k,x]of Object.entries(v)){if(['__proto__','prototype','constructor'].includes(k))fail('JSON','禁止されたキーです');safeTree(x,depth+1)}}}
 export function validateProject(input:unknown):asserts input is Project{
  safeTree(input);const p=record(input,'Project');
- if(p.schemaVersion!==9)fail('schemaVersion','この版では保存形式9のみ対応です。旧形式・未知の形式は未対応のため読み込めません。現在の案は保持します');
+ // v9→v10 in-place migration: old files carried only the constant environment.
+ if(p.schemaVersion===9){
+  if(p.model&&typeof p.model==='object'&&!Array.isArray(p.model))(p.model as Record<string,unknown>).version=MODEL.version;
+  if(p.milkSimulation&&typeof p.milkSimulation==='object'&&!Array.isArray(p.milkSimulation))(p.milkSimulation as Record<string,unknown>).weatherMode='constant-environment';
+  p.dailyWeather={mode:'constant',hours:[]};
+  p.schemaVersion=10;
+ }
+ if(p.schemaVersion!==10)fail('schemaVersion','この版では保存形式10のみ対応です（v9は自動変換）。旧形式・未知の形式は未対応のため読み込めません。現在の案は保持します');
  text(p.appVersion,'appVersion',80);const t=record(p.template,'template');
  if(t.id!=='fs-amr1-50-guided-reference'||t.version!==1)fail('template','対応していないテンプレートです');
  number(t.lengthM,32,48,'牛舎の長さ');number(t.widthM,23.5,30,'牛舎の幅');if(t.eaveHeightM!==4||t.ridgeHeightM!==8.7)fail('屋根','本版は軒4m・棟8.7m固定です');
  const e=record(p.environment,'environment');number(e.temperatureC,20,40,'気温');number(e.relativeHumidityPct,0,100,'湿度');number(e.pressurePa,50000,110000,'気圧');number(e.backgroundSpeedMps,0,10,'背景風速');number(e.ventilationM3sPerM2,.0001,1,'換気量');
  number(e.solarRoofWm2,0,1200,'屋根面日射');
+ const dwReasons=dailyWeatherReasons(p.dailyWeather);if(dwReasons.length)fail('dailyWeather',dwReasons[0]);
  const m=record(p.model,'model');if(m.version!==MODEL.version)fail('model','未対応のモデル版です');
  for(const [key,value]of Object.entries(MODEL))if(typeof value==='number')number(m[key],key==='radiantOffsetC'?-20:0,key==='latentHeatJkg'?5e6:key==='vaporGasConstant'?1000:key==='airCpJkgK'?10000:100,`model.${key}`);
  if(m.areaM2<=0||m.wetAreaM2>m.areaM2||m.baseWetFraction>1||m.emissivity>1||m.kDecay<=0||m.airDensityKgM3<=0||m.airCpJkgK<=0||m.vaporGasConstant<=0||m.patchLengthM<=0||m.patchWidthM<=0)fail('model','面積・係数の関係が不正です');
  const rm=record(m.roof,'model.roof');if(rm.version!==MODEL.roof.version)fail('roof.model','未対応の屋根モデルです');for(const [k,value] of Object.entries(MODEL.roof))if(typeof value==='number'){number(rm[k],0,k==='backgroundSensibleW'?1e6:100,`roof.${k}`);if(k!=='backgroundSensibleW'&&k!=='viewFactor'&&rm[k]<=0)fail('roof','係数は正数です')}if(rm.viewFactor>1)fail('roof.viewFactor','0〜1です');
  const refs=record(p.references,'references');if(refs.milkModel!=='milk-table-cowbell178-v1')fail('references','未対応の乳量表');if(refs.baselineMilkKgPerDay!==null)number(refs.baselineMilkKgPerDay,0,100,'基準乳量');const f=record(refs.fertility,'references.fertility');if(f.model!=='fertility-thi-period-or-baccouri2025-v1'||f.profileVersion!==1)fail('fertility','未対応モデル');number(f.p0,.001,.999,'基準受胎率');if(!['manual','simulation'].includes(f.mode))fail('fertility.mode','未対応入力');bool(f.exposureAssumed,'fertility.exposureAssumed');number(f.temperatureC,-20,50,'代表気温');number(f.relativeHumidityPct,0,100,'代表湿度');
  const ms=record(p.milkSimulation,'milkSimulation');const milkReasons=validateMilkSettings(ms as Project['milkSimulation']);if(milkReasons.length)fail('milkSimulation',milkReasons[0]);
+ if(ms.weatherMode!==weatherModeOf(p.dailyWeather as Project['dailyWeather']))fail('milkSimulation.weatherMode','日気象モードと一致していません');
  if(!Array.isArray(m.profiles)||m.profiles.length!==3)fail('model.profiles','3プロファイルが必要です');
  const profileIds=new Set<string>();for(const x of m.profiles){record(x,'profile');if(!['low','reference','high'].includes(x.id)||profileIds.has(x.id))fail('profile.id','重複または未知のID');profileIds.add(x.id);text(x.name,'profile.name');number(x.outletMultiplier,.01,5,'outletMultiplier');number(x.hcMultiplier,.01,5,'hcMultiplier');number(x.mistEfficiency,0,1,'mistEfficiency');number(x.maxFilmKg,.001,5,'maxFilmKg')}
  if(!Array.isArray(p.scenarios)||p.scenarios.length!==3)fail('scenarios','基準と2編集案が必要です');

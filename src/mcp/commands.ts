@@ -1,4 +1,4 @@
-import type {DailyMilkResult,Device,Layout,PointResult,Project,RoofSettings,SimulationResult,View,WaterSystem} from '../domain/project.js';
+import type {DailyMilkResult,DailyThermalResult,DailyWeather,Device,Layout,PointResult,Project,RoofSettings,SimulationResult,View,WaterSystem} from '../domain/project.js';
 import {activeScenario,devices,isFan} from '../domain/project.js';
 import {ProjectStore} from '../state/store.js';
 import {buildLayout} from '../template/layout.js';
@@ -11,7 +11,7 @@ import {describeModel} from '../model/modelInfo.js';
 /** Runtime UI/worker state owned by main.ts; injected so commands stay testable. */
 export interface CommandStatus{pendingInput:boolean;invalidInput:boolean;calculating:boolean;workerError:string|null}
 /** One-off simulation of a hypothetical project; `daily` is null when not requested. */
-export interface EvalJob{thermal:SimulationResult;daily:Record<string,DailyMilkResult>|null;dailyMilkStatus:'complete'|'error'}
+export interface EvalJob{thermal:SimulationResult;daily:Record<string,DailyMilkResult>|null;dailyThermal:Record<string,DailyThermalResult>|null;dailyMilkStatus:'complete'|'error'}
 export interface CommandDeps{
  store:ProjectStore;
  /** Latest worker result, already filtered by ResultGate. May still be stale vs committed input. */
@@ -63,6 +63,7 @@ const PATCH_FIELDS={
  modelRoof:new Set<string>(['backgroundSensibleW','bareResistance','conductivity','hOutConv','hOutRad','hInConv','hInRad','viewFactor','waterCapacityKgM2'] satisfies (keyof Omit<Project['model']['roof'],'version'>)[]),
  profile:new Set<string>(['outletMultiplier','hcMultiplier','mistEfficiency','maxFilmKg'] satisfies (keyof Omit<Project['model']['profiles'][number],'id'|'name'>)[]),
  milk:new Set(['potentialMilkKgPerCowDay','referenceCoolingWPerCow','responseKgPerCowDayPerW','maxLossFraction','lagWeights','occupancyFractions','responseSensitivityKgPerCowDayPerW','warmupDurationSec','evaluationDurationSec','timeStepSec'] satisfies (keyof Omit<Project['milkSimulation'],'modelId'|'mode'|'weatherMode'|'operationPolicy'|'assumptionClass'>)[]),
+ dailyWeather:new Set(['mode','hours'] satisfies (keyof DailyWeather)[]),
  references:new Set(['baselineMilkKgPerDay','fertility']),
  fertility:new Set(['p0','mode','exposureAssumed','temperatureC','relativeHumidityPct']),
 };
@@ -146,6 +147,11 @@ export function applyOperation(s:ProjectStore,args:EditArgs):Record<string,unkno
    s.updateModel(patch);
    return{applied:p().model};
   }
+  case'update_daily_weather':{
+   const patch=checkPatch(args.patch,PATCH_FIELDS.dailyWeather,'日気象');
+   s.updateDailyWeather(patch as unknown as DailyWeather);
+   return{applied:p().dailyWeather};
+  }
   case'update_milk':{
    const patch=checkPatch(args.patch,PATCH_FIELDS.milk,'乳量モデル');
    s.updateMilk(patch as Partial<Project['milkSimulation']>);
@@ -193,13 +199,13 @@ export async function evaluateOnProject(project:Project,args:EvaluateArgs,runEva
  if(args.scenarioId&&args.scenarioId!==tmp.committed.activeScenarioId)tmp.switchScenario(args.scenarioId);
  const applied=args.operations.map(op=>applyOperation(tmp,op));
  const job=await runEval(tmp.committed,{daily:args.includeDaily===true});
- if(job.daily)mergeDaily(job.thermal,job.daily,job.dailyMilkStatus);
+ if(job.daily)mergeDaily(job.thermal,job.daily,job.dailyThermal??{},job.dailyMilkStatus);
  const p=tmp.committed,areas=buildAreas(layout(p));
  const scenarioOf=(id:string)=>{
   const sr=job.thermal.scenarios.find(s=>s.id===id);
   if(!sr)return null;
   const meta=p.scenarios.find(s=>s.id===id)!,{series:_,...roof}=sr.roof;
-  return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,comparison:comparisonStats(sr.points,job.thermal.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],{id:'all',label:'全地点',probeIds:layout(p).probes.map(q=>q.id)}),areas:areas.map(a=>comparisonStats(sr.points,job.thermal.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:job.daily?sr.dailyMilk:undefined};
+  return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,comparison:comparisonStats(sr.points,job.thermal.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],{id:'all',label:'全地点',probeIds:layout(p).probes.map(q=>q.id)}),areas:areas.map(a=>comparisonStats(sr.points,job.thermal.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:job.daily?sr.dailyMilk:undefined,dailyThermal:job.daily?sr.dailyThermal:undefined};
  };
  return{
   scenarioId:p.activeScenarioId,inputHash:inputHash(p),operations:applied,
@@ -217,7 +223,7 @@ export function createCommands(d:CommandDeps){
    appVersion:p.appVersion,schemaVersion:p.schemaVersion,inputHash:inputHash(p),
    baselineScenarioId:p.baselineScenarioId,activeScenarioId:p.activeScenarioId,
    scenarios:p.scenarios.map(s=>({id:s.id,name:s.name,readOnly:s.readOnly,roof:s.roof,fans:s.fans,waterSystems:s.waterSystems})),
-   template:p.template,environment:p.environment,view:p.view,milkSimulation:p.milkSimulation,
+   template:p.template,environment:p.environment,dailyWeather:p.dailyWeather,view:p.view,milkSimulation:p.milkSimulation,
    probes:l.probes.map(q=>({id:q.id,label:q.label,kind:q.kind,x:q.x,y:q.y,heightM:q.heightM})),
    areas:buildAreas(l).map(a=>({id:a.id,label:a.label,probeIds:a.probeIds,subtotal:a.subtotal??false})),
    undoCount:store.undoCount,redoCount:store.redoCount,
@@ -282,7 +288,7 @@ export function createCommands(d:CommandDeps){
   const scenarios=wanted.map(id=>{
    const sr=r.scenarios.find(s=>s.id===id)!,{series:_,...roof}=sr.roof;
    const meta=p.scenarios.find(s=>s.id===id)!;
-   return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,comparison:comparisonStats(sr.points,r.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],{id:'all',label:'全地点',probeIds:l.probes.map(q=>q.id)}),areas:areas.map(a=>comparisonStats(sr.points,r.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:sr.dailyMilk};
+   return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,comparison:comparisonStats(sr.points,r.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],{id:'all',label:'全地点',probeIds:l.probes.map(q=>q.id)}),areas:areas.map(a=>comparisonStats(sr.points,r.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:sr.dailyMilk,dailyThermal:sr.dailyThermal};
   });
   const points=Object.fromEntries(wanted.map(id=>{
    const q=r.scenarios.find(s=>s.id===id)!.points.find(q=>q.probeId===probe.id);

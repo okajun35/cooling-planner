@@ -1,6 +1,8 @@
 import type {Project,Device,Environment,Template,View,WaterSystem,RoofSettings,ReferenceSettings,MilkSimulation} from '../domain/project.js';
 import {activeScenario,devices,isFan,clone} from '../domain/project.js';
 import {validateProject,parseProject} from '../domain/validation.js';
+import {weatherModeOf} from '../model/dailyWeather.js';
+import type {DailyWeather} from '../domain/project.js';
 import {anchorPose,buildLayout,positionFromAnchor} from '../template/layout.js';
 import {checkPlacement} from '../template/placement.js';
 import {createProject} from '../data/defaults.js';
@@ -21,6 +23,8 @@ export class ProjectStore{
  setView(patch:Partial<View>){const p=clone(this.current);Object.assign(p.view,patch);this.repairSelection(p);validateProject(p);this.current=freeze(p);if(this.draft){const d=clone(this.draft);Object.assign(d.view,p.view);this.draft=freeze(d)}this.emit('view')}
  switchScenario(id:string){const p=clone(this.current);if(!p.scenarios.some(s=>s.id===id))throw Error('案が見つかりません');p.activeScenarioId=id;this.repairSelection(p);validateProject(p);this.draft=null;this.current=freeze(p);this.emit('view')}
  updateEnvironment(patch:Partial<Environment>){this.edit(p=>Object.assign(p.environment,patch))}
+ /** Replaces the representative-day weather; milk weatherMode is synced, never independently edited. */
+ updateDailyWeather(dw:DailyWeather){this.edit(p=>{p.dailyWeather={mode:dw.mode,hours:clone(dw.hours??[])};p.milkSimulation.weatherMode=weatherModeOf(p.dailyWeather)})}
  updateRoof(patch:Partial<RoofSettings>){this.edit(p=>Object.assign(this.editable(p).roof,patch))}
  updateReferences(patch:Partial<ReferenceSettings>){this.edit(p=>Object.assign(p.references,patch))}
  updateFertility(patch:Partial<ReferenceSettings['fertility']>){this.edit(p=>Object.assign(p.references.fertility,patch))}

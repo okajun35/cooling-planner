@@ -11,7 +11,7 @@ scope.onmessage=(e)=>{
   scope.postMessage({jobId,inputHash:expected,kind:'thermal-result',result:simulate(project)});
   try{
    const daily=simulateDaily(project);
-   scope.postMessage({jobId,inputHash:expected,kind:'daily-result',daily:daily.daily,dailyMilkStatus:daily.status==='error'?'error':'complete'});
-  }catch{scope.postMessage({jobId,inputHash:expected,kind:'daily-result',daily:{},dailyMilkStatus:'error'})}
+   scope.postMessage({jobId,inputHash:expected,kind:'daily-result',daily:daily.daily,thermal:daily.thermal,dailyMilkStatus:daily.status==='error'?'error':'complete'});
+  }catch{scope.postMessage({jobId,inputHash:expected,kind:'daily-result',daily:{},thermal:{},dailyMilkStatus:'error'})}
  }catch(err){scope.postMessage({jobId,inputHash:expected,kind:'error',error:err instanceof Error?err.message:String(err)})}
 };

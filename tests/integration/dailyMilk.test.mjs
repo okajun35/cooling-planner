@@ -124,9 +124,10 @@ test('worker gate accepts both staged replies of the same job and rejects stale 
 test('mergeDaily attaches per-scenario results and flips status',()=>{
   const p=createProject(),r=simulate(p,{envelope:false});
   assert.equal(r.dailyMilkStatus,'pending');
-  mergeDaily(r,simulateDaily(p).daily,'complete');
+  const out=simulateDaily(p);
+  mergeDaily(r,out.daily,out.thermal,'complete');
   assert.equal(r.dailyMilkStatus,'complete');
-  for(const s of r.scenarios)assert.equal(s.dailyMilk.status,'available');
+  for(const s of r.scenarios){assert.equal(s.dailyMilk.status,'available');assert.equal(s.dailyThermal.status,'complete');assert.equal(s.dailyThermal.weatherMode,'constant')}
 });
 test('warmup water state carries across the day boundary: split run == continuous, dry restart differs',()=>{
   const p=createProject();const s=p.scenarios.find(x=>x.id==='working-soaker');

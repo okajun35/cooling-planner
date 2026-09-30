@@ -27,7 +27,7 @@ export function stableStringify(v:unknown):string {
 const deviceInput=(d:any)=>Object.fromEntries(Object.entries(d).filter(([k])=>!['label','anchor'].includes(k)));
 export const scenarioInput=(s:Scenario)=>({roof:s.roof,fans:s.fans.map(deviceInput),waterSystems:s.waterSystems.map(w=>({...w,nozzles:w.nozzles.map(deviceInput)}))});
 export function inputHash(p:Project){
-  const input=stableStringify({schema:p.schemaVersion,template:p.template,environment:p.environment,model:p.model,references:p.references,milkSimulation:p.milkSimulation,baselineScenarioId:p.baselineScenarioId,scenarios:p.scenarios.map(s=>({id:s.id,...scenarioInput(s)}))});let h=0xcbf29ce484222325n;
+  const input=stableStringify({schema:p.schemaVersion,template:p.template,environment:p.environment,dailyWeather:p.dailyWeather,model:p.model,references:p.references,milkSimulation:p.milkSimulation,baselineScenarioId:p.baselineScenarioId,scenarios:p.scenarios.map(s=>({id:s.id,...scenarioInput(s)}))});let h=0xcbf29ce484222325n;
   for(let i=0;i<input.length;i++){h^=BigInt(input.charCodeAt(i));h=BigInt.asUintN(64,h*0x100000001b3n)}return h.toString(16).padStart(16,'0');
 }
 export function mistDistribution(p:Project,s:Scenario,layout:Layout,rays:number){
@@ -103,7 +103,7 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
     filmLedger.finalKg=mass;
     return {...blank,status:'valid',meanSpeedMps:speedSum/3600,meanAirTemperatureC:tempSum/3600,meanRelativeHumidityPct:rhSum/3600,meanQrefW:Object.values(comp).reduce((a,b)=>a+b,0),meanRadiantC:roof.result.meanRadiantC,meanFeelsLikeC:feelSum/3600,components:comp,film:filmLedger,captureFraction:maxFraction,series,milk:milkReference(firstT,firstRH,firstSpeed,p.references.baselineMilkKgPerDay,staticInputs),fertility:fertilityReference(p.references.fertility,tempSum/3600,rhSum/3600),meanDeficitW:deficitWs/(n*dt),meanFilmKg:filmMassWs/(n*dt),fanActionFraction:fanActionS/(n*dt),soakerArrivalFraction:soakerArrivalS/(n*dt),mistEvaporationActionFraction:mistEvapS/(n*dt),mistSupplyFraction:mistSupplyS/(n*dt),qSeries};
   });
-  return {id:s.id,points,resources:resources(s,p),warnings,roof:roof.result,...trialResources(s,p),dailyMilk:null};
+  return {id:s.id,points,resources:resources(s,p),warnings,roof:roof.result,...trialResources(s,p),dailyMilk:null,dailyThermal:null};
 }
 export function simulate(p:Project,opts:{dt?:number;rays?:number;envelope?:boolean;collectQSeries?:boolean}={}):SimulationResult{
   const dt=opts.dt??1,rays=opts.rays??256;if(dt!==1&&dt!==.5)throw Error('時間刻みは1秒または0.5秒です');if(![256,1024].includes(rays))throw Error('積分レイ数は256または1024です');

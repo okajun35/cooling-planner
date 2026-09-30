@@ -135,9 +135,11 @@ const REFERENCES_PATCH=z.strictObject({
   temperatureC:z.number().optional(),relativeHumidityPct:z.number().optional(),
  }).optional(),
 });
+const WEATHER_HOUR=z.strictObject({hour:z.number().int().min(0).max(23),temperatureC:z.number().min(20).max(40),relativeHumidityPct:z.number().min(0).max(100),solarRoofWm2:z.number().min(0).max(1200)});
+const DAILY_WEATHER_PATCH=z.strictObject({mode:z.enum(['constant','hourly']),hours:z.array(WEATHER_HOUR).optional()}).describe('代表日気象。mode:"hourly"のときhoursにhour=0〜23の24行を昇順で指定（hourlyは日シミュレーションのみ効く）。constantに戻すときhoursは省略可');
 
 function createServer(){
- const server=new McpServer({name:'cooling-planner',version:'0.9.0-preview.1',instructions:[
+ const server=new McpServer({name:'cooling-planner',version:'0.10.0-preview.1',instructions:[
   'ブラウザで開いているCooling Plannerの画面そのものを操作するツール群。状態の正本はブラウザ。',
   `先に get_state で現状・ID・選択対象を確認する。ブラウザ未接続なら ${PAGE_URL} を1タブで開いてもらう。`,
   '「この牛」は選択地点として解釈する。座標はx=牛舎長さ方向、y=幅方向、heightM=高さ。長さm、向きdeg。',
@@ -164,6 +166,7 @@ function createServer(){
   z.strictObject({operation:z.literal('update_roof'),patch:ROOF_PATCH}),
   z.strictObject({operation:z.literal('update_system'),systemId:z.string(),patch:SYSTEM_PATCH}),
   z.strictObject({operation:z.literal('update_environment'),patch:ENV_PATCH}),
+  z.strictObject({operation:z.literal('update_daily_weather'),patch:DAILY_WEATHER_PATCH}).describe('代表日の時刻別気象の設定・解除。全案共有'),
  z.strictObject({operation:z.literal('update_model'),patch:MODEL_PATCH}).describe('物理モデル係数の変更。共通気象と同様に全案へ効く'),
  z.strictObject({operation:z.literal('update_milk'),patch:MILK_PATCH}).describe('乳量仮説モデルの係数変更'),
  z.strictObject({operation:z.literal('update_references'),patch:REFERENCES_PATCH}).describe('参照設定(基準乳量・受胎参照)の変更'),

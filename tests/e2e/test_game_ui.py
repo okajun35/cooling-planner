@@ -5,7 +5,7 @@ import json, os, pytest
 from playwright.sync_api import sync_playwright
 from test_browser import ready, snap, result, point, check, uncheck, open_panel, open_sheet, place_device, workspace, PANEL, OUT
 
-HTML=(Path(__file__).resolve().parents[2]/'cooling-planner-v0.9.html').read_text()
+HTML=(Path(__file__).resolve().parents[2]/'cooling-planner-v0.10.html').read_text()
 
 @pytest.fixture
 def page(browser):

@@ -3,7 +3,7 @@
   "name": "io.github.okajun35/cooling-planner",
   "title": "Cooling Planner",
   "description": "MCP simulator for dairy barn cooling: evaluate equipment, roof and weather on heat, water and milk.",
-  "version": "0.9.0-preview.1",
+  "version": "0.10.0-preview.1",
   "websiteUrl": "https://main.da05znjm47ziu.amplifyapp.com",
   "repository": {
     "url": "https://github.com/okajun35/cooling-planner",
