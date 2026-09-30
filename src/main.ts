@@ -25,7 +25,7 @@ import {openProjectImport} from './ui/projectImport.js';
 
 declare global {interface Window {__DCS_WORKER_SOURCE__?:string;__DCS__?:unknown}}
 const store=new ProjectStore(createProject()),gate=new ResultGate();
-let result:SimulationResult|null=null,worker:Worker|null=null,scene:SceneView|null=null,mode='',calculating=false,lastCalculationMs=0,startTime=0,workerFailed=false,pending=false,invalid=false,workerError:string|null=null,suppressChange=false;
+let result:SimulationResult|null=null,worker:Worker|null=null,scene:SceneView|null=null,mode='',calculating=false,lastCalculationMs=0,startTime=0,workerFailed=false,pending=false,invalid=false,workerError:string|null=null,suppressChange=false,pendingInput:HTMLInputElement|null=null;
 let chart:ChartMetric='qW',playing=false,playTimer:number|null=null,speed=120,jobTimer:number|null=null;
 const ROOT_KEY='cooling-planner-project-v10',GUIDE_KEY='cooling-planner-guide-v1';
 const ws:Workspace=createWorkspace();
@@ -71,9 +71,13 @@ function render(){
  const p=store.project,r=currentResult();
  // An uncommitted edit lives only in the focused input (blur commits via 'change').
  // Rebuilding the DOM on worker results would drop it, so carry value/focus over.
+ // Identify it by id, else by its data-* attributes (weather rows have no id) —
+ // a destroyed pending input can never fire change and leaves pending stuck.
  const ae=document.activeElement;
- const keep=pending&&ae instanceof HTMLInputElement&&ae.type!=='checkbox'&&ae.type!=='radio'&&ae.id
-  ?{id:ae.id,value:ae.value,bad:ae.classList.contains('bad-input')}:null;
+ const keepSel=(i:HTMLInputElement)=>i.id?`#${CSS.escape(i.id)}`
+  :(parts=>parts.length?`input${parts.join('')}`:null)([...i.attributes].filter(a=>a.name.startsWith('data-')).map(a=>`[${a.name}="${a.value.replace(/["\\]/g,'\\$&')}"]`));
+ const keep=pending&&ae instanceof HTMLInputElement&&ae.type!=='checkbox'&&ae.type!=='radio'
+  ?{sel:keepSel(ae),value:ae.value,bad:ae.classList.contains('bad-input')}:null;
  // innerHTML rebuilds blur+change the focused field mid-render (while still
  // connected) — a teardown artifact that must not commit. Suppress it; real
  // user change events cannot interleave inside a synchronous render.
@@ -84,7 +88,7 @@ function render(){
   updateTime(p,r);renderChrome(p,r,ws);
   for(const [id,fn]of [['settings-dialog',()=>renderSettings(p)],['reference-dialog',()=>renderReference(p)],['evidence-dialog',()=>renderEvidence(p,r)],['help-dialog',()=>renderHelp()]] as const)if(el<HTMLDialogElement>(id).open)fn();
   syncScene();status();
-  if(keep){const n=document.getElementById(keep.id);if(n instanceof HTMLInputElement){n.value=keep.value;if(keep.bad)n.classList.add('bad-input');n.focus({preventScroll:true})}}
+  if(keep?.sel){const n=document.querySelector(keep.sel);if(n instanceof HTMLInputElement){n.value=keep.value;if(keep.bad)n.classList.add('bad-input');n.focus({preventScroll:true})}}
  }finally{suppressChange=prevSuppress}
 }
 function spawnWorker():Worker|null{
@@ -139,7 +143,7 @@ store.subscribe((p,kind)=>{
  if(kind==='draft'){syncScene();status();return}
  if(timeOnly){updateTime(p,currentResult());syncScene();return}
  if(cameraOnly){updateGhost();return}
- if(kind==='project'){pending=false;invalid=false;stopPlayback();try{localStorage.setItem(ROOT_KEY,store.serialize())}catch{}recalculate()}
+ if(kind==='project'){pending=false;invalid=false;pendingInput=null;stopPlayback();try{localStorage.setItem(ROOT_KEY,store.serialize())}catch{}recalculate()}
  render();
 });
 function numberInput(input:HTMLInputElement){
@@ -149,7 +153,7 @@ function numberInput(input:HTMLInputElement){
 document.addEventListener('input',event=>{
  const i=event.target as HTMLInputElement;
  if(i.id==='time-slider'){stopPlayback();store.setView({timeSec:Number(i.value)});return}
- if(i.type!=='number')return;pending=true;
+ if(i.type!=='number')return;pending=true;pendingInput=i;
  try{if(i.value.trim()===''&&(i.dataset.price||i.hasAttribute('data-milk-baseline'))){}else numberInput(i);i.classList.remove('bad-input');invalid=!!document.querySelector('.bad-input')}catch{i.classList.add('bad-input');invalid=true}status();
 });
 document.addEventListener('change',event=>{
@@ -179,9 +183,18 @@ document.addEventListener('change',event=>{
   else if(i.hasAttribute('data-milk-baseline'))store.updateReferences({baselineMilkKgPerDay:value});
   else if(i.dataset.milk)store.updateMilk({[i.dataset.milk]:value} as Partial<import('./domain/project.js').MilkSimulation>);
   else if(i.dataset.fertility)store.updateFertility({[i.dataset.fertility]:value});
-  i.classList.remove('bad-input');pending=false;invalid=!!document.querySelector('.bad-input');if(!invalid)el('error-banner').hidden=true;status();
- }catch(e){invalid=true;pending=false;i.classList.add('bad-input');showError(e instanceof Error?e.message:String(e));status()}
+  i.classList.remove('bad-input');pending=false;pendingInput=null;invalid=!!document.querySelector('.bad-input');if(!invalid)el('error-banner').hidden=true;status();
+ }catch(e){invalid=true;pending=false;pendingInput=null;i.classList.add('bad-input');showError(e instanceof Error?e.message:String(e));status()}
 });
+// Esc/× close skips the input's change event; an uncommitted edit inside a
+// dialog would otherwise leave `pending` stuck with the value silently lost.
+// Commit it (or clear the flag when the value already matches) on close.
+document.addEventListener('close',e=>{
+ const d=e.target;
+ if(!(d instanceof HTMLDialogElement)||!pending||!pendingInput||!d.contains(pendingInput))return;
+ pendingInput.dispatchEvent(new Event('change',{bubbles:true}));
+ if(pending){pending=false;pendingInput=null;status()}
+},true);
 function download(name:string,object:unknown){const url=URL.createObjectURL(new Blob([typeof object==='string'?object:JSON.stringify(object,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 document.addEventListener('click',event=>{
  const inspect=(event.target as Element).closest<HTMLElement>('[data-inspect-probe]');

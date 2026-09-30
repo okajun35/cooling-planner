@@ -40,6 +40,9 @@ export function renderSummary(p:Project,r:SimulationResult|null){
 export function renderWeatherPanel(p:Project){
  setHTML('environment-fields',`${field('env-temperature','外気温',p.environment.temperatureC,'℃','data-env="temperatureC"',20,40,.5)}${field('env-humidity','相対湿度',p.environment.relativeHumidityPct,'%','data-env="relativeHumidityPct"',10,100,1)}${field('env-solar','屋根面日射',p.environment.solarRoofWm2,'W/m²','data-env="solarRoofWm2"',0,1200,50)}<div class="thi-badge"><small>外気THI</small><strong>${num(thi(p.environment.temperatureC,p.environment.relativeHumidityPct))}</strong></div>`);
  el('dimensions-label').textContent=`フリーストール / 50床 · ${p.template.lengthM} × ${p.template.widthM} m · 70評価点`;
+ el('weather-note').textContent=p.dailyWeather.mode==='hourly'
+  ?'地点別は60分計算（固定気象）。日乳量・日資源は時刻別気象（0〜23時）で積算する代表日です — 「設定・保存」で編集。気圧・背景風・換気は全時刻で共通です。'
+  :'地点別は60分計算。日乳量は同じ気象を24時間反復した代表日です。背景風速・空気交換は「設定・保存」にあります。';
 }
 
 /** Roof panel: whole-barn measures (existing toggles/details). */

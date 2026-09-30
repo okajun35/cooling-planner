@@ -45,7 +45,7 @@ export function layout(){return `
   <div id="panel-devices" class="panel-page" hidden><h3>設備・系統</h3><div id="system-controls"></div><h3>設備を選ぶ</h3><div id="device-selector"></div><p class="micro">ドックのファン・ソーカー・ミストボタンで新しい設備を配置できます。</p><p class="micro"><button data-action="panel-roof" class="text-button">屋根対策を開く →</button></p></div>
   <div id="panel-probe" class="panel-page" hidden><div class="panel-subhead"><label class="sr-only" for="probe-select">比較する地点</label><select id="probe-select"></select></div><div id="results"></div></div>
   <div id="panel-roof" class="panel-page" hidden><h3>屋根対策 <small>牛舎全体に適用</small></h3><div id="roof-controls"></div></div>
-  <div id="panel-weather" class="panel-page" hidden><h3>気象条件 <small>全案共通</small></h3><div id="environment-fields"></div><p class="micro">地点別は60分計算。日乳量は同じ気象を24時間反復した代表日です。背景風速・空気交換は「設定・保存」にあります。</p><p class="micro" id="dimensions-label"></p></div>
+  <div id="panel-weather" class="panel-page" hidden><h3>気象条件 <small>全案共通</small></h3><div id="environment-fields"></div><p class="micro" id="weather-note"></p><p class="micro" id="dimensions-label"></p></div>
  </aside>
  <section id="sheet" data-tab="" hidden>
   <div class="sheet-tabs" role="tablist" aria-label="結果と比較">
