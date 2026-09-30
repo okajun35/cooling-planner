@@ -39,13 +39,13 @@ Lambda MCP Function (Function URL, /mcp)         ─┘
 - [ ] `aws/lambda/core.ts`: project→ProjectStore→createCommands で `evaluate` を再現する共有部品
 - [ ] `aws/lambda/mcp.ts`: Function URL event → web Request 変換 + Bearer 認証 + `createMcpHandler`
 - [ ] `aws/lambda/api.ts`: `POST /simulate` / `GET /model` / `GET /health`
-- [ ] `aws/infra/`: CDK（Lambda×2, FunctionUrl×2, Amplify CfnApp+CfnBranch, Outputs）
-- [ ] `aws/deploy.mjs`: build → esbuild → cdk deploy → Amplify zip 手動デプロイ → URL表示
+- [ ] `aws/infra/`: CDK（Lambda×2, FunctionUrl×2, Outputs）
+- [ ] `aws/deploy.mjs`: build → esbuild → cdk deploy → URL表示
 - [ ] 検証: `npm run typecheck` / `npm test` / `npm run build` / `tsc -p aws` / curl で MCP initialize・tools/call・Amplify 200
 
 ## Amplify と GitHub 連携
 
-初回は Amplify の手動デプロイ（zip アップロード）で公開する。GitHub App 接続はブラウザでの OAuth 承認が必要で自動化できないため、継続デプロイが必要になった段階でコンソールから接続する（`okajun35/cooling-planner` 、branch: main, baseDirectory: dist-offline）。
+GitHub接続済みAmplifyアプリ（コンソールで作成）が `main` へのpushをトリガーに `amplify.yml` でビルド＆デプロイする（`okajun35/cooling-planner`、branch: main、artifacts: dist-offline）。スタック側の手動デプロイ用Amplifyリソースは削除済み。
 
 ## 既知の制限
 

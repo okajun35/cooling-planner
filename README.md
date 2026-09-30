@@ -121,14 +121,14 @@ devin mcp add cooling-planner -- node /home/hddwm390/tmp/cooling-planner/scripts
 
 ## AWS へのデプロイ
 
-実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `describe_model`（操作語彙はローカル版と同一）。
+実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト、GitHub連携で `main` への push で自動デプロイ）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `describe_model`（操作語彙はローカル版と同一）。
 
 ```sh
 cd aws && npm ci && cd ..
-npm run deploy:aws   # サイトbuild → Lambda bundle → cdk deploy → Amplify zip deploy
+npm run deploy:aws   # サイトbuild → Lambda bundle → cdk deploy（Lambdaバックエンドのみ）
 ```
 
-デプロイ状態（Bearerトークン・URL）は `aws/deploy.local.json`（git管理外）に保存されます。初回はCDK bootstrapが必要な場合自動で実行します。GitHub からの自動デプロイは、Amplifyコンソールで一度リポジトリを接続すると有効になります（`amplify.yml` 同梱済み）。
+デプロイ状態（Bearerトークン・URL）は `aws/deploy.local.json`（git管理外）に保存されます。初回はCDK bootstrapが必要な場合自動で実行します。サイトの公開はGitHub接続済みAmplifyアプリが `main` へのpushをトリガーに `amplify.yml` でビルドして行います。
 
 ## 保存形式
 

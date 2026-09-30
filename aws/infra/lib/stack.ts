@@ -1,13 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as amplify from 'aws-cdk-lib/aws-amplify';
 import {Construct} from 'constructs';
 import {fileURLToPath} from 'node:url';
 
 /** Cooling Planner on AWS:
  *  - cooling-planner-mcp: stateless streamable-HTTP MCP endpoint (Function URL)
  *  - cooling-planner-api: REST adapter for the same domain core (Function URL)
- *  - Amplify app (manual deploy mode): serves dist-offline/
+ *  The static site is hosted by a GitHub-connected Amplify app (console-managed,
+ *  auto-deploys on push to main via amplify.yml) — not part of this stack.
  *  Both Function URLs are authType NONE; handlers enforce a shared Bearer token
  *  supplied via the `mcpBearerToken` CDK context (managed by aws/deploy.mjs). */
 export class CoolingPlannerStack extends cdk.Stack{
@@ -42,14 +42,7 @@ export class CoolingPlannerStack extends cdk.Stack{
    allowedHeaders:['authorization','content-type'],
   }});
 
-  // Manual-deploy Amplify app (no repository connection). GitHub auto-deploy is
-  // enabled later by connecting the repo once in the Amplify console.
-  const amplifyApp=new amplify.CfnApp(this,'AmplifyApp',{name:'cooling-planner',platform:'WEB'});
-  new amplify.CfnBranch(this,'AmplifyMainBranch',{appId:amplifyApp.attrAppId,branchName:'main',stage:'PRODUCTION'});
-
   new cdk.CfnOutput(this,'McpUrl',{value:mcpUrl.url});
   new cdk.CfnOutput(this,'ApiUrl',{value:apiUrl.url});
-  new cdk.CfnOutput(this,'AmplifyAppId',{value:amplifyApp.attrAppId});
-  new cdk.CfnOutput(this,'AmplifyUrl',{value:`https://main.${amplifyApp.attrDefaultDomain}`});
  }
 }
