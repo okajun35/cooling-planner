@@ -21,6 +21,7 @@ import {buildLayout} from './template/layout.js';
 import {createCommands} from './mcp/commands.js';
 import type {EvalJob} from './mcp/commands.js';
 import {startMcpBridge} from './mcp/bridge.js';
+import {openProjectImport} from './ui/projectImport.js';
 
 declare global {interface Window {__DCS_WORKER_SOURCE__?:string;__DCS__?:unknown}}
 const store=new ProjectStore(createProject()),gate=new ResultGate();
@@ -111,7 +112,7 @@ function recalculate(){
  jobTimer=window.setTimeout(()=>{jobTimer=null;if(!worker)makeWorker();if(!worker){calculating=false;status();return}startTime=performance.now();worker.postMessage({jobId,inputHash:hash,project:store.committed})},100);
 }
 function stopPlayback(){playing=false;if(playTimer!==null)clearInterval(playTimer);playTimer=null;el('play-button').innerHTML=`${icon('play',15)} 再生`}
-function toggleSheet(tab:SheetTab){ws.sheet===tab?closeSheet(ws):openSheet(ws,tab);if(ws.sheet&&!ws.guide.done&&ws.guide.step===2){guideAdvance(ws);markGuideDone()}}
+function toggleSheet(tab:SheetTab){ws.sheet===tab?closeSheet(ws):openSheet(ws,tab);if(ws.sheet&&!ws.guide.done&&(ws.guide.step===3||ws.guide.step===0)){guideAdvance(ws);markGuideDone()}}
 function tryPlacement(kind:'fan'|'soaker'|'mist'){
  if(activeScenario(store.project).readOnly){toast('基準案は固定です。「編集案 A で試す」で切り替えます');return}
  if(ws.placement?.kind===kind){cancelPlacement(ws);return}
@@ -128,8 +129,9 @@ store.subscribe((p,kind)=>{
  if(p.view.selectedDeviceId&&p.view.selectedDeviceId!==prev.view.selectedDeviceId)openPanel(ws,'device');
  if(p.view.selectedProbeId&&p.view.selectedProbeId!==prev.view.selectedProbeId)openPanel(ws,'probe');
  if(!ws.guide.done){
-  if(ws.guide.step===0&&(p.view.selectedProbeId!==prev.view.selectedProbeId||p.view.metric!==prev.view.metric)){guideAdvance(ws)}
-  else if(ws.guide.step===1&&p.view.selectedDeviceId&&p.view.selectedDeviceId!==prev.view.selectedDeviceId){guideAdvance(ws)}
+  if(ws.guide.step===0&&(p.view.selectedProbeId!==prev.view.selectedProbeId||p.view.metric!==prev.view.metric||p.view.selectedDeviceId!==prev.view.selectedDeviceId)){guideAdvance(ws)}
+  else if(ws.guide.step===1&&(p.view.selectedProbeId!==prev.view.selectedProbeId||p.view.metric!==prev.view.metric)){guideAdvance(ws)}
+  else if(ws.guide.step===2&&p.view.selectedDeviceId&&p.view.selectedDeviceId!==prev.view.selectedDeviceId){guideAdvance(ws)}
  }
  const timeOnly=kind==='view'&&p.view.timeSec!==prev.view.timeSec&&JSON.stringify({...p.view,timeSec:0})===JSON.stringify({...prev.view,timeSec:0});
  const cameraOnly=kind==='view'&&JSON.stringify({...p.view,camera:null})===JSON.stringify({...prev.view,camera:null})&&JSON.stringify(p.view.camera)!==JSON.stringify(prev.view.camera);
@@ -180,6 +182,8 @@ document.addEventListener('change',event=>{
 });
 function download(name:string,object:unknown){const url=URL.createObjectURL(new Blob([typeof object==='string'?object:JSON.stringify(object,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 document.addEventListener('click',event=>{
+ const inspect=(event.target as Element).closest<HTMLElement>('[data-inspect-probe]');
+ if(inspect){safe(()=>{store.setView({selectedProbeId:inspect.dataset.inspectProbe!,metric:'deficit',heatmap:true});closeSheet(ws);openPanel(ws,'probe');render()});return}
  const areaRow=(event.target as Element).closest('[data-area]');
  if(areaRow){const id=areaRow.getAttribute('data-area');safe(()=>store.setView({selectedAreaId:store.project.view.selectedAreaId===id?null:id}));return}
  const b=(event.target as Element).closest<HTMLButtonElement>('button');if(!b||b.disabled)return;safe(()=>{
@@ -191,6 +195,10 @@ document.addEventListener('click',event=>{
  switch(b.dataset.action){
   case 'save':if(pending||invalid||store.isDraft)throw Error('入力を確定してから保存してください');download('cooling-planner-v9.json',store.serialize());toast('配置・環境・モデルの仮定を保存しました');break;
   case 'load':el<HTMLInputElement>('file-input').click();break;
+  case 'paste-project':{
+   document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
+   openProjectImport(store,()=>{invalid=false;pending=false;el('error-banner').hidden=true;render();toast('MCP案を読み込み、この画面で再計算しています')});break;
+  }
   case 'export-results':{const r=currentResult();if(!r)throw Error('計算完了後に保存してください');if(r.dailyMilkStatus==='pending')throw Error('日乳量の計算完了を待ってください');download('cooling-planner-v9-results.json',{appVersion:p.appVersion,project:p,result:r});break}
   case 'undo':store.undo();break;case 'redo':store.redo();break;
   case 'reset-active':store.resetActive();toast('編集案を基準の設定に戻しました');break;

@@ -1334,6 +1334,11 @@ function parseProject(text) {
     catch {
         fail('JSON', '読めないJSONです。現在の案は保持します');
     }
+    // MCP evaluate and result exports carry a full Project under `project`.
+    // Only inputs are restored; supplied calculation results are never trusted.
+    safeTree(p);
+    if (p && typeof p === 'object' && !Array.isArray(p) && !Object.hasOwn(p, 'schemaVersion') && Object.hasOwn(p, 'project'))
+        p = p.project;
     validateProject(p);
     return p;
 }

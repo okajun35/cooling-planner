@@ -32,7 +32,7 @@ export function closePanel(w:Workspace){w.panel=null}
 export function openSheet(w:Workspace,tab:SheetTab){w.sheet=tab}
 export function closeSheet(w:Workspace){w.sheet=null}
 
-export const GUIDE_STEPS=3;
+export const GUIDE_STEPS=4;
 export function guideAdvance(w:Workspace){if(!w.guide.done){w.guide.step++;if(w.guide.step>=GUIDE_STEPS)w.guide.done=true}}
 export function guideSkip(w:Workspace){w.guide.done=true}
 export function guideRestart(w:Workspace){w.guide={step:0,done:false}}

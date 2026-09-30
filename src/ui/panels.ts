@@ -7,6 +7,7 @@ import {esc,num,signed,icon,field,toggle,setHTML,el} from './dom.js';
 import {buildAreas} from '../template/faces.js';
 import {areaStats,deficitUnreached} from '../model/areaStats.js';
 import type {Workspace} from './workspaceState.js';
+import {comparisonContent,areaContent,heatExplanation} from './comparison.js';
 
 export function selectedResults(p:Project,r:SimulationResult|null){
  const scenario=r?.scenarios.find(s=>s.id===p.activeScenarioId),base=r?.scenarios.find(s=>s.id===p.baselineScenarioId);
@@ -124,6 +125,7 @@ export function renderProbePanel(p:Project,r:SimulationResult|null){
  ${kpi('牛位置の気温',q?.meanAirTemperatureC,'℃',b?.meanAirTemperatureC,'temp',`局所湿度 ${num(q?.meanRelativeHumidityPct)}%`)}
  ${kpi('屋根裏の温度',s?.roof.meanUnderC,'℃',s?selectedResults(p,r).base?.roof.meanUnderC:null,'roof',`平均放射温度 ${num(q?.meanRadiantC)}℃`)}
  ${kpi('送風体感温度',q?.meanFeelsLikeC,'℃',b?.meanFeelsLikeC,'fan',`全酪連掲載式 · 風速 ${num(q?.meanSpeedMps,2)}m/s`)}
+ ${heatExplanation(q,b)}
  <details id="probe-detail" class="probe-detail"><summary>濡れ方・放熱内訳・設備の作用</summary><table class="micro-table"><tbody>
  <tr><th>評価高さ</th><td>${num(probe?.heightM,2)} m（${esc(probe?.label??'')}）</td></tr>
  <tr><th>濡れ方</th><td>捕水 ${num(q?.film?.capturedKg,3)} kg・凝縮 ${num(q?.film?.condensedKg,3)} kg・蒸発 ${num(q?.film?.evaporatedKg,3)} kg・流出 ${num(q?.film?.runoffKg,3)} kg（60分累積）</td></tr>
@@ -152,22 +154,11 @@ export function renderReferencePane(p:Project,r:SimulationResult|null){
 }
 
 export function renderComparison(p:Project,r:SimulationResult|null){
- const qid=p.view.selectedProbeId;
- setHTML('comparison',`<div class="comparison-toolbar"><button data-action="copy-scenario" id="copy-scenario">別案へコピー</button><button data-action="reset-active" id="reset-active">基準に戻す</button><span class="micro">コピー・戻すは現在の編集案に対して実行します</span></div><div class="comparison-grid">${p.scenarios.map(sc=>{const s=r?.scenarios.find(v=>v.id===sc.id),q=s?.points.find(v=>v.probeId===qid),dres=s?.dailyMilk?.resources??null,cost=dres&&p.prices.electricityYenKwh!==null&&p.prices.waterYenM3!==null?dres.totalKwhPerDay*p.prices.electricityYenKwh+dres.waterLPerDay/1000*p.prices.waterYenM3:null,dm=s?.dailyMilk;
- const milkLine=dm?.status==='available'?`日乳量 <b>${num(dm.yieldKgPerCowDay)}</b> kg（${dm.deltaKgPerCowDay===null?'—':signed(dm.deltaKgPerCowDay)}）`:dm?`日乳量 <b>計算不可</b>`:'日乳量 <b>計算中…</b>';
- return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id===p.activeScenarioId?'active':''}"><h3>${esc(sc.name)}</h3><div><strong>${signed(q?.deltaQrefW,0)}</strong><small>W 放熱改善</small></div><p>局所気温 <b>${num(q?.meanAirTemperatureC)}℃</b><br>${milkLine}<br>日運転費 <b>${num(cost,0)}円</b></p><span class="micro">${sc.roof.reflectance>.5?'遮熱あり':'遮熱なし'} / ${sc.roof.insulationM>0?'断熱あり':'断熱なし'}</span></button>`}).join('')}</div><p class="micro">運転費は入力単価による試算。初期設備費・投資回収は計算しません。日乳量は仮説モデルの牛群平均です。</p>`);
+ setHTML('comparison',comparisonContent(p,r));
  el<HTMLButtonElement>('reset-active').disabled=activeScenario(p).readOnly;el<HTMLButtonElement>('copy-scenario').disabled=activeScenario(p).readOnly;
 }
-export function renderAreas(p:Project,r:SimulationResult|null){
- const l=buildLayout(p.template),s=r?.scenarios.find(x=>x.id===p.activeScenarioId);
- if(!s){setHTML('area-summary','<p class="micro">計算待ち</p>');return}
- const rows=buildAreas(l).map(a=>{
-  const st=areaStats(s.points,a);
-  return `<tr data-area="${esc(a.id)}" class="${p.view.selectedAreaId===a.id?'selected':''}${a.subtotal?' subtotal':''}"><th>${esc(a.label)}</th><td>${st.meanDeficitW===null?`未評価 ${st.validCount}/${st.probeCount}`:`${num(st.meanDeficitW,0)} W`}</td><td>${st.meanImprovementW===null?'—':signed(st.meanImprovementW,0)}</td><td>${st.deficitCount}/${st.probeCount}</td><td>${st.deficitNoActionCount}</td><td>${st.topDeficit.map(t=>esc(t.probeId)).join('、')||'—'}</td></tr>`;
- }).join('');
- setHTML('area-summary',`<div class="table-scroll"><table class="area-table"><thead><tr><th>エリア</th><th>不足</th><th>改善</th><th>不足点</th><th>未到達</th><th>不足上位3</th></tr></thead><tbody>${rows}</tbody></table></div><p class="micro">行をクリックすると対象の面を強調します。不足=Qrefに対する秒積算平均 / 未到達=不足があり局所設備の作用もない地点数。代表点の単純平均で、滞在時間・頭数の重みではありません。1点でも無効なら未評価です。</p>`);
-}
-export function renderSettings(p:Project){setHTML('settings-body',`<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${field('barn-length','長さ',p.template.lengthM,'m','data-template="lengthM"',32,48,.1)}${field('barn-width','幅',p.template.widthM,'m','data-template="widthM"',23.5,30,.1)}${field('background-wind','背景風速',p.environment.backgroundSpeedMps,'m/s','data-env="backgroundSpeedMps"',0,10,.01)}${field('ventilation','空気交換',p.environment.ventilationM3sPerM2,'m³/s/m²','data-env="ventilationM3sPerM2"',.0001,1,.001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p><h3>日運転費の試算単価</h3><div class="field-grid">${field('price-electricity','電力',p.prices.electricityYenKwh,'円/kWh','data-price="electricityYenKwh"',0,1e6,1)}${field('price-water','水',p.prices.waterYenM3,'円/m³','data-price="waterYenM3"',0,1e6,1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><p>新しい保存形式はschemaVersion 9です。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`)}
+export function renderAreas(p:Project,r:SimulationResult|null){setHTML('area-summary',areaContent(p,r))}
+export function renderSettings(p:Project){setHTML('settings-body',`<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${field('barn-length','長さ',p.template.lengthM,'m','data-template="lengthM"',32,48,.1)}${field('barn-width','幅',p.template.widthM,'m','data-template="widthM"',23.5,30,.1)}${field('background-wind','背景風速',p.environment.backgroundSpeedMps,'m/s','data-env="backgroundSpeedMps"',0,10,.01)}${field('ventilation','空気交換',p.environment.ventilationM3sPerM2,'m³/s/m²','data-env="ventilationM3sPerM2"',.0001,1,.001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p><h3>日運転費の試算単価</h3><div class="field-grid">${field('price-electricity','電力',p.prices.electricityYenKwh,'円/kWh','data-price="electricityYenKwh"',0,1e6,1)}${field('price-water','水',p.prices.waterYenM3,'円/m³','data-price="waterYenM3"',0,1e6,1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><button data-action="paste-project">MCP案のJSONを読込</button><p class="micro">MCPのevaluate応答全体またはprojectのJSONを貼付できます。JSONファイルは上部の「読込」でも復元できます。</p><p>新しい保存形式はschemaVersion 9です。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`)}
 export function renderReference(p:Project){
  const f=p.references.fertility,calc=fertilityReference({...f,mode:'manual',exposureAssumed:true},null,null);
  setHTML('reference-body',`<h3>乳量：掲載表をそのまま参照</h3><p>この表の表示は、現在の牛舎計算とは別です。実際の局所条件が一致する場合だけ結果カードへ反映します。</p>${field('baseline-milk','適温時の基準乳量',p.references.baselineMilkKgPerDay,'kg/頭/日','data-milk-baseline',0,100,.5)}<div class="table-scroll"><table><thead><tr><th>気温</th><th>風速</th><th>乳量比</th><th>参考kg/頭/日</th></tr></thead><tbody>${MILK_ROWS.map(row=>`<tr><td>${row.temperatureC}℃</td><td>${row.speedMps} m/s</td><td>${row.ratioPct}%</td><td>${num(milkReference(row.temperatureC,65,row.speedMps,p.references.baselineMilkKgPerDay).kgPerDay,2)}</td></tr>`).join('')}</tbody></table></div><p class="micro">全酪連COWBELL No.178 p.8、日本飼養標準2017・柴田ら1984の抜粋。相対湿度60〜70%。時間変動、補間、外挿、最近傍への丸めなし。</p>
@@ -233,10 +224,11 @@ export function renderChrome(p:Project,r:SimulationResult|null,w:Workspace){
  const g=el('guide-card');g.hidden=w.guide.done;
  if(!w.guide.done){
   const steps=[
+   {t:'LLMに相談できます（MCP）',x:'このシミュレーターはMCP経由でAIエージェントが計算・比較できます。つなぎ方は右上の「？ヘルプ」に載せています。'},
    {t:'暑さの分布を見る',x:'床の色は放熱不足の60分平均です。面をクリックすると地点を選べます。'},
    {t:'ファンを選んで動かす',x:'下の「ファン」で追加、既存の設備はドラッグで移動します。'},
    {t:'基準案と比べる',x:'「結果・比較」で同じ気象条件の基準案との差を確認します。'},
   ][w.guide.step]!;
-  el('guide-title').textContent=`${w.guide.step+1}/3 ${steps.t}`;el('guide-text').textContent=steps.x;
+  el('guide-title').textContent=`${w.guide.step+1}/4 ${steps.t}`;el('guide-text').textContent=steps.x;
  }
 }

@@ -190,7 +190,7 @@ function createServer(){
  },args=>relay('set_view',args));
 
  server.registerTool('evaluate',{
-  description:'画面を変えずに仮説を評価する。editと同じoperationの配列を、現在の確定済み状態の複製へ順に適用して計算し、その結果を返す。画面の案・設備・Undo履歴・再計算には影響しない。対象案はscenarioIdで指定（省略時は現在の案）。戻り値は適用した案の区画別集計・resources・roof・（includeDaily指定時）dailyMilkと、比較用の基準案集計。「この設備を置いたら？」「どの対策が効くか」といった試行はedit→undoではなくこのツールを使う。',
+  description:'画面を変えずに仮説を評価する。editと同じoperationの配列を、現在の確定済み状態の複製へ順に適用して計算し、その結果を返す。画面の案・設備・Undo履歴・再計算には影響しない。対象案はscenarioIdで指定（省略時は現在の案）。返値のprojectまたは応答全体をJSONファイルで渡すと、画面の読込／MCP案のJSONを読込から復元・再計算できる。戻り値は平均・最大不足と基準より不足が減らず残る地点のcomparison、適用した案の区画別集計・resources・roof・（includeDaily指定時）dailyMilkと、比較用の基準案集計。「この設備を置いたら？」「どの対策が効くか」といった試行はedit→undoではなくこのツールを使う。',
   inputSchema:z.strictObject({
    operations:z.array(editSchema).describe('複製へ順に適用する操作列（editと同じoperation/引数。空配列は現状そのままの計算）'),
    scenarioId:z.string().optional().describe('操作を適用する案ID。省略時は現在の案。基準案は読取専用'),

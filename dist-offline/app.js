@@ -41,6 +41,7 @@ const workspaceState_js_1 = require("./ui/workspaceState.js");
 const placement_js_1 = require("./template/placement.js");
 const commands_js_1 = require("./mcp/commands.js");
 const bridge_js_1 = require("./mcp/bridge.js");
+const projectImport_js_1 = require("./ui/projectImport.js");
 const store = new store_js_1.ProjectStore((0, defaults_js_1.createProject)()), gate = new protocol_js_1.ResultGate();
 let result = null, worker = null, scene = null, mode = '', calculating = false, lastCalculationMs = 0, startTime = 0, workerFailed = false, pending = false, invalid = false, workerError = null, suppressChange = false;
 let chart = 'qW', playing = false, playTimer = null, speed = 120, jobTimer = null;
@@ -298,7 +299,7 @@ function stopPlayback() {
 }
 function toggleSheet(tab) {
     ws.sheet === tab ? (0, workspaceState_js_1.closeSheet)(ws) : (0, workspaceState_js_1.openSheet)(ws, tab);
-    if (ws.sheet && !ws.guide.done && ws.guide.step === 2) {
+    if (ws.sheet && !ws.guide.done && (ws.guide.step === 3 || ws.guide.step === 0)) {
         (0, workspaceState_js_1.guideAdvance)(ws);
         markGuideDone();
     }
@@ -330,10 +331,13 @@ store.subscribe((p, kind) => {
     if (p.view.selectedProbeId && p.view.selectedProbeId !== prev.view.selectedProbeId)
         (0, workspaceState_js_1.openPanel)(ws, 'probe');
     if (!ws.guide.done) {
-        if (ws.guide.step === 0 && (p.view.selectedProbeId !== prev.view.selectedProbeId || p.view.metric !== prev.view.metric)) {
+        if (ws.guide.step === 0 && (p.view.selectedProbeId !== prev.view.selectedProbeId || p.view.metric !== prev.view.metric || p.view.selectedDeviceId !== prev.view.selectedDeviceId)) {
             (0, workspaceState_js_1.guideAdvance)(ws);
         }
-        else if (ws.guide.step === 1 && p.view.selectedDeviceId && p.view.selectedDeviceId !== prev.view.selectedDeviceId) {
+        else if (ws.guide.step === 1 && (p.view.selectedProbeId !== prev.view.selectedProbeId || p.view.metric !== prev.view.metric)) {
+            (0, workspaceState_js_1.guideAdvance)(ws);
+        }
+        else if (ws.guide.step === 2 && p.view.selectedDeviceId && p.view.selectedDeviceId !== prev.view.selectedDeviceId) {
             (0, workspaceState_js_1.guideAdvance)(ws);
         }
     }
@@ -485,6 +489,11 @@ document.addEventListener('change', event => {
 });
 function download(name, object) { const url = URL.createObjectURL(new Blob([typeof object === 'string' ? object : JSON.stringify(object, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 document.addEventListener('click', event => {
+    const inspect = event.target.closest('[data-inspect-probe]');
+    if (inspect) {
+        safe(() => { store.setView({ selectedProbeId: inspect.dataset.inspectProbe, metric: 'deficit', heatmap: true }); (0, workspaceState_js_1.closeSheet)(ws); (0, workspaceState_js_1.openPanel)(ws, 'probe'); render(); });
+        return;
+    }
     const areaRow = event.target.closest('[data-area]');
     if (areaRow) {
         const id = areaRow.getAttribute('data-area');
@@ -543,6 +552,11 @@ document.addEventListener('click', event => {
             case 'load':
                 (0, dom_js_1.el)('file-input').click();
                 break;
+            case 'paste-project': {
+                document.querySelectorAll('dialog[open]').forEach(d => d.close());
+                (0, projectImport_js_1.openProjectImport)(store, () => { invalid = false; pending = false; (0, dom_js_1.el)('error-banner').hidden = true; render(); toast('MCP案を読み込み、この画面で再計算しています'); });
+                break;
+            }
             case 'export-results': {
                 const r = currentResult();
                 if (!r)
@@ -12132,8 +12146,8 @@ const layout_js_1 = require("../template/layout.js");
 const physics_js_1 = require("../model/physics.js");
 const references_js_1 = require("../model/references.js");
 const dom_js_1 = require("./dom.js");
-const faces_js_1 = require("../template/faces.js");
 const areaStats_js_1 = require("../model/areaStats.js");
+const comparison_js_1 = require("./comparison.js");
 function selectedResults(p, r) {
     const scenario = r?.scenarios.find(s => s.id === p.activeScenarioId), base = r?.scenarios.find(s => s.id === p.baselineScenarioId);
     return { scenario, base, point: scenario?.points.find(q => q.probeId === p.view.selectedProbeId), baseline: base?.points.find(q => q.probeId === p.view.selectedProbeId) };
@@ -12259,6 +12273,7 @@ function renderProbePanel(p, r) {
  ${kpi('牛位置の気温', q?.meanAirTemperatureC, '℃', b?.meanAirTemperatureC, 'temp', `局所湿度 ${(0, dom_js_1.num)(q?.meanRelativeHumidityPct)}%`)}
  ${kpi('屋根裏の温度', s?.roof.meanUnderC, '℃', s ? selectedResults(p, r).base?.roof.meanUnderC : null, 'roof', `平均放射温度 ${(0, dom_js_1.num)(q?.meanRadiantC)}℃`)}
  ${kpi('送風体感温度', q?.meanFeelsLikeC, '℃', b?.meanFeelsLikeC, 'fan', `全酪連掲載式 · 風速 ${(0, dom_js_1.num)(q?.meanSpeedMps, 2)}m/s`)}
+ ${(0, comparison_js_1.heatExplanation)(q, b)}
  <details id="probe-detail" class="probe-detail"><summary>濡れ方・放熱内訳・設備の作用</summary><table class="micro-table"><tbody>
  <tr><th>評価高さ</th><td>${(0, dom_js_1.num)(probe?.heightM, 2)} m（${(0, dom_js_1.esc)(probe?.label ?? '')}）</td></tr>
  <tr><th>濡れ方</th><td>捕水 ${(0, dom_js_1.num)(q?.film?.capturedKg, 3)} kg・凝縮 ${(0, dom_js_1.num)(q?.film?.condensedKg, 3)} kg・蒸発 ${(0, dom_js_1.num)(q?.film?.evaporatedKg, 3)} kg・流出 ${(0, dom_js_1.num)(q?.film?.runoffKg, 3)} kg（60分累積）</td></tr>
@@ -12285,28 +12300,12 @@ function renderReferencePane(p, r) {
  <div class="result-note">放熱Wの乳量への変換は仮説モデル milk-heat-deficit-v0.1 のみ。牛の深部体温や実農場の効果を保証する値ではありません。</div>`);
 }
 function renderComparison(p, r) {
-    const qid = p.view.selectedProbeId;
-    (0, dom_js_1.setHTML)('comparison', `<div class="comparison-toolbar"><button data-action="copy-scenario" id="copy-scenario">別案へコピー</button><button data-action="reset-active" id="reset-active">基準に戻す</button><span class="micro">コピー・戻すは現在の編集案に対して実行します</span></div><div class="comparison-grid">${p.scenarios.map(sc => {
-        const s = r?.scenarios.find(v => v.id === sc.id), q = s?.points.find(v => v.probeId === qid), dres = s?.dailyMilk?.resources ?? null, cost = dres && p.prices.electricityYenKwh !== null && p.prices.waterYenM3 !== null ? dres.totalKwhPerDay * p.prices.electricityYenKwh + dres.waterLPerDay / 1000 * p.prices.waterYenM3 : null, dm = s?.dailyMilk;
-        const milkLine = dm?.status === 'available' ? `日乳量 <b>${(0, dom_js_1.num)(dm.yieldKgPerCowDay)}</b> kg（${dm.deltaKgPerCowDay === null ? '—' : (0, dom_js_1.signed)(dm.deltaKgPerCowDay)}）` : dm ? `日乳量 <b>計算不可</b>` : '日乳量 <b>計算中…</b>';
-        return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id === p.activeScenarioId ? 'active' : ''}"><h3>${(0, dom_js_1.esc)(sc.name)}</h3><div><strong>${(0, dom_js_1.signed)(q?.deltaQrefW, 0)}</strong><small>W 放熱改善</small></div><p>局所気温 <b>${(0, dom_js_1.num)(q?.meanAirTemperatureC)}℃</b><br>${milkLine}<br>日運転費 <b>${(0, dom_js_1.num)(cost, 0)}円</b></p><span class="micro">${sc.roof.reflectance > .5 ? '遮熱あり' : '遮熱なし'} / ${sc.roof.insulationM > 0 ? '断熱あり' : '断熱なし'}</span></button>`;
-    }).join('')}</div><p class="micro">運転費は入力単価による試算。初期設備費・投資回収は計算しません。日乳量は仮説モデルの牛群平均です。</p>`);
+    (0, dom_js_1.setHTML)('comparison', (0, comparison_js_1.comparisonContent)(p, r));
     (0, dom_js_1.el)('reset-active').disabled = (0, project_js_1.activeScenario)(p).readOnly;
     (0, dom_js_1.el)('copy-scenario').disabled = (0, project_js_1.activeScenario)(p).readOnly;
 }
-function renderAreas(p, r) {
-    const l = (0, layout_js_1.buildLayout)(p.template), s = r?.scenarios.find(x => x.id === p.activeScenarioId);
-    if (!s) {
-        (0, dom_js_1.setHTML)('area-summary', '<p class="micro">計算待ち</p>');
-        return;
-    }
-    const rows = (0, faces_js_1.buildAreas)(l).map(a => {
-        const st = (0, areaStats_js_1.areaStats)(s.points, a);
-        return `<tr data-area="${(0, dom_js_1.esc)(a.id)}" class="${p.view.selectedAreaId === a.id ? 'selected' : ''}${a.subtotal ? ' subtotal' : ''}"><th>${(0, dom_js_1.esc)(a.label)}</th><td>${st.meanDeficitW === null ? `未評価 ${st.validCount}/${st.probeCount}` : `${(0, dom_js_1.num)(st.meanDeficitW, 0)} W`}</td><td>${st.meanImprovementW === null ? '—' : (0, dom_js_1.signed)(st.meanImprovementW, 0)}</td><td>${st.deficitCount}/${st.probeCount}</td><td>${st.deficitNoActionCount}</td><td>${st.topDeficit.map(t => (0, dom_js_1.esc)(t.probeId)).join('、') || '—'}</td></tr>`;
-    }).join('');
-    (0, dom_js_1.setHTML)('area-summary', `<div class="table-scroll"><table class="area-table"><thead><tr><th>エリア</th><th>不足</th><th>改善</th><th>不足点</th><th>未到達</th><th>不足上位3</th></tr></thead><tbody>${rows}</tbody></table></div><p class="micro">行をクリックすると対象の面を強調します。不足=Qrefに対する秒積算平均 / 未到達=不足があり局所設備の作用もない地点数。代表点の単純平均で、滞在時間・頭数の重みではありません。1点でも無効なら未評価です。</p>`);
-}
-function renderSettings(p) { (0, dom_js_1.setHTML)('settings-body', `<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${(0, dom_js_1.field)('barn-length', '長さ', p.template.lengthM, 'm', 'data-template="lengthM"', 32, 48, .1)}${(0, dom_js_1.field)('barn-width', '幅', p.template.widthM, 'm', 'data-template="widthM"', 23.5, 30, .1)}${(0, dom_js_1.field)('background-wind', '背景風速', p.environment.backgroundSpeedMps, 'm/s', 'data-env="backgroundSpeedMps"', 0, 10, .01)}${(0, dom_js_1.field)('ventilation', '空気交換', p.environment.ventilationM3sPerM2, 'm³/s/m²', 'data-env="ventilationM3sPerM2"', .0001, 1, .001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p><h3>日運転費の試算単価</h3><div class="field-grid">${(0, dom_js_1.field)('price-electricity', '電力', p.prices.electricityYenKwh, '円/kWh', 'data-price="electricityYenKwh"', 0, 1e6, 1)}${(0, dom_js_1.field)('price-water', '水', p.prices.waterYenM3, '円/m³', 'data-price="waterYenM3"', 0, 1e6, 1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><p>新しい保存形式はschemaVersion 9です。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`); }
+function renderAreas(p, r) { (0, dom_js_1.setHTML)('area-summary', (0, comparison_js_1.areaContent)(p, r)); }
+function renderSettings(p) { (0, dom_js_1.setHTML)('settings-body', `<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${(0, dom_js_1.field)('barn-length', '長さ', p.template.lengthM, 'm', 'data-template="lengthM"', 32, 48, .1)}${(0, dom_js_1.field)('barn-width', '幅', p.template.widthM, 'm', 'data-template="widthM"', 23.5, 30, .1)}${(0, dom_js_1.field)('background-wind', '背景風速', p.environment.backgroundSpeedMps, 'm/s', 'data-env="backgroundSpeedMps"', 0, 10, .01)}${(0, dom_js_1.field)('ventilation', '空気交換', p.environment.ventilationM3sPerM2, 'm³/s/m²', 'data-env="ventilationM3sPerM2"', .0001, 1, .001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p><h3>日運転費の試算単価</h3><div class="field-grid">${(0, dom_js_1.field)('price-electricity', '電力', p.prices.electricityYenKwh, '円/kWh', 'data-price="electricityYenKwh"', 0, 1e6, 1)}${(0, dom_js_1.field)('price-water', '水', p.prices.waterYenM3, '円/m³', 'data-price="waterYenM3"', 0, 1e6, 1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><button data-action="paste-project">MCP案のJSONを読込</button><p class="micro">MCPのevaluate応答全体またはprojectのJSONを貼付できます。JSONファイルは上部の「読込」でも復元できます。</p><p>新しい保存形式はschemaVersion 9です。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`); }
 function renderReference(p) {
     const f = p.references.fertility, calc = (0, references_js_1.fertilityReference)({ ...f, mode: 'manual', exposureAssumed: true }, null, null);
     (0, dom_js_1.setHTML)('reference-body', `<h3>乳量：掲載表をそのまま参照</h3><p>この表の表示は、現在の牛舎計算とは別です。実際の局所条件が一致する場合だけ結果カードへ反映します。</p>${(0, dom_js_1.field)('baseline-milk', '適温時の基準乳量', p.references.baselineMilkKgPerDay, 'kg/頭/日', 'data-milk-baseline', 0, 100, .5)}<div class="table-scroll"><table><thead><tr><th>気温</th><th>風速</th><th>乳量比</th><th>参考kg/頭/日</th></tr></thead><tbody>${references_js_1.MILK_ROWS.map(row => `<tr><td>${row.temperatureC}℃</td><td>${row.speedMps} m/s</td><td>${row.ratioPct}%</td><td>${(0, dom_js_1.num)((0, references_js_1.milkReference)(row.temperatureC, 65, row.speedMps, p.references.baselineMilkKgPerDay).kgPerDay, 2)}</td></tr>`).join('')}</tbody></table></div><p class="micro">全酪連COWBELL No.178 p.8、日本飼養標準2017・柴田ら1984の抜粋。相対湿度60〜70%。時間変動、補間、外挿、最近傍への丸めなし。</p>
@@ -12385,13 +12384,111 @@ function renderChrome(p, r, w) {
     g.hidden = w.guide.done;
     if (!w.guide.done) {
         const steps = [
+            { t: 'LLMに相談できます（MCP）', x: 'このシミュレーターはMCP経由でAIエージェントが計算・比較できます。つなぎ方は右上の「？ヘルプ」に載せています。' },
             { t: '暑さの分布を見る', x: '床の色は放熱不足の60分平均です。面をクリックすると地点を選べます。' },
             { t: 'ファンを選んで動かす', x: '下の「ファン」で追加、既存の設備はドラッグで移動します。' },
             { t: '基準案と比べる', x: '「結果・比較」で同じ気象条件の基準案との差を確認します。' },
         ][w.guide.step];
-        (0, dom_js_1.el)('guide-title').textContent = `${w.guide.step + 1}/3 ${steps.t}`;
+        (0, dom_js_1.el)('guide-title').textContent = `${w.guide.step + 1}/4 ${steps.t}`;
         (0, dom_js_1.el)('guide-text').textContent = steps.x;
     }
+}
+
+},
+"ui/comparison.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.comparisonContent = comparisonContent;
+exports.areaContent = areaContent;
+exports.heatExplanation = heatExplanation;
+const layout_js_1 = require("../template/layout.js");
+const faces_js_1 = require("../template/faces.js");
+const comparisonStats_js_1 = require("../model/comparisonStats.js");
+const areaStats_js_1 = require("../model/areaStats.js");
+const dom_js_1 = require("./dom.js");
+const watts = (v) => v == null ? '未評価' : `${(0, dom_js_1.num)(v, 0)} W`;
+const count = (v) => v == null ? '未評価' : String(v);
+const reduction = (v) => v == null ? '比較不可' : `${(0, dom_js_1.signed)(v, 0)} W`;
+function comparisonContent(p, r) {
+    const l = (0, layout_js_1.buildLayout)(p.template), areas = (0, faces_js_1.buildAreas)(l), base = r?.scenarios.find(s => s.id === p.baselineScenarioId);
+    const cards = p.scenarios.map(sc => {
+        const s = r?.scenarios.find(s => s.id === sc.id), stats = s ? (0, comparisonStats_js_1.comparisonStats)(s.points, base?.points ?? [], { id: 'all', label: '全地点', probeIds: l.probes.map(q => q.id) }) : null;
+        const res = s?.dailyMilk?.resources, baseRes = base?.dailyMilk?.resources;
+        const areaLines = ['stalls', 'feeding', 'waiting'].map(id => {
+            const a = areas.find(a => a.id === id), st = s ? (0, comparisonStats_js_1.comparisonStats)(s.points, base?.points ?? [], a) : null;
+            return `<tr><th>${(0, dom_js_1.esc)(a.label.replace('（小計）', ''))}</th><td>${watts(st?.meanDeficitW)}</td><td>${watts(st?.maxDeficitW)}</td></tr>`;
+        }).join('');
+        return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id === p.activeScenarioId ? 'active' : ''}" data-comparison="${sc.id}"><h3>${(0, dom_js_1.esc)(sc.name)}</h3>
+   <div><strong>${stats?.meanDeficitW == null ? '未評価' : (0, dom_js_1.num)(stats.meanDeficitW, 0)}</strong><small> W 平均放熱不足</small></div>
+   <p>基準から不足低減 <b>${reduction(stats?.deficitReductionW)}</b><br>最大の不足 <b>${watts(stats?.maxDeficitW)}</b><br>不足が残る地点 <b>${stats?.meanDeficitW == null ? '未評価' : `${stats.deficitCount}/${stats.probeCount}`}</b><br>不足が減らず残る <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> 地点 / 不足増加 <b>${count(stats?.worsenedDeficitCount)}</b> 地点</p>
+   <table class="micro-table"><thead><tr><th>場所</th><th>平均不足</th><th>最大不足</th></tr></thead><tbody>${areaLines}</tbody></table>
+   <p>水 <b>${res ? (0, dom_js_1.num)(res.waterLPerDay, 0) + ' L/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.waterLPerDay - baseRes.waterLPerDay, 0)}）` : ''}<br>電力 <b>${res ? (0, dom_js_1.num)(res.totalKwhPerDay, 1) + ' kWh/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.totalKwhPerDay - baseRes.totalKwhPerDay, 1)}）` : ''}</p>
+   <span class="micro">${sc.roof.reflectance > .5 ? '遮熱あり' : '遮熱なし'} / ${sc.roof.insulationM > 0 ? '断熱あり' : '断熱なし'}</span></button>`;
+    }).join('');
+    const active = r?.scenarios.find(s => s.id === p.activeScenarioId);
+    const st = active ? (0, comparisonStats_js_1.comparisonStats)(active.points, base?.points ?? [], { id: 'all', label: '全地点', probeIds: l.probes.map(q => q.id) }) : null;
+    const worst = st?.topRemaining.map(q => `<li><button class="text-button" data-inspect-probe="${(0, dom_js_1.esc)(q.probeId)}">${(0, dom_js_1.esc)(l.probes.find(p => p.id === q.probeId)?.label ?? q.probeId)}：不足 ${watts(q.deficitW)}</button> · 基準から低減 ${reduction(q.deficitReductionW)}${q.noLocalAction ? ' · 局所作用なし' : ''}</li>`).join('');
+    return `<div class="comparison-toolbar"><button data-action="copy-scenario" id="copy-scenario">別案へコピー</button><button data-action="reset-active" id="reset-active">基準に戻す</button><button data-action="paste-project">MCP案のJSONを読込</button></div>
+  <div class="comparison-grid">${cards}</div>
+  <div class="assumption-box" id="remaining-deficits"><strong>選択案で不足が大きい場所</strong>${worst ? `<ol>${worst}</ol>` : '<p>不足地点なし、または未評価です。</p>'}${st && st.invalidCount ? `<p>未評価 ${st.invalidCount}/${st.probeCount} 地点。上位は評価できた地点のみ。</p>` : ''}</div>
+  <p class="micro">不足・場所は固定気象60分の代表点平均。平均は70地点の単純平均で、頭数・滞在時間の重みではありません。最大は地点ごとの60分平均不足の最大です。不足低減は基準の不足−案の不足（正が改善）。「減らず残る」は不足があり、基準より不足が減っていない地点。「局所作用なし」は送風・牛体散水・ミストの作用がない診断で、屋根対策の効果は含みません。</p>
+  <p class="micro">水・電力は別の評価日24時間の運転を積算。60分不足と日資源は集計期間が異なり、日全体の最適案を示すものではありません。乳量・受胎と運転費は参考影響タブで確認できます。</p>`;
+}
+function areaContent(p, r) {
+    const l = (0, layout_js_1.buildLayout)(p.template), s = r?.scenarios.find(s => s.id === p.activeScenarioId), base = r?.scenarios.find(s => s.id === p.baselineScenarioId);
+    if (!s)
+        return '<p class="micro">計算待ち</p>';
+    const rows = (0, faces_js_1.buildAreas)(l).map(a => {
+        const st = (0, comparisonStats_js_1.comparisonStats)(s.points, base?.points ?? [], a);
+        return `<tr data-area="${(0, dom_js_1.esc)(a.id)}" class="${p.view.selectedAreaId === a.id ? 'selected' : ''}${a.subtotal ? ' subtotal' : ''}"><th>${(0, dom_js_1.esc)(a.label)}</th><td>${watts(st.meanDeficitW)}</td><td>${watts(st.maxDeficitW)}</td><td>${reduction(st.deficitReductionW)}</td><td>${st.meanDeficitW === null ? '未評価' : `${st.deficitCount}/${st.probeCount}`}</td><td>${count(st.unchangedOrWorseDeficitCount)}</td><td>${st.meanDeficitW === null ? '未評価' : st.deficitNoActionCount}</td><td>${st.topRemaining.map(q => `<button class="text-button" data-inspect-probe="${(0, dom_js_1.esc)(q.probeId)}">${(0, dom_js_1.esc)(l.probes.find(p => p.id === q.probeId)?.label ?? q.probeId)} ${watts(q.deficitW)}</button>`).join('<br>') || '—'}</td></tr>`;
+    }).join('');
+    return `<div class="table-scroll"><table class="area-table"><thead><tr><th>エリア</th><th>平均不足</th><th>最大不足</th><th>不足低減</th><th>不足点</th><th>減らず残る</th><th>局所作用なし</th><th>不足上位3（地点を確認）</th></tr></thead><tbody>${rows}</tbody></table></div><p class="micro">行でエリアを強調、上位地点のボタンで場所・放熱内訳を確認。不足はQrefに対する秒積算の60分平均で、最大はその地点間の最大。低減は基準−案。「減らず残る」は不足があり基準より不足が減っていない地点。「局所作用なし」は不足があり送風・牛体散水・ミストの作用がない地点で、屋根効果は含みません。平均は代表点の単純平均。1点でも無効なら全体平均・最大・件数は未評価、上位は評価できた地点のみ。</p>`;
+}
+function heatExplanation(q, b) {
+    if (q?.status !== 'valid' || !q.components)
+        return '';
+    const names = { convectionW: '対流', radiationW: '放射', baseEvaporationW: '通常蒸発', soakerEvaporationW: '牛体散水の蒸発', condensationW: '結露' };
+    const rows = Object.entries(names).map(([k, name]) => {
+        const key = k, v = q.components[key], bv = b?.status === 'valid' ? b.components?.[key] : null;
+        return `<tr><th>${name}</th><td>${watts(v)}</td><td>${bv == null ? '比較不可' : (0, dom_js_1.signed)(v - bv, 0) + ' W'}</td></tr>`;
+    }).join('');
+    const observations = [];
+    if ((0, areaStats_js_1.hasDeficit)(q))
+        observations.push('放熱不足が残っています。改善量と残る不足を一緒に確認してください。');
+    if ((0, areaStats_js_1.noLocalAction)(q))
+        observations.push('送風・牛体散水・ミストの局所作用はありません。屋根対策の改善とは別の診断です。');
+    if (q.components.radiationW < 0)
+        observations.push('放射は負の放熱：周囲から受ける熱が残っています。');
+    if (q.components.convectionW < 0)
+        observations.push('対流は負の放熱：空気から熱を受けています。');
+    if (q.film && q.film.runoffKg > 1e-6)
+        observations.push(`捕水のうち ${(0, dom_js_1.num)(q.film.runoffKg, 3)} kg が流出。供給した水がすべて蒸発するわけではありません。`);
+    return `<div class="assumption-box" id="heat-explanation"><strong>この場所の放熱内訳と基準差（60分平均）</strong><table><thead><tr><th>経路</th><th>案の放熱</th><th>基準との差</th></tr></thead><tbody>${rows}</tbody></table>${observations.map(t => `<p>${(0, dom_js_1.esc)(t)}</p>`).join('')}<p>正は放熱、負は受熱。内訳の差は複合設備を同時計算した結果で、設備別の独立した寄与ではありません。</p></div>`;
+}
+
+},
+"model/comparisonStats.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.comparisonStats = comparisonStats;
+const areaStats_js_1 = require("./areaStats.js");
+/** Display diagnostics only. A reduction compares accumulated deficits, not mean Q.
+ * The epsilon is a numerical-zero guard, never a biological adequacy threshold. */
+function comparisonStats(points, baseline, area) {
+    const stats = (0, areaStats_js_1.areaStats)(points, area), base = (0, areaStats_js_1.areaStats)(baseline, area);
+    const reduction = (q) => {
+        const b = baseline.find(b => b.probeId === q.probeId);
+        return q.status === 'valid' && q.meanDeficitW != null && b?.status === 'valid' && b.meanDeficitW != null ? b.meanDeficitW - q.meanDeficitW : null;
+    };
+    const remaining = points.filter(q => area.probeIds.includes(q.probeId) && q.status === 'valid' && (0, areaStats_js_1.hasDeficit)(q));
+    const comparable = stats.meanDeficitW !== null && base.meanDeficitW !== null;
+    return { ...stats,
+        maxDeficitW: stats.meanDeficitW === null ? null : stats.maxDeficitW,
+        deficitReductionW: comparable ? base.meanDeficitW - stats.meanDeficitW : null,
+        unchangedOrWorseDeficitCount: comparable ? remaining.filter(q => reduction(q) <= 1e-6).length : null,
+        worsenedDeficitCount: comparable ? points.filter(q => area.probeIds.includes(q.probeId) && reduction(q) < -1e-6).length : null,
+        topRemaining: [...remaining].sort((a, b) => b.meanDeficitW - a.meanDeficitW || a.probeId.localeCompare(b.probeId)).slice(0, 3).map(q => ({ probeId: q.probeId, deficitW: q.meanDeficitW, deficitReductionW: reduction(q), noLocalAction: (0, areaStats_js_1.noLocalAction)(q) })),
+    };
 }
 
 },
@@ -12492,7 +12589,7 @@ function openPanel(w, kind) { w.panel = kind; }
 function closePanel(w) { w.panel = null; }
 function openSheet(w, tab) { w.sheet = tab; }
 function closeSheet(w) { w.sheet = null; }
-exports.GUIDE_STEPS = 3;
+exports.GUIDE_STEPS = 4;
 function guideAdvance(w) {
     if (!w.guide.done) {
         w.guide.step++;
@@ -12515,7 +12612,7 @@ const project_js_1 = require("../domain/project.js");
 const store_js_1 = require("../state/store.js");
 const layout_js_1 = require("../template/layout.js");
 const faces_js_1 = require("../template/faces.js");
-const areaStats_js_1 = require("../model/areaStats.js");
+const comparisonStats_js_1 = require("../model/comparisonStats.js");
 const simulation_js_1 = require("../model/simulation.js");
 const dailySimulation_js_1 = require("../model/dailySimulation.js");
 const modelInfo_js_1 = require("../model/modelInfo.js");
@@ -12530,6 +12627,8 @@ exports.MODEL_NOTES = [
     'meanQrefWは地点の正味放熱量。referenceCoolingWPerCowは不足計算に用いる仮定値。',
     'deltaQrefWは基準案からの放熱差。meanDeficitWは秒ごとの不足を積算した60分平均。',
     '区画平均は代表地点の単純平均。乳量の牛群平均・滞在時間加重とは異なる。',
+    'comparisonとareasは60分平均不足の診断。deficitReductionWは基準不足−案不足（正が改善）、unchangedOrWorseDeficitCountは不足が減らず残る地点数。局所作用なしは屋根効果と別。平均だけで案を選ばない。',
+    'evaluateのprojectには配置・共通気象・モデル係数・基準案が含まれる。返値全体かprojectをJSONとして渡すと画面の読込／MCP案のJSONを読込で復元し再計算できる。',
     'resourcesの単位はL/day、kWh/day。trialWaterL/trialKwhは60分試行分。日乳量の資源量はdailyMilk.resources。',
     '地点のseriesを省いて返す平均値は、timeSecを変えても変化しない。',
     '各面は代表地点の値。CFDや面内全域の計算ではない。',
@@ -12710,7 +12809,7 @@ async function evaluateOnProject(project, args, runEval) {
         if (!sr)
             return null;
         const meta = p.scenarios.find(s => s.id === id), { series: _, ...roof } = sr.roof;
-        return { id, name: meta.name, readOnly: meta.readOnly, warnings: sr.warnings, areas: areas.map(a => (0, areaStats_js_1.areaStats)(sr.points, a)), resources: sr.resources, trialWaterL: sr.trialWaterL, trialKwh: sr.trialKwh, roof, dailyMilk: job.daily ? sr.dailyMilk : undefined };
+        return { id, name: meta.name, readOnly: meta.readOnly, warnings: sr.warnings, comparison: (0, comparisonStats_js_1.comparisonStats)(sr.points, job.thermal.scenarios.find(s => s.id === p.baselineScenarioId)?.points ?? [], { id: 'all', label: '全地点', probeIds: layout(p).probes.map(q => q.id) }), areas: areas.map(a => (0, comparisonStats_js_1.comparisonStats)(sr.points, job.thermal.scenarios.find(s => s.id === p.baselineScenarioId)?.points ?? [], a)), resources: sr.resources, trialWaterL: sr.trialWaterL, trialKwh: sr.trialKwh, roof, dailyMilk: job.daily ? sr.dailyMilk : undefined };
     };
     return {
         scenarioId: p.activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(p), operations: applied,
@@ -12743,8 +12842,7 @@ function createCommands(d) {
     /** Applies ops to a cloned project, simulates it, and returns results. Never touches the live store. */
     async function evaluate(args) {
         const r = await evaluateOnProject(store.committed, args, d.evaluate);
-        const { project: _, ...rest } = r;
-        return { ...rest, note: '仮の複製へ操作を適用して計算した結果です。画面の案・設備・Undo履歴は変わっていません' };
+        return { ...r, note: '仮の複製へ操作を適用した結果です。画面は変わっていません。返値全体またはprojectをJSON保存し、画面の読込／MCP案のJSONを読込で復元できます' };
     }
     function setView(args) {
         const p = store.committed, l = layout(p), patch = {};
@@ -12804,7 +12902,7 @@ function createCommands(d) {
         const scenarios = wanted.map(id => {
             const sr = r.scenarios.find(s => s.id === id), { series: _, ...roof } = sr.roof;
             const meta = p.scenarios.find(s => s.id === id);
-            return { id, name: meta.name, readOnly: meta.readOnly, warnings: sr.warnings, areas: areas.map(a => (0, areaStats_js_1.areaStats)(sr.points, a)), resources: sr.resources, trialWaterL: sr.trialWaterL, trialKwh: sr.trialKwh, roof, dailyMilk: sr.dailyMilk };
+            return { id, name: meta.name, readOnly: meta.readOnly, warnings: sr.warnings, comparison: (0, comparisonStats_js_1.comparisonStats)(sr.points, r.scenarios.find(s => s.id === p.baselineScenarioId)?.points ?? [], { id: 'all', label: '全地点', probeIds: l.probes.map(q => q.id) }), areas: areas.map(a => (0, comparisonStats_js_1.comparisonStats)(sr.points, r.scenarios.find(s => s.id === p.baselineScenarioId)?.points ?? [], a)), resources: sr.resources, trialWaterL: sr.trialWaterL, trialKwh: sr.trialKwh, roof, dailyMilk: sr.dailyMilk };
         });
         const points = Object.fromEntries(wanted.map(id => {
             const q = r.scenarios.find(s => s.id === id).points.find(q => q.probeId === probe.id);
@@ -12960,6 +13058,44 @@ function startMcpBridge(opts) {
         }
     };
     ws.onclose = ev => { opts.notify(ev.reason ? `MCP接続が閉じられました: ${ev.reason}` : 'MCP接続が閉じられました。ページを再読込すると再接続します'); };
+}
+
+},
+"ui/projectImport.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.openProjectImport = openProjectImport;
+const validation_js_1 = require("../domain/validation.js");
+/** Kept outside layout.ts so layout work can proceed independently. The textarea
+ * is not rebuilt on worker messages, preserving pasted input while calculating. */
+function openProjectImport(store, onImported) {
+    let dialog = document.getElementById('project-import-dialog');
+    if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'project-import-dialog';
+        dialog.innerHTML = `<div class="dialog-head"><h2>MCP案のJSONを読込</h2><button type="button" data-close="project-import-dialog" aria-label="閉じる">×</button></div><div><p>MCPのevaluateが返したJSON全体、またはprojectのJSONを貼り付けてください。配置・気象・モデル係数・基準案をまとめて復元し、この画面で再計算します。</p><label for="project-import-text">案のJSON（最大2MiB）</label><textarea id="project-import-text" rows="10" style="width:100%;box-sizing:border-box" spellcheck="false"></textarea><p class="micro">読込は全案・共通条件を置き換えます。戻すで読込前の条件へ戻せます。受け取った計算結果は表示せず再計算します。</p><button type="button" id="project-import-apply">読み込んで再計算</button><p id="project-import-error" role="alert" hidden></p></div>`;
+        document.body.append(dialog);
+        const apply = dialog.querySelector('#project-import-apply'), text = dialog.querySelector('#project-import-text'), error = dialog.querySelector('#project-import-error');
+        apply.addEventListener('click', () => {
+            try {
+                const project = (0, validation_js_1.parseProject)(text.value);
+                // Normalize an envelope back to a plain saved Project. This also discards
+                // claimed result values, hashes and explanatory text from the other client.
+                store.importJSON(JSON.stringify(project));
+                dialog.close();
+                onImported();
+            }
+            catch (e) {
+                error.textContent = e instanceof Error ? e.message : String(e);
+                error.hidden = false;
+            }
+        });
+        text.addEventListener('input', () => { error.hidden = true; });
+    }
+    const error = dialog.querySelector('#project-import-error');
+    error.hidden = true;
+    dialog.showModal();
+    dialog.querySelector('textarea').focus();
 }
 
 }};const cache={};function resolve(id,from){if(!id.startsWith('.')){if(modules[id])return id;throw Error('Optional dependency not included in the offline distribution: '+id)}const out=[];for(const x of (from.slice(0,from.lastIndexOf('/')+1)+id).split('/')){if(x==='..')out.pop();else if(x!=='.'&&x)out.push(x)}return out.join('/')}function load(id){if(cache[id])return cache[id].exports;const fn=modules[id];if(!fn)throw Error('Missing module: '+id);const module={exports:{}};cache[id]=module;fn(s=>load(resolve(s,id)),module,module.exports);return module.exports}load("main.js");})();

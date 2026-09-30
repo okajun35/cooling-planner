@@ -3,7 +3,7 @@ import {activeScenario,devices,isFan} from '../domain/project.js';
 import {ProjectStore} from '../state/store.js';
 import {buildLayout} from '../template/layout.js';
 import {areaOfProbe,buildAreas} from '../template/faces.js';
-import {areaStats} from '../model/areaStats.js';
+import {comparisonStats} from '../model/comparisonStats.js';
 import {inputHash} from '../model/simulation.js';
 import {mergeDaily} from '../model/dailySimulation.js';
 import {describeModel} from '../model/modelInfo.js';
@@ -40,6 +40,8 @@ export const MODEL_NOTES=[
  'meanQrefWは地点の正味放熱量。referenceCoolingWPerCowは不足計算に用いる仮定値。',
  'deltaQrefWは基準案からの放熱差。meanDeficitWは秒ごとの不足を積算した60分平均。',
  '区画平均は代表地点の単純平均。乳量の牛群平均・滞在時間加重とは異なる。',
+ 'comparisonとareasは60分平均不足の診断。deficitReductionWは基準不足−案不足（正が改善）、unchangedOrWorseDeficitCountは不足が減らず残る地点数。局所作用なしは屋根効果と別。平均だけで案を選ばない。',
+ 'evaluateのprojectには配置・共通気象・モデル係数・基準案が含まれる。返値全体かprojectをJSONとして渡すと画面の読込／MCP案のJSONを読込で復元し再計算できる。',
  'resourcesの単位はL/day、kWh/day。trialWaterL/trialKwhは60分試行分。日乳量の資源量はdailyMilk.resources。',
  '地点のseriesを省いて返す平均値は、timeSecを変えても変化しない。',
  '各面は代表地点の値。CFDや面内全域の計算ではない。',
@@ -197,7 +199,7 @@ export async function evaluateOnProject(project:Project,args:EvaluateArgs,runEva
   const sr=job.thermal.scenarios.find(s=>s.id===id);
   if(!sr)return null;
   const meta=p.scenarios.find(s=>s.id===id)!,{series:_,...roof}=sr.roof;
-  return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,areas:areas.map(a=>areaStats(sr.points,a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:job.daily?sr.dailyMilk:undefined};
+  return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,comparison:comparisonStats(sr.points,job.thermal.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],{id:'all',label:'全地点',probeIds:layout(p).probes.map(q=>q.id)}),areas:areas.map(a=>comparisonStats(sr.points,job.thermal.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:job.daily?sr.dailyMilk:undefined};
  };
  return{
   scenarioId:p.activeScenarioId,inputHash:inputHash(p),operations:applied,
@@ -234,8 +236,7 @@ export function createCommands(d:CommandDeps){
  /** Applies ops to a cloned project, simulates it, and returns results. Never touches the live store. */
  async function evaluate(args:EvaluateArgs){
   const r=await evaluateOnProject(store.committed,args,d.evaluate);
-  const{project:_,...rest}=r;
-  return{...rest,note:'仮の複製へ操作を適用して計算した結果です。画面の案・設備・Undo履歴は変わっていません'};
+  return{...r,note:'仮の複製へ操作を適用した結果です。画面は変わっていません。返値全体またはprojectをJSON保存し、画面の読込／MCP案のJSONを読込で復元できます'};
  }
 
  function setView(args:SetViewArgs){
@@ -281,7 +282,7 @@ export function createCommands(d:CommandDeps){
   const scenarios=wanted.map(id=>{
    const sr=r.scenarios.find(s=>s.id===id)!,{series:_,...roof}=sr.roof;
    const meta=p.scenarios.find(s=>s.id===id)!;
-   return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,areas:areas.map(a=>areaStats(sr.points,a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:sr.dailyMilk};
+   return{id,name:meta.name,readOnly:meta.readOnly,warnings:sr.warnings,comparison:comparisonStats(sr.points,r.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],{id:'all',label:'全地点',probeIds:l.probes.map(q=>q.id)}),areas:areas.map(a=>comparisonStats(sr.points,r.scenarios.find(s=>s.id===p.baselineScenarioId)?.points??[],a)),resources:sr.resources,trialWaterL:sr.trialWaterL,trialKwh:sr.trialKwh,roof,dailyMilk:sr.dailyMilk};
   });
   const points=Object.fromEntries(wanted.map(id=>{
    const q=r.scenarios.find(s=>s.id===id)!.points.find(q=>q.probeId===probe.id);

@@ -55,11 +55,11 @@ test('sheet opens one tab at a time; closing returns to scene',()=>{
  closeSheet(w);assert.equal(w.sheet,null);
 });
 
-test('guide advances through 3 steps then marks done; skip finishes; restart resets',()=>{
+test('guide advances through 4 steps then marks done; skip finishes; restart resets',()=>{
  const w=createWorkspace();
  guideAdvance(w);assert.equal(w.guide.step,1);assert.equal(w.guide.done,false);
- guideAdvance(w);guideAdvance(w);
- assert.equal(w.guide.step,3);assert.equal(w.guide.done,true);
+ guideAdvance(w);guideAdvance(w);guideAdvance(w);
+ assert.equal(w.guide.step,4);assert.equal(w.guide.done,true);
  guideRestart(w);assert.equal(w.guide.step,0);assert.equal(w.guide.done,false);
  guideSkip(w);assert.equal(w.guide.done,true);
 });
