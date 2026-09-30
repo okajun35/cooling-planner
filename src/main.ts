@@ -166,9 +166,11 @@ document.addEventListener('change',event=>{
   if(i.dataset.systemEnabled){store.updateSystem(i.dataset.systemEnabled,{enabled:i.checked});return}
   if(i.hasAttribute('data-device-enabled')){store.updateDevice(store.project.view.selectedDeviceId!,{enabled:i.checked});return}
   if(i.hasAttribute('data-fertility-linked')){store.updateFertility({mode:i.checked?'simulation':'manual',exposureAssumed:true});return}
+  if(i.hasAttribute('data-weather-mode')){const p0=store.project,hours=p0.dailyWeather.hours.length===24?p0.dailyWeather.hours:Array.from({length:24},(_,h)=>({hour:h,temperatureC:p0.environment.temperatureC,relativeHumidityPct:p0.environment.relativeHumidityPct,solarRoofWm2:p0.environment.solarRoofWm2}));store.updateDailyWeather(i.checked?{mode:'hourly',hours}:{mode:'constant',hours:[]});return}
   if(i.type!=='number')return;
   const value=i.value.trim()===''&&(i.dataset.price||i.hasAttribute('data-milk-baseline'))?null:numberInput(i);
-  if(i.dataset.env)store.updateEnvironment({[i.dataset.env]:value});
+  if(i.dataset.weatherField){const h=Number(i.dataset.weatherHour);store.updateDailyWeather({mode:'hourly',hours:store.project.dailyWeather.hours.map(r=>r.hour===h?{...r,[i.dataset.weatherField!]:value}:r)})}
+  else if(i.dataset.env)store.updateEnvironment({[i.dataset.env]:value});
   else if(i.dataset.roof)store.updateRoof({[i.dataset.roof]:value});
   else if(i.dataset.device)store.updateDevice(store.project.view.selectedDeviceId!,{[i.dataset.device]:value} as Partial<Device>);
   else if(i.dataset.system)store.updateSystem(i.dataset.systemId!,{[i.dataset.system]:value});
@@ -193,7 +195,7 @@ document.addEventListener('click',event=>{
  if(b.dataset.chart){chart=b.dataset.chart as ChartMetric;document.querySelectorAll<HTMLElement>('[data-chart]').forEach(x=>x.classList.toggle('active',x.dataset.chart===chart));renderTimeline(p,currentResult(),chart);return}
  if(b.dataset.close){el<HTMLDialogElement>(b.dataset.close).close();return}
  switch(b.dataset.action){
-  case 'save':if(pending||invalid||store.isDraft)throw Error('入力を確定してから保存してください');download('cooling-planner-v9.json',store.serialize());toast('配置・環境・モデルの仮定を保存しました');break;
+  case 'save':if(pending||invalid||store.isDraft)throw Error('入力を確定してから保存してください');download('cooling-planner-v10.json',store.serialize());toast('配置・環境・モデルの仮定を保存しました');break;
   case 'load':el<HTMLInputElement>('file-input').click();break;
   case 'paste-project':{
    document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
@@ -227,6 +229,7 @@ document.addEventListener('click',event=>{
   case 'dismiss-error':el('error-banner').hidden=true;break;
   case 'evidence':renderEvidence(p,currentResult());el<HTMLDialogElement>('evidence-dialog').showModal();break;
   case 'settings':renderSettings(p);el<HTMLDialogElement>('settings-dialog').showModal();break;
+  case 'weather-fill-env':{const e0=p.environment;store.updateDailyWeather({mode:'hourly',hours:Array.from({length:24},(_,h)=>({hour:h,temperatureC:e0.temperatureC,relativeHumidityPct:e0.relativeHumidityPct,solarRoofWm2:e0.solarRoofWm2}))});break}
   case 'references':renderReference(p);el<HTMLDialogElement>('reference-dialog').showModal();break;
   case 'restore-local':{const text=localStorage.getItem(ROOT_KEY);if(!text)throw Error('この端末には保存がありません');store.importJSON(text);toast('端末内の保存を復元しました');break}
   case 'play':if(playing)stopPlayback();else{if(p.view.timeSec>=3600)store.setView({timeSec:0});playing=true;el('play-button').innerHTML='Ⅱ 停止';playTimer=window.setInterval(()=>{const t=Math.min(3600,store.project.view.timeSec+speed*.1);store.setView({timeSec:t});if(t>=3600)stopPlayback()},100)}break;

@@ -193,13 +193,29 @@ function createServer(){
  },args=>relay('set_view',args));
 
  server.registerTool('evaluate',{
-  description:'画面を変えずに仮説を評価する。editと同じoperationの配列を、現在の確定済み状態の複製へ順に適用して計算し、その結果を返す。画面の案・設備・Undo履歴・再計算には影響しない。対象案はscenarioIdで指定（省略時は現在の案）。返値のprojectまたは応答全体をJSONファイルで渡すと、画面の読込／MCP案のJSONを読込から復元・再計算できる。戻り値は平均・最大不足と基準より不足が減らず残る地点のcomparison、適用した案の区画別集計・resources・roof・（includeDaily指定時）dailyMilkと、比較用の基準案集計。「この設備を置いたら？」「どの対策が効くか」といった試行はedit→undoではなくこのツールを使う。',
+  description:'画面を変えずに仮説を評価する。editと同じoperationの配列を、現在の確定済み状態の複製へ順に適用して計算し、その結果を返す。画面の案・設備・Undo履歴・再計算には影響しない。対象案はscenarioIdで指定（省略時は現在の案）。返値のprojectまたは応答全体をJSONファイルで渡すと、画面の読込／MCP案のJSONを読込から復元・再計算できる。戻り値は平均・最大不足と基準より不足が減らず残る地点のcomparison、適用した案の区画別集計・resources・roof・（includeDaily指定時）dailyMilkとdailyThermal（評価日の地点・区画別平均不足）と、比較用の基準案集計。「この設備を置いたら？」「どの対策が効くか」といった試行はedit→undoではなくこのツールを使う。',
   inputSchema:z.strictObject({
    operations:z.array(editSchema).describe('複製へ順に適用する操作列（editと同じoperation/引数。空配列は現状そのままの計算）'),
    scenarioId:z.string().optional().describe('操作を適用する案ID。省略時は現在の案。基準案は読取専用'),
    includeDaily:z.boolean().optional().describe('trueで日乳量の仮説モデルまで計算（数十秒かかる。省略時は60分熱計算のみ）'),
   }),
  },args=>relay('evaluate',args,120000));
+
+ server.registerTool('compare_candidates',{
+  description:'制約付きの候補比較。同じ開始projectへ1〜3案の操作列を別々に適用し、日結果（日平均不足・冷却水・電力・悪化地点数）と制約判定・順位を返す。候補操作はupdate_device（enabled/位置/向き/日運転）、update_system（onoff・日運転）、update_roofのみ。係数・気象・案切替・設備の追加削除は候補に使えない。順位はこの呼出し内だけ有効。画面は変わらない。',
+  inputSchema:z.strictObject({
+   scenarioId:z.string().optional().describe('候補を適用する編集案ID。省略時は現在の案。基準案は不可'),
+   candidates:z.array(z.strictObject({id:z.string().describe('候補ID（呼出し内で一意）'),operations:z.array(editSchema)})).min(1).max(3).describe('比較する候補。それぞれ開始projectの複製へ適用（累積しない）'),
+   constraints:z.strictObject({
+    maxWaterLPerDay:z.number().optional().describe('冷却設備（ソーカー・ミスト・屋根散水）の日供給水上限L'),
+    maxElectricityKwhPerDay:z.number().optional().describe('ファン＋ポンプの日電力量上限kWh'),
+    priorityArea:z.string().optional().describe('改善を優先する区域ID（既定stalls。stall-A〜D/feeding/waiting/stalls/all）'),
+    protectAreas:z.array(z.string()).optional().describe('開始案より日平均不足を増やさない区域（既定は3区域すべて）'),
+    protectWorst:z.boolean().optional().describe('全地点の最大不足を開始案より増やさない（既定true）'),
+   }).optional(),
+   ranking:z.enum(['deficit','water','worst']).optional().describe('順位規則：deficit=優先区域不足→最大不足→水→電力 / water=節水優先（優先区域が改善する候補に限定） / worst=最大不足優先'),
+  }),
+ },args=>relay('compare_candidates',args,300000));
 
  server.registerTool('describe_model',{
   description:'このアプリの計算モデルが「何を・どう仮定して・何を無視して」計算しているかを返す。計算構造(屋根/風/散水/ミスト/牛体収支/日集計)、入力・出力フィールドの意味、主な仮定定数、限界、検証状態を含む。get_results/evaluateの数値を解釈・説明する前に呼ぶ。',

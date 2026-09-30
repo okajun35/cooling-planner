@@ -22,7 +22,7 @@ export function comparisonContent(p:Project,r:SimulationResult|null){
    <div><strong>${stats?.meanDeficitW==null?'未評価':num(stats.meanDeficitW,0)}</strong><small> W 平均放熱不足</small></div>
    <p>基準から不足低減 <b>${reduction(stats?.deficitReductionW)}</b><br>最大の不足 <b>${watts(stats?.maxDeficitW)}</b><br>不足が残る地点 <b>${stats?.meanDeficitW==null?'未評価':`${stats.deficitCount}/${stats.probeCount}`}</b><br>局所作用なし <b>${stats?.meanDeficitW==null?'未評価':stats.deficitNoActionCount}</b> 地点<br>不足が減らず残る <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> 地点 / 不足増加 <b>${count(stats?.worsenedDeficitCount)}</b> 地点</p>
    <table class="micro-table"><thead><tr><th>場所</th><th>平均不足</th><th>最大不足</th></tr></thead><tbody>${areaLines}</tbody></table>
-   <p>水 <b>${res?num(res.waterLPerDay,0)+' L/日':'未計算'}</b>${res&&baseRes?`（差 ${signed(res.waterLPerDay-baseRes.waterLPerDay,0)}）`:''}<br>電力 <b>${res?num(res.totalKwhPerDay,1)+' kWh/日':'未計算'}</b>${res&&baseRes?`（差 ${signed(res.totalKwhPerDay-baseRes.totalKwhPerDay,1)}）`:''}</p>
+   <p>水 <b>${res?num(res.waterLPerDay,0)+' L/日':'未計算'}</b>${res&&baseRes?`（差 ${signed(res.waterLPerDay-baseRes.waterLPerDay,0)}）`:''}<br>電力 <b>${res?num(res.totalKwhPerDay,1)+' kWh/日':'未計算'}</b>${res&&baseRes?`（差 ${signed(res.totalKwhPerDay-baseRes.totalKwhPerDay,1)}）`:''}<br>日・地点平均の不足 <b>${watts(s?.dailyThermal?.all?.meanDeficitW)}</b>${s?.dailyThermal?`（最大 ${watts(s.dailyThermal.all?.maxDeficitW)}・${s.dailyThermal.weatherMode==='hourly'?'時刻別':'固定'}気象）`:''}</p>
    <span class="micro">${sc.roof.reflectance>.5?'遮熱あり':'遮熱なし'} / ${sc.roof.insulationM>0?'断熱あり':'断熱なし'}</span></article>`;
  }).join('');
  const active=r?.scenarios.find(s=>s.id===p.activeScenarioId);

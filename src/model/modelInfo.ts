@@ -51,6 +51,7 @@ export function describeModel(p:Project){
    `牛体収支: 対流(hc=${m.hcIntercept}+${m.hcSlope}×√v)+放射+基礎蒸発+ソーカー蒸発+結露(負)を秒ごとに計算し3600秒平均=meanQrefW`,
    `空気: 顕熱・潜熱を1つの集中気塊として集約。換気量${p.environment.ventilationM3sPerM2}m³/s/m²×床面積、背景顕熱${roof.backgroundSensibleW}W`,
    `日集計: 代表地点へ滞在時間の重み(牛床${hours(occ.stall)}/採食${hours(occ.feeding)}/その他${hours(occ.waiting)})を掛け、放熱不足を24時間積算して乳量仮説へ接続`,
+   `日気象: dailyWeather.mode="hourly"なら0〜23時の行で気温・湿度・屋根面日射を時刻別に供給し、日シミュレーションの屋根熱収支・空気・地点放熱へ反映（気象区切りで屋根・熱項キャッシュを無効化）。"constant"はenvironmentを全日固定`,
   ],
   outputs:{
    meanQrefW:'地点の正味放熱量[W]。components内訳=convectionW/radiationW/baseEvaporationW/soakerEvaporationW/condensationW',
@@ -61,6 +62,7 @@ export function describeModel(p:Project){
    resources:'系統別・合計のwaterLPerDay/fanKwhPerDay/pumpKwhPerDay/totalKwhPerDay。trialWaterL/trialKwhは60分試行分',
    roof:'meanOuterC/meanUnderC/meanAirC/meanRadiantCと散水収支suppliedL/evaporatedKg/runoffL',
    dailyMilk:'仮説モデルの日乳量。Y=Y0−min(Y0×maxLossFraction, beta×不足積算E)。resourcesは日集計の水量・電力量',
+   dailyThermal:'評価日(24h)の地点別・区画別平均（meanDeficitW/meanQrefW/気温/風速/湿度/放熱内訳/作用割合）。weatherModeで使用気象を明示。不足は秒ごとにmax(0,Qref−Q)で積算（日平均を後で切るのではない）',
   },
   keyAssumptions:{
    referenceCoolingWPerCow:ms.referenceCoolingWPerCow,

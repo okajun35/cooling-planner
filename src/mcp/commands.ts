@@ -7,6 +7,8 @@ import {comparisonStats} from '../model/comparisonStats.js';
 import {inputHash} from '../model/simulation.js';
 import {mergeDaily} from '../model/dailySimulation.js';
 import {describeModel} from '../model/modelInfo.js';
+import {summarizeDay,worsenedCount,checkConstraints,improvesPriorityArea,rankCandidates} from '../model/candidateComparison.js';
+import type {CandidateConstraints,RankingMode} from '../model/candidateComparison.js';
 
 /** Runtime UI/worker state owned by main.ts; injected so commands stay testable. */
 export interface CommandStatus{pendingInput:boolean;invalidInput:boolean;calculating:boolean;workerError:string|null}
@@ -27,6 +29,7 @@ export interface EditArgs{operation:string;scenarioId?:string;deviceId?:string;s
 export interface EvaluateArgs{operations:EditArgs[];scenarioId?:string;includeDaily?:boolean}
 export interface SetViewArgs{mode?:View['mode'];metric?:View['metric'];selectedProbeId?:string;selectedDeviceId?:string|null;selectedAreaId?:string|null;analysis?:boolean;realistic?:boolean;heatmap?:boolean;roof?:boolean;flow?:boolean;particles?:boolean;timeSec?:number}
 export interface GetResultsArgs{scenarioId?:string;probeId?:string}
+export interface CompareArgs{scenarioId?:string;candidates:{id:string;operations:EditArgs[]}[];constraints?:Partial<CandidateConstraints>;ranking?:RankingMode}
 
 const CONFIRM_INPUT='画面の入力を確定してください';
 
@@ -50,6 +53,9 @@ export const MODEL_NOTES=[
  '条件を変えた結果の比較にはedit→get_results→undoではなくevaluateを使う。画面の状態・Undo履歴を変えずに複数の仮説を試せる。',
  'モデルの計算構造・仮定・限界はdescribe_modelで取得できる。結果を説明する前に呼んでおく。',
  'モデル係数はupdate_model(物理)/update_milk(乳量仮説)/update_references(参照)で変更する。仮定の感度試行はevaluateと組み合わせ、係数を変えた結果は既定値とは別モデル入力として説明する。',
+ '代表日の時刻別気象はupdate_daily_weatherで設定。mode:"hourly"にはhour=0〜23の24行（昇順・一意）が必要。気圧・背景風・換気はenvironmentの値を全時刻で共用する。',
+ 'dailyThermalは評価日(24h)の秒積算による地点・区画の平均不足。60分評価(points)は常にenvironment固定気象。日負荷の時間加重(dailyMilk.dailyDeficitWPerCow)と地点平均(dailyThermal.all.meanDeficitW)は定義が異なり一致しない。',
+ 'compare_candidatesは同じ開始projectへ1〜3案の操作列を別々に適用して日結果・制約・順位を返す。候補操作は運転調整のみ（update_deviceのenabled/位置/向き/日運転、update_systemのonoff・日運転、update_roofの明示設定）。性能係数・気象・案切替は候補に使えない。順位はその呼出し内だけ有効。',
 ] as const;
 
 const DEVICE_COMMON=['x','y','heightM','yawDeg','pitchDownDeg','enabled'];
@@ -214,6 +220,84 @@ export async function evaluateOnProject(project:Project,args:EvaluateArgs,runEva
  };
 }
 
+/** Candidate ops are restricted to operation-schedule/placement tweaks; model
+ * coefficients, weather, scenario switching and structural add/remove are not
+ * candidate knobs (they would let a candidate "win" by changing the rules). */
+const CANDIDATE_OPS:{
+ update_device:{fan:Set<string>;nozzle:Set<string>};
+ update_system:Set<string>;
+ update_roof:Set<string>;
+}={
+ update_device:{fan:new Set(['enabled','x','y','heightM','yawDeg','pitchDownDeg','hoursPerDay','dailyStartHour']),nozzle:new Set(['enabled','x','y','heightM','yawDeg','pitchDownDeg'])},
+ update_system:new Set(['enabled','onSec','offSec','hoursPerDay','dailyStartHour']),
+ update_roof:new Set(['reflectance','insulationM','sprayEnabled','flowLpmM2','onSec','offSec','hoursPerDay','dailyStartHour']),
+};
+function assertCandidateOp(p:Project,op:EditArgs){
+ const allowed=(CANDIDATE_OPS as Record<string,unknown>)[op.operation];
+ if(!allowed)throw Error(`候補比較で使えない操作です: ${op.operation}（使えるのはupdate_device/update_system/update_roofのみ。係数・気象・案切替・設備の追加削除は不可）`);
+ if(op.operation==='update_device'){const dev=deviceById(p,op.deviceId);checkPatch(op.patch,isFan(dev)?CANDIDATE_OPS.update_device.fan:CANDIDATE_OPS.update_device.nozzle,'候補の設備')}
+ else checkPatch(op.patch,allowed as Set<string>,'候補');
+}
+function normalizeConstraints(c:Partial<CandidateConstraints>|undefined,p:Project):CandidateConstraints{
+ const ids=new Set([...buildAreas(layout(p)).map(a=>a.id),'all']);
+ const priorityArea=c?.priorityArea??'stalls';
+ if(!ids.has(priorityArea))throw Error(`priorityAreaが不明です: ${priorityArea}（使えるID: ${[...ids].join(', ')}）`);
+ const protectAreas=c?.protectAreas??['stalls','feeding','waiting'];
+ for(const a of protectAreas)if(!ids.has(a))throw Error(`protectAreasに不明な区域があります: ${a}`);
+ return{maxWaterLPerDay:c?.maxWaterLPerDay,maxElectricityKwhPerDay:c?.maxElectricityKwhPerDay,priorityArea,protectAreas,protectWorst:c?.protectWorst??true};
+}
+/** Stateless core of `compare_candidates`: evaluates the start scenario once,
+ * applies each candidate's ops to a fresh clone, and returns day-scale results,
+ * constraint verdicts and a deterministic order. Never cumulative. */
+export async function compareOnProject(project:Project,args:CompareArgs,runEval:(p:Project,o:{daily:boolean})=>Promise<EvalJob>){
+ if(!args||!Array.isArray(args.candidates)||!args.candidates.length)throw Error('candidatesに1〜3案の操作列が必要です');
+ if(args.candidates.length>3)throw Error('1回に比較できるのは3案までです。増やす場合は同じproject・同じ制約で分けて呼んでください');
+ const seen=new Set<string>();
+ for(const c of args.candidates){
+  if(!c||typeof c.id!=='string'||!c.id)throw Error('候補idが必要です');
+  if(seen.has(c.id))throw Error(`候補idが重複しています: ${c.id}`);
+  seen.add(c.id);
+  if(!Array.isArray(c.operations))throw Error(`候補${c.id}にoperationsの配列が必要です`);
+ }
+ const k=normalizeConstraints(args.constraints,project);
+ const targetId=args.scenarioId??project.activeScenarioId;
+ const meta=project.scenarios.find(s=>s.id===targetId);
+ if(!meta)throw Error(`案が見つかりません: ${targetId}`);
+ if(meta.readOnly)throw Error('候補比較の対象は編集案です。基準案は変更できません');
+ const startJob=await runEval(structuredClone(project),{daily:true});
+ if(startJob.daily)mergeDaily(startJob.thermal,startJob.daily,startJob.dailyThermal??{},startJob.dailyMilkStatus);
+ const startSr=startJob.thermal.scenarios.find(s=>s.id===targetId);
+ const startSum=summarizeDay(startSr);
+ const ranking=args.ranking??'deficit';
+ if(!['deficit','water','worst'].includes(ranking))throw Error(`rankingはdeficit/water/worstです: ${ranking}`);
+ interface CandidateOut{id:string;status:string;error?:string;operations:Record<string,unknown>[];inputHash?:string;reasons?:string[];coolingWaterLPerDay?:number|null;electricityKwhPerDay?:number|null;areaMeanDeficitW?:Record<string,number|null>;allMaxDeficitW?:number|null;worsenedPoints?:number|null;violations:string[];constraintsSatisfied:boolean;improvesPriorityArea:boolean;dailyMilkYieldKgPerCowDay?:number|null}
+ const candidates:CandidateOut[]=[];
+ for(const c of args.candidates){
+  const tmp=new ProjectStore(structuredClone(project));
+  tmp.switchScenario(targetId);
+  let applied:Record<string,unknown>[];
+  try{applied=c.operations.map(op=>{assertCandidateOp(tmp.committed,op);return applyOperation(tmp,op)})}
+  catch(e){candidates.push({id:c.id,status:'invalid_input',error:e instanceof Error?e.message:String(e),operations:[],constraintsSatisfied:false,improvesPriorityArea:false,violations:['操作を適用できませんでした']});continue}
+  const job=await runEval(tmp.committed,{daily:true});
+  if(job.daily)mergeDaily(job.thermal,job.daily,job.dailyThermal??{},job.dailyMilkStatus);
+  const sr=job.thermal.scenarios.find(s=>s.id===targetId),sum=summarizeDay(sr);
+  sum.worsenedPoints=worsenedCount(sr,startSr);
+  const violations=checkConstraints(sum,startSum,k);
+  candidates.push({id:c.id,operations:applied,inputHash:inputHash(tmp.committed),status:sum.status,reasons:sum.reasons,
+   coolingWaterLPerDay:sum.coolingWaterLPerDay,electricityKwhPerDay:sum.electricityKwhPerDay,
+   areaMeanDeficitW:sum.areaMean,allMaxDeficitW:sum.allMax,worsenedPoints:sum.worsenedPoints,
+   violations,constraintsSatisfied:!violations.length,improvesPriorityArea:improvesPriorityArea(sum,startSum,k.priorityArea),
+   dailyMilkYieldKgPerCowDay:sr?.dailyMilk?.yieldKgPerCowDay??null});
+ }
+ const pool=candidates.filter(c=>c.constraintsSatisfied).map(c=>({id:c.id,s:{areaMean:c.areaMeanDeficitW??{},allMax:c.allMaxDeficitW??null,coolingWaterLPerDay:c.coolingWaterLPerDay??null,electricityKwhPerDay:c.electricityKwhPerDay??null},improves:c.improvesPriorityArea}));
+ const order=rankCandidates(pool,k.priorityArea,ranking);
+ return{
+  start:{scenarioId:targetId,inputHash:startJob.thermal.inputHash,coolingWaterLPerDay:startSum.coolingWaterLPerDay,electricityKwhPerDay:startSum.electricityKwhPerDay,areaMeanDeficitW:startSum.areaMean,allMaxDeficitW:startSum.allMax,valid:startSum.valid,reasons:startSum.reasons},
+  constraints:k,ranking:{mode:ranking,order,note:'この順位はこの呼出しの候補内だけです。別呼出しの候補と比べるときは同じ規則で並べ直してください'},
+  candidates,
+  note:order.length?`制約を満たす候補が${order.length}件あります`:`今回評価した候補では制約を満たす案がありません（全探索ではないので実現不可能とは断定しません）。violationsで除外条件を確認できます`,
+ };
+}
 export function createCommands(d:CommandDeps){
  const store=d.store;
 
@@ -309,6 +393,6 @@ export function createCommands(d:CommandDeps){
   return{changed,activeScenarioId:store.committed.activeScenarioId,inputHash:inputHash(store.committed),undoCount:store.undoCount};
  }
 
- return{get_state:getState,edit,evaluate,set_view:setView,get_results:getResults,undo,describe_model:describe} as const;
+ return{get_state:getState,edit,evaluate,set_view:setView,get_results:getResults,undo,describe_model:describe,compare_candidates:(args:CompareArgs)=>compareOnProject(store.committed,args,d.evaluate)} as const;
 }
 export type CommandMap=ReturnType<typeof createCommands>;

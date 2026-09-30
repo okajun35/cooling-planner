@@ -5,7 +5,7 @@
  * authType NONE). */
 import {McpServer,createMcpHandler} from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import {defaultProject,describe,evaluateProject} from './core.js';
+import {defaultProject,describe,evaluateProject,compareProject} from './core.js';
 import {DOCS} from './docs.js';
 import {APP_VERSION} from '../../src/data/defaults.js';
 
@@ -93,6 +93,7 @@ function buildServer(){
   'モデル牛舎の設備配置・屋根条件を変えて環境・水資源・代表牛の放熱・日乳量(仮説)を比較する計算サービス。ブラウザ画面は持たないステートレス版。',
   '基本フロー: get_default_project で既定project(JSON)とID一覧を取得 → projectの設備/気象/係数を編集するかoperationsで操作を指定 → evaluate で計算。返ってきたprojectを次のevaluateの入力にすると逐次編集できる。',
   'operationsの語彙はローカル版と同一。座標はx=牛舎長さ方向、y=幅方向、heightM=高さ。長さm、向きdeg。基準案は読取専用、update_environmentは全案に効く。',
+  '代表日の時刻別気象はupdate_daily_weatherで設定（mode:"hourly"はhour=0〜23の24行・昇順一意）。60分評価は常にenvironment固定気象、時刻別は日結果(dailyThermal/dailyMilk)のみに効く。',
   '数値説明はevaluateの結果を使う。未計算・null・invalidをゼロと説明しない。meanQrefWは地点の正味放熱量、deltaQrefWは基準案からの放熱差、meanDeficitWは秒積算した不足の60分平均。',
   '結果を解釈・説明する前にdescribe_modelでモデルの計算構造・仮定・限界を確認する。縮約モデルの数値を実牛舎の保証値と言わない。',
   'モデル理論・係数の根拠となる文書(熱収支仕様/乳量仮説/設計決定ログ)のMarkdown本文はget_docで取得する。describe_modelのdocs一覧とnameが対応する。',
@@ -102,7 +103,7 @@ function buildServer(){
   description:'既定のProject JSONと、operationsで使う案ID・設備ID・地点・区画の一覧を返す。入力を組み立てる起点。返るprojectはそのままevaluateのproject引数に使える。',
  },()=>call(()=>defaultProject()));
  server.registerTool('evaluate',{
-  description:'projectへ操作列operationsを複製へ適用して計算し、区画別集計・resources・roof・(includeDaily時)dailyMilkと基準案を返す。project省略時は既定project。operations省略時はそのままの計算。返値のprojectを次回入力に使うと逐次編集できる。',
+  description:'projectへ操作列operationsを複製へ適用して計算し、区画別集計・resources・roof・(includeDaily時)dailyMilkとdailyThermal（評価日24hの地点・区画別平均不足）と基準案を返す。project省略時は既定project。operations省略時はそのままの計算。返値のprojectを次回入力に使うと逐次編集できる。',
   inputSchema:z.strictObject({
    project:z.unknown().optional().describe('対象Project JSON(get_default_projectの返値または前回evaluateの返値)。省略時は既定'),
    scenarioId:z.string().optional().describe('操作を適用する案ID。省略時はprojectの現在の案。基準案は読取専用'),
@@ -110,6 +111,23 @@ function buildServer(){
    includeDaily:z.boolean().optional().describe('trueで日乳量の仮説モデルまで計算(数十秒かかる。省略時は60分熱計算のみ)'),
   }),
  },args=>call(()=>evaluateProject(args)));
+ server.registerTool('compare_candidates',{
+  description:'制約付きの候補比較。同じ開始projectへ1〜3案の操作列を別々に適用し、日結果（日平均不足・冷却水・電力・悪化地点数・乳量）と制約判定・順位を返す。候補操作はupdate_device（enabled/位置/向き/日運転）、update_system（onoff・日運転）、update_roofのみ。係数・気象・案切替・設備の追加削除は候補に使えない。順位はこの呼出し内だけ有効。各候補の日計算を含むため数十秒〜数分かかる。',
+  inputSchema:z.strictObject({
+   project:z.unknown().optional().describe('開始Project JSON。省略時は既定'),
+   scenarioId:z.string().optional().describe('候補を適用する編集案ID。省略時はprojectの現在の案。基準案は不可'),
+   candidates:z.array(z.strictObject({id:z.string().describe('候補ID（呼出し内で一意）'),operations:z.array(OPERATION)})).min(1).max(3).describe('比較する候補。それぞれ開始projectの複製へ適用（累積しない）'),
+   constraints:z.strictObject({
+    maxWaterLPerDay:z.number().optional().describe('冷却設備（ソーカー・ミスト・屋根散水）の日供給水上限L'),
+    maxElectricityKwhPerDay:z.number().optional().describe('ファン＋ポンプの日電力量上限kWh'),
+    priorityArea:z.string().optional().describe('改善を優先する区域ID（既定stalls。stall-A〜D/feeding/waiting/stalls/all）'),
+    protectAreas:z.array(z.string()).optional().describe('開始案より日平均不足を増やさない区域（既定は3区域すべて）'),
+    protectWorst:z.boolean().optional().describe('全地点の最大不足を開始案より増やさない（既定true）'),
+   }).optional(),
+   ranking:z.enum(['deficit','water','worst']).optional().describe('順位規則：deficit=優先区域不足→最大不足→水→電力 / water=節水優先（優先区域が改善する候補に限定） / worst=最大不足優先'),
+  }),
+ },args=>call(()=>compareProject(args)));
+
  server.registerTool('describe_model',{
   description:'この計算モデルが「何を・どう仮定して・何を無視して」計算しているかを返す。計算構造(屋根/風/散水/ミスト/牛体収支/日集計)、入出力の意味、主な仮定定数、限界、検証状態を含む。結果を解釈・説明する前に呼ぶ。docs一覧の文書本文はget_docで取得。',
   inputSchema:z.strictObject({project:z.unknown().optional().describe('説明対象のproject。省略時は既定projectのモデル設定で説明')}),

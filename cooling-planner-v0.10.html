@@ -495,10 +495,19 @@ document.addEventListener('change', event => {
             store.updateFertility({ mode: i.checked ? 'simulation' : 'manual', exposureAssumed: true });
             return;
         }
+        if (i.hasAttribute('data-weather-mode')) {
+            const p0 = store.project, hours = p0.dailyWeather.hours.length === 24 ? p0.dailyWeather.hours : Array.from({ length: 24 }, (_, h) => ({ hour: h, temperatureC: p0.environment.temperatureC, relativeHumidityPct: p0.environment.relativeHumidityPct, solarRoofWm2: p0.environment.solarRoofWm2 }));
+            store.updateDailyWeather(i.checked ? { mode: 'hourly', hours } : { mode: 'constant', hours: [] });
+            return;
+        }
         if (i.type !== 'number')
             return;
         const value = i.value.trim() === '' && (i.dataset.price || i.hasAttribute('data-milk-baseline')) ? null : numberInput(i);
-        if (i.dataset.env)
+        if (i.dataset.weatherField) {
+            const h = Number(i.dataset.weatherHour);
+            store.updateDailyWeather({ mode: 'hourly', hours: store.project.dailyWeather.hours.map(r => r.hour === h ? { ...r, [i.dataset.weatherField]: value } : r) });
+        }
+        else if (i.dataset.env)
             store.updateEnvironment({ [i.dataset.env]: value });
         else if (i.dataset.roof)
             store.updateRoof({ [i.dataset.roof]: value });
@@ -590,7 +599,7 @@ document.addEventListener('click', event => {
             case 'save':
                 if (pending || invalid || store.isDraft)
                     throw Error('入力を確定してから保存してください');
-                download('cooling-planner-v9.json', store.serialize());
+                download('cooling-planner-v10.json', store.serialize());
                 toast('配置・環境・モデルの仮定を保存しました');
                 break;
             case 'load':
@@ -753,6 +762,11 @@ document.addEventListener('click', event => {
                 (0, panels_js_1.renderSettings)(p);
                 (0, dom_js_1.el)('settings-dialog').showModal();
                 break;
+            case 'weather-fill-env': {
+                const e0 = p.environment;
+                store.updateDailyWeather({ mode: 'hourly', hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, temperatureC: e0.temperatureC, relativeHumidityPct: e0.relativeHumidityPct, solarRoofWm2: e0.solarRoofWm2 })) });
+                break;
+            }
             case 'references':
                 (0, panels_js_1.renderReference)(p);
                 (0, dom_js_1.el)('reference-dialog').showModal();
@@ -12434,7 +12448,7 @@ function kpi(label, value, unit, before, ic, description) {
     return `<div class="kpi"><div class="kpi-icon">${(0, dom_js_1.icon)(ic, 19)}</div><div><h3>${label}</h3><div class="kpi-value">${(0, dom_js_1.num)(value)}<small>${unit}</small></div><p>基準 ${(0, dom_js_1.num)(before)} ${unit} <b class="${diff !== null && diff < 0 ? 'good' : ''}">${diff === null ? '' : `→ ${(0, dom_js_1.signed)(diff)} ${unit}`}</b></p><small class="micro">${description}</small></div></div>`;
 }
 function milkCard(p, r, s) {
-    const ms = p.milkSimulation, dm = s?.dailyMilk ?? null;
+    const ms = p.milkSimulation, dm = s?.dailyMilk ?? null, dt = s?.dailyThermal ?? null, hourly = p.dailyWeather.mode === 'hourly';
     const head = `<div class="reference-heading">${(0, dom_js_1.icon)('cow', 17)}<h3>乳量への参考影響</h3><span class="tag">仮説モデル</span></div>`;
     if (!r)
         return `<div class="reference-card">${head}<strong class="out-of-scope">—</strong><p>計算待ち</p></div>`;
@@ -12449,12 +12463,13 @@ function milkCard(p, r, s) {
  <strong class="reference-value">${(0, dom_js_1.num)(dm.yieldKgPerCowDay)} kg/頭/日</strong>
  <p>基準案との差 <b class="${delta !== null && delta < 0 ? '' : 'good'}">${delta === null ? '—' : `${(0, dom_js_1.signed)(delta)} kg/頭/日`}</b>${delta === null ? '（基準案が計算不可）' : ''}</p>
  ${dm.lossCapped ? `<p class="micro"><b>低下上限に到達</b>：低下量は最大 ${(0, dom_js_1.num)(dm.potentialMilkKgPerCowDay * dm.maxLossFraction)} kg に止めています。</p>` : ''}
- <p class="micro">牛群平均・同じ代表日が続いた場合。現在の気象・日射を24時間固定して繰り返す仮想日です。</p>
+ <p class="micro">牛群平均・同じ代表日が続いた場合。${hourly ? '0〜23時の時刻別気象で繰り返す仮想日' : '現在の気象・日射を24時間固定して繰り返す仮想日'}です（予報ではありません）。</p>
  <details id="milk-details"><summary>仮定と計算を見る</summary>
  <div class="field-grid">${(0, dom_js_1.field)('milk-y0', '基準日乳量 Y0', ms.potentialMilkKgPerCowDay, 'kg/頭/日', 'data-milk="potentialMilkKgPerCowDay"', .1, 100, .5)}${(0, dom_js_1.field)('milk-beta', '換算係数 beta', ms.responseKgPerCowDayPerW, 'kg/頭/日/W', 'data-milk="responseKgPerCowDayPerW"', 0, 1, .001)}</div>
  <p class="micro"><button data-action="reset-milk" class="text-button">乳量の仮定を初期値に戻す</button></p>
  <table class="micro-table"><tbody>
  <tr><th>日負荷 D</th><td>${(0, dom_js_1.num)(dm.dailyDeficitWPerCow, 1)} W/頭（時間・区域加重）</td></tr>
+ ${dt ? `<tr><th>日・地点平均の不足</th><td>${(0, dom_js_1.num)(dt.all?.meanDeficitW, 1)} W / 最大 ${(0, dom_js_1.num)(dt.all?.maxDeficitW, 1)} W（${dt.weatherMode === 'hourly' ? '時刻別' : '固定'}気象）</td></tr>` : ''}
  <tr><th>遅れ込み E</th><td>${(0, dom_js_1.num)(dm.laggedDeficitWPerCow, 1)} W/頭（同日反復モードでは D=E）</td></tr>
  <tr><th>式</th><td>Y = Y0 − min(Y0×${dm.maxLossFraction}, beta×E)、Qref=${(0, dom_js_1.num)(dm.referenceCoolingWPerCow, 0)} W</td></tr>
  <tr><th>滞在割合</th><td>牛床 ${dm.zoneCounts.stall}点・採食 ${dm.zoneCounts.feeding}点・その他 ${dm.zoneCounts.waiting}点で 14/6/4 時間相当。「その他」はロボット前地点の代理です。</td></tr>
@@ -12510,7 +12525,13 @@ function renderComparison(p, r) {
     (0, dom_js_1.el)('copy-scenario').disabled = (0, project_js_1.activeScenario)(p).readOnly;
 }
 function renderAreas(p, r) { (0, dom_js_1.setHTML)('area-summary', (0, comparison_js_1.areaContent)(p, r)); }
-function renderSettings(p) { (0, dom_js_1.setHTML)('settings-body', `<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${(0, dom_js_1.field)('barn-length', '長さ', p.template.lengthM, 'm', 'data-template="lengthM"', 32, 48, .1)}${(0, dom_js_1.field)('barn-width', '幅', p.template.widthM, 'm', 'data-template="widthM"', 23.5, 30, .1)}${(0, dom_js_1.field)('background-wind', '背景風速', p.environment.backgroundSpeedMps, 'm/s', 'data-env="backgroundSpeedMps"', 0, 10, .01)}${(0, dom_js_1.field)('ventilation', '空気交換', p.environment.ventilationM3sPerM2, 'm³/s/m²', 'data-env="ventilationM3sPerM2"', .0001, 1, .001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p><h3>日運転費の試算単価</h3><div class="field-grid">${(0, dom_js_1.field)('price-electricity', '電力', p.prices.electricityYenKwh, '円/kWh', 'data-price="electricityYenKwh"', 0, 1e6, 1)}${(0, dom_js_1.field)('price-water', '水', p.prices.waterYenM3, '円/m³', 'data-price="waterYenM3"', 0, 1e6, 1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><button data-action="paste-project">MCP案のJSONを読込</button><p class="micro">MCPのevaluate応答全体またはprojectのJSONを貼付できます。JSONファイルは上部の「読込」でも復元できます。</p><p>新しい保存形式はschemaVersion 9です。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`); }
+function renderSettings(p) {
+    const hourly = p.dailyWeather.mode === 'hourly';
+    const weatherTable = hourly ? `<div class="table-scroll weather-table"><table><thead><tr><th>時</th><th>気温 ℃</th><th>湿度 %</th><th>屋根面日射 W/m²</th></tr></thead><tbody>${p.dailyWeather.hours.map(h => `<tr><th>${h.hour}</th><td><input type="number" data-weather-hour="${h.hour}" data-weather-field="temperatureC" value="${h.temperatureC}" min="20" max="40" step="0.5"></td><td><input type="number" data-weather-hour="${h.hour}" data-weather-field="relativeHumidityPct" value="${h.relativeHumidityPct}" min="0" max="100" step="1"></td><td><input type="number" data-weather-hour="${h.hour}" data-weather-field="solarRoofWm2" value="${h.solarRoofWm2}" min="0" max="1200" step="50"></td></tr>`).join('')}</tbody></table></div><button data-action="weather-fill-env" class="text-button">現在の外気条件を全時刻へ複製</button>` : '';
+    (0, dom_js_1.setHTML)('settings-body', `<h3>モデル牛舎</h3><p>寸法は全案共通。設備の相対位置と牛床を一緒に更新します。</p><div class="field-grid">${(0, dom_js_1.field)('barn-length', '長さ', p.template.lengthM, 'm', 'data-template="lengthM"', 32, 48, .1)}${(0, dom_js_1.field)('barn-width', '幅', p.template.widthM, 'm', 'data-template="widthM"', 23.5, 30, .1)}${(0, dom_js_1.field)('background-wind', '背景風速', p.environment.backgroundSpeedMps, 'm/s', 'data-env="backgroundSpeedMps"', 0, 10, .01)}${(0, dom_js_1.field)('ventilation', '空気交換', p.environment.ventilationM3sPerM2, 'm³/s/m²', 'data-env="ventilationM3sPerM2"', .0001, 1, .001)}</div><p class="micro">循環ファンを増やしても換気量は増えません。50床・軒4m・棟8.7mは固定。</p>
+ <h3>代表日の気象（日シミュレーションのみ）</h3><label class="weather-mode"><input type="checkbox" data-weather-mode ${hourly ? 'checked' : ''}> 0〜23時の時刻別気象を使う</label><p class="micro">ONのとき日乳量・日資源は時刻別の気温・湿度・屋根面日射で積算します。あくまで繰り返す代表日であり、予報ではありません。上部の60分結果は常に固定気象。気圧・背景風・換気は全時刻で共通です。</p>${weatherTable}
+ <h3>日運転費の試算単価</h3><div class="field-grid">${(0, dom_js_1.field)('price-electricity', '電力', p.prices.electricityYenKwh, '円/kWh', 'data-price="electricityYenKwh"', 0, 1e6, 1)}${(0, dom_js_1.field)('price-water', '水', p.prices.waterYenM3, '円/m³', 'data-price="waterYenM3"', 0, 1e6, 1)}</div><p class="micro">実際の料金ではない仮単価です。空欄なら費用のみ非表示。</p><h3>保存と復元</h3><button data-action="paste-project">MCP案のJSONを読込</button><p class="micro">MCPのevaluate応答全体またはprojectのJSONを貼付できます。JSONファイルは上部の「読込」でも復元できます。</p><p>新しい保存形式はschemaVersion 10です（v9の保存・MCP出力は自動で変換します）。旧版（v8・v4など）は読み込みません。読み込み失敗時には現在の案を保持します。</p><button data-action="restore-local">この端末の前回保存を復元</button><p class="micro">端末内に保存。サーバーには送信しません。ブラウザ設定によって端末内保存が使えない場合も、JSON保存は利用できます。</p>`);
+}
 function renderReference(p) {
     const f = p.references.fertility, calc = (0, references_js_1.fertilityReference)({ ...f, mode: 'manual', exposureAssumed: true }, null, null);
     (0, dom_js_1.setHTML)('reference-body', `<h3>乳量：掲載表をそのまま参照</h3><p>この表の表示は、現在の牛舎計算とは別です。実際の局所条件が一致する場合だけ結果カードへ反映します。</p>${(0, dom_js_1.field)('baseline-milk', '適温時の基準乳量', p.references.baselineMilkKgPerDay, 'kg/頭/日', 'data-milk-baseline', 0, 100, .5)}<div class="table-scroll"><table><thead><tr><th>気温</th><th>風速</th><th>乳量比</th><th>参考kg/頭/日</th></tr></thead><tbody>${references_js_1.MILK_ROWS.map(row => `<tr><td>${row.temperatureC}℃</td><td>${row.speedMps} m/s</td><td>${row.ratioPct}%</td><td>${(0, dom_js_1.num)((0, references_js_1.milkReference)(row.temperatureC, 65, row.speedMps, p.references.baselineMilkKgPerDay).kgPerDay, 2)}</td></tr>`).join('')}</tbody></table></div><p class="micro">全酪連COWBELL No.178 p.8、日本飼養標準2017・柴田ら1984の抜粋。相対湿度60〜70%。時間変動、補間、外挿、最近傍への丸めなし。</p>
@@ -12627,7 +12648,7 @@ function comparisonContent(p, r) {
    <div><strong>${stats?.meanDeficitW == null ? '未評価' : (0, dom_js_1.num)(stats.meanDeficitW, 0)}</strong><small> W 平均放熱不足</small></div>
    <p>基準から不足低減 <b>${reduction(stats?.deficitReductionW)}</b><br>最大の不足 <b>${watts(stats?.maxDeficitW)}</b><br>不足が残る地点 <b>${stats?.meanDeficitW == null ? '未評価' : `${stats.deficitCount}/${stats.probeCount}`}</b><br>局所作用なし <b>${stats?.meanDeficitW == null ? '未評価' : stats.deficitNoActionCount}</b> 地点<br>不足が減らず残る <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> 地点 / 不足増加 <b>${count(stats?.worsenedDeficitCount)}</b> 地点</p>
    <table class="micro-table"><thead><tr><th>場所</th><th>平均不足</th><th>最大不足</th></tr></thead><tbody>${areaLines}</tbody></table>
-   <p>水 <b>${res ? (0, dom_js_1.num)(res.waterLPerDay, 0) + ' L/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.waterLPerDay - baseRes.waterLPerDay, 0)}）` : ''}<br>電力 <b>${res ? (0, dom_js_1.num)(res.totalKwhPerDay, 1) + ' kWh/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.totalKwhPerDay - baseRes.totalKwhPerDay, 1)}）` : ''}</p>
+   <p>水 <b>${res ? (0, dom_js_1.num)(res.waterLPerDay, 0) + ' L/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.waterLPerDay - baseRes.waterLPerDay, 0)}）` : ''}<br>電力 <b>${res ? (0, dom_js_1.num)(res.totalKwhPerDay, 1) + ' kWh/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.totalKwhPerDay - baseRes.totalKwhPerDay, 1)}）` : ''}<br>日・地点平均の不足 <b>${watts(s?.dailyThermal?.all?.meanDeficitW)}</b>${s?.dailyThermal ? `（最大 ${watts(s.dailyThermal.all?.maxDeficitW)}・${s.dailyThermal.weatherMode === 'hourly' ? '時刻別' : '固定'}気象）` : ''}</p>
    <span class="micro">${sc.roof.reflectance > .5 ? '遮熱あり' : '遮熱なし'} / ${sc.roof.insulationM > 0 ? '断熱あり' : '断熱なし'}</span></article>`;
     }).join('');
     const active = r?.scenarios.find(s => s.id === p.activeScenarioId);
@@ -12812,6 +12833,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MODEL_NOTES = void 0;
 exports.applyOperation = applyOperation;
 exports.evaluateOnProject = evaluateOnProject;
+exports.compareOnProject = compareOnProject;
 exports.createCommands = createCommands;
 const project_js_1 = require("../domain/project.js");
 const store_js_1 = require("../state/store.js");
@@ -12821,6 +12843,7 @@ const comparisonStats_js_1 = require("../model/comparisonStats.js");
 const simulation_js_1 = require("../model/simulation.js");
 const dailySimulation_js_1 = require("../model/dailySimulation.js");
 const modelInfo_js_1 = require("../model/modelInfo.js");
+const candidateComparison_js_1 = require("../model/candidateComparison.js");
 const CONFIRM_INPUT = '画面の入力を確定してください';
 /** Short guidance also embedded in the MCP server instructions and tool descriptions. */
 exports.MODEL_NOTES = [
@@ -12842,6 +12865,9 @@ exports.MODEL_NOTES = [
     '条件を変えた結果の比較にはedit→get_results→undoではなくevaluateを使う。画面の状態・Undo履歴を変えずに複数の仮説を試せる。',
     'モデルの計算構造・仮定・限界はdescribe_modelで取得できる。結果を説明する前に呼んでおく。',
     'モデル係数はupdate_model(物理)/update_milk(乳量仮説)/update_references(参照)で変更する。仮定の感度試行はevaluateと組み合わせ、係数を変えた結果は既定値とは別モデル入力として説明する。',
+    '代表日の時刻別気象はupdate_daily_weatherで設定。mode:"hourly"にはhour=0〜23の24行（昇順・一意）が必要。気圧・背景風・換気はenvironmentの値を全時刻で共用する。',
+    'dailyThermalは評価日(24h)の秒積算による地点・区画の平均不足。60分評価(points)は常にenvironment固定気象。日負荷の時間加重(dailyMilk.dailyDeficitWPerCow)と地点平均(dailyThermal.all.meanDeficitW)は定義が異なり一致しない。',
+    'compare_candidatesは同じ開始projectへ1〜3案の操作列を別々に適用して日結果・制約・順位を返す。候補操作は運転調整のみ（update_deviceのenabled/位置/向き/日運転、update_systemのonoff・日運転、update_roofの明示設定）。性能係数・気象・案切替は候補に使えない。順位はその呼出し内だけ有効。',
 ];
 const DEVICE_COMMON = ['x', 'y', 'heightM', 'yawDeg', 'pitchDownDeg', 'enabled'];
 const PATCH_FIELDS = {
@@ -13028,6 +13054,102 @@ async function evaluateOnProject(project, args, runEval) {
         dailyIncluded: !!job.daily, project: p,
     };
 }
+/** Candidate ops are restricted to operation-schedule/placement tweaks; model
+ * coefficients, weather, scenario switching and structural add/remove are not
+ * candidate knobs (they would let a candidate "win" by changing the rules). */
+const CANDIDATE_OPS = {
+    update_device: { fan: new Set(['enabled', 'x', 'y', 'heightM', 'yawDeg', 'pitchDownDeg', 'hoursPerDay', 'dailyStartHour']), nozzle: new Set(['enabled', 'x', 'y', 'heightM', 'yawDeg', 'pitchDownDeg']) },
+    update_system: new Set(['enabled', 'onSec', 'offSec', 'hoursPerDay', 'dailyStartHour']),
+    update_roof: new Set(['reflectance', 'insulationM', 'sprayEnabled', 'flowLpmM2', 'onSec', 'offSec', 'hoursPerDay', 'dailyStartHour']),
+};
+function assertCandidateOp(p, op) {
+    const allowed = CANDIDATE_OPS[op.operation];
+    if (!allowed)
+        throw Error(`候補比較で使えない操作です: ${op.operation}（使えるのはupdate_device/update_system/update_roofのみ。係数・気象・案切替・設備の追加削除は不可）`);
+    if (op.operation === 'update_device') {
+        const dev = deviceById(p, op.deviceId);
+        checkPatch(op.patch, (0, project_js_1.isFan)(dev) ? CANDIDATE_OPS.update_device.fan : CANDIDATE_OPS.update_device.nozzle, '候補の設備');
+    }
+    else
+        checkPatch(op.patch, allowed, '候補');
+}
+function normalizeConstraints(c, p) {
+    const ids = new Set([...(0, faces_js_1.buildAreas)(layout(p)).map(a => a.id), 'all']);
+    const priorityArea = c?.priorityArea ?? 'stalls';
+    if (!ids.has(priorityArea))
+        throw Error(`priorityAreaが不明です: ${priorityArea}（使えるID: ${[...ids].join(', ')}）`);
+    const protectAreas = c?.protectAreas ?? ['stalls', 'feeding', 'waiting'];
+    for (const a of protectAreas)
+        if (!ids.has(a))
+            throw Error(`protectAreasに不明な区域があります: ${a}`);
+    return { maxWaterLPerDay: c?.maxWaterLPerDay, maxElectricityKwhPerDay: c?.maxElectricityKwhPerDay, priorityArea, protectAreas, protectWorst: c?.protectWorst ?? true };
+}
+/** Stateless core of `compare_candidates`: evaluates the start scenario once,
+ * applies each candidate's ops to a fresh clone, and returns day-scale results,
+ * constraint verdicts and a deterministic order. Never cumulative. */
+async function compareOnProject(project, args, runEval) {
+    if (!args || !Array.isArray(args.candidates) || !args.candidates.length)
+        throw Error('candidatesに1〜3案の操作列が必要です');
+    if (args.candidates.length > 3)
+        throw Error('1回に比較できるのは3案までです。増やす場合は同じproject・同じ制約で分けて呼んでください');
+    const seen = new Set();
+    for (const c of args.candidates) {
+        if (!c || typeof c.id !== 'string' || !c.id)
+            throw Error('候補idが必要です');
+        if (seen.has(c.id))
+            throw Error(`候補idが重複しています: ${c.id}`);
+        seen.add(c.id);
+        if (!Array.isArray(c.operations))
+            throw Error(`候補${c.id}にoperationsの配列が必要です`);
+    }
+    const k = normalizeConstraints(args.constraints, project);
+    const targetId = args.scenarioId ?? project.activeScenarioId;
+    const meta = project.scenarios.find(s => s.id === targetId);
+    if (!meta)
+        throw Error(`案が見つかりません: ${targetId}`);
+    if (meta.readOnly)
+        throw Error('候補比較の対象は編集案です。基準案は変更できません');
+    const startJob = await runEval(structuredClone(project), { daily: true });
+    if (startJob.daily)
+        (0, dailySimulation_js_1.mergeDaily)(startJob.thermal, startJob.daily, startJob.dailyThermal ?? {}, startJob.dailyMilkStatus);
+    const startSr = startJob.thermal.scenarios.find(s => s.id === targetId);
+    const startSum = (0, candidateComparison_js_1.summarizeDay)(startSr);
+    const ranking = args.ranking ?? 'deficit';
+    if (!['deficit', 'water', 'worst'].includes(ranking))
+        throw Error(`rankingはdeficit/water/worstです: ${ranking}`);
+    const candidates = [];
+    for (const c of args.candidates) {
+        const tmp = new store_js_1.ProjectStore(structuredClone(project));
+        tmp.switchScenario(targetId);
+        let applied;
+        try {
+            applied = c.operations.map(op => { assertCandidateOp(tmp.committed, op); return applyOperation(tmp, op); });
+        }
+        catch (e) {
+            candidates.push({ id: c.id, status: 'invalid_input', error: e instanceof Error ? e.message : String(e), operations: [], constraintsSatisfied: false, improvesPriorityArea: false, violations: ['操作を適用できませんでした'] });
+            continue;
+        }
+        const job = await runEval(tmp.committed, { daily: true });
+        if (job.daily)
+            (0, dailySimulation_js_1.mergeDaily)(job.thermal, job.daily, job.dailyThermal ?? {}, job.dailyMilkStatus);
+        const sr = job.thermal.scenarios.find(s => s.id === targetId), sum = (0, candidateComparison_js_1.summarizeDay)(sr);
+        sum.worsenedPoints = (0, candidateComparison_js_1.worsenedCount)(sr, startSr);
+        const violations = (0, candidateComparison_js_1.checkConstraints)(sum, startSum, k);
+        candidates.push({ id: c.id, operations: applied, inputHash: (0, simulation_js_1.inputHash)(tmp.committed), status: sum.status, reasons: sum.reasons,
+            coolingWaterLPerDay: sum.coolingWaterLPerDay, electricityKwhPerDay: sum.electricityKwhPerDay,
+            areaMeanDeficitW: sum.areaMean, allMaxDeficitW: sum.allMax, worsenedPoints: sum.worsenedPoints,
+            violations, constraintsSatisfied: !violations.length, improvesPriorityArea: (0, candidateComparison_js_1.improvesPriorityArea)(sum, startSum, k.priorityArea),
+            dailyMilkYieldKgPerCowDay: sr?.dailyMilk?.yieldKgPerCowDay ?? null });
+    }
+    const pool = candidates.filter(c => c.constraintsSatisfied).map(c => ({ id: c.id, s: { areaMean: c.areaMeanDeficitW ?? {}, allMax: c.allMaxDeficitW ?? null, coolingWaterLPerDay: c.coolingWaterLPerDay ?? null, electricityKwhPerDay: c.electricityKwhPerDay ?? null }, improves: c.improvesPriorityArea }));
+    const order = (0, candidateComparison_js_1.rankCandidates)(pool, k.priorityArea, ranking);
+    return {
+        start: { scenarioId: targetId, inputHash: startJob.thermal.inputHash, coolingWaterLPerDay: startSum.coolingWaterLPerDay, electricityKwhPerDay: startSum.electricityKwhPerDay, areaMeanDeficitW: startSum.areaMean, allMaxDeficitW: startSum.allMax, valid: startSum.valid, reasons: startSum.reasons },
+        constraints: k, ranking: { mode: ranking, order, note: 'この順位はこの呼出しの候補内だけです。別呼出しの候補と比べるときは同じ規則で並べ直してください' },
+        candidates,
+        note: order.length ? `制約を満たす候補が${order.length}件あります` : `今回評価した候補では制約を満たす案がありません（全探索ではないので実現不可能とは断定しません）。violationsで除外条件を確認できます`,
+    };
+}
 function createCommands(d) {
     const store = d.store;
     function getState() {
@@ -13132,7 +13254,7 @@ function createCommands(d) {
         store.undo();
         return { changed, activeScenarioId: store.committed.activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(store.committed), undoCount: store.undoCount };
     }
-    return { get_state: getState, edit, evaluate, set_view: setView, get_results: getResults, undo, describe_model: describe };
+    return { get_state: getState, edit, evaluate, set_view: setView, get_results: getResults, undo, describe_model: describe, compare_candidates: (args) => compareOnProject(store.committed, args, d.evaluate) };
 }
 
 },
@@ -13189,6 +13311,7 @@ function describeModel(p) {
             `牛体収支: 対流(hc=${m.hcIntercept}+${m.hcSlope}×√v)+放射+基礎蒸発+ソーカー蒸発+結露(負)を秒ごとに計算し3600秒平均=meanQrefW`,
             `空気: 顕熱・潜熱を1つの集中気塊として集約。換気量${p.environment.ventilationM3sPerM2}m³/s/m²×床面積、背景顕熱${roof.backgroundSensibleW}W`,
             `日集計: 代表地点へ滞在時間の重み(牛床${hours(occ.stall)}/採食${hours(occ.feeding)}/その他${hours(occ.waiting)})を掛け、放熱不足を24時間積算して乳量仮説へ接続`,
+            `日気象: dailyWeather.mode="hourly"なら0〜23時の行で気温・湿度・屋根面日射を時刻別に供給し、日シミュレーションの屋根熱収支・空気・地点放熱へ反映（気象区切りで屋根・熱項キャッシュを無効化）。"constant"はenvironmentを全日固定`,
         ],
         outputs: {
             meanQrefW: '地点の正味放熱量[W]。components内訳=convectionW/radiationW/baseEvaporationW/soakerEvaporationW/condensationW',
@@ -13199,6 +13322,7 @@ function describeModel(p) {
             resources: '系統別・合計のwaterLPerDay/fanKwhPerDay/pumpKwhPerDay/totalKwhPerDay。trialWaterL/trialKwhは60分試行分',
             roof: 'meanOuterC/meanUnderC/meanAirC/meanRadiantCと散水収支suppliedL/evaporatedKg/runoffL',
             dailyMilk: '仮説モデルの日乳量。Y=Y0−min(Y0×maxLossFraction, beta×不足積算E)。resourcesは日集計の水量・電力量',
+            dailyThermal: '評価日(24h)の地点別・区画別平均（meanDeficitW/meanQrefW/気温/風速/湿度/放熱内訳/作用割合）。weatherModeで使用気象を明示。不足は秒ごとにmax(0,Qref−Q)で積算（日平均を後で切るのではない）',
         },
         keyAssumptions: {
             referenceCoolingWPerCow: ms.referenceCoolingWPerCow,
@@ -13221,6 +13345,88 @@ function describeModel(p) {
         validation: 'reference/thermal(v0.5 Python参照との数値一致テスト V08-PY*)、reference/fertility(v0.7)。モデル式・係数はこれらで固定',
         docs: ['reference/thermal/MODEL.md', 'docs/MILK_HEAT_MODEL_V0_1.md', 'docs/cooling_planner_decisions_v0_6.md', 'docs/DECISIONS_v0_8.md'],
     };
+}
+
+},
+"model/candidateComparison.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EPS = void 0;
+exports.summarizeDay = summarizeDay;
+exports.worsenedCount = worsenedCount;
+exports.checkConstraints = checkConstraints;
+exports.improvesPriorityArea = improvesPriorityArea;
+exports.rankCandidates = rankCandidates;
+/** Constrained candidate comparison (単位C): the LLM builds a few candidates and
+ * this module supplies the numbers, constraint verdicts and a transparent order.
+ * No opaque weighted score — ordering keys are fixed per ranking mode. */
+exports.EPS = 1e-6;
+function summarizeDay(r) {
+    const t = r?.dailyThermal;
+    if (!r || !t)
+        return { status: 'missing', coolingWaterLPerDay: null, electricityKwhPerDay: null, areaMean: {}, allMax: null, worsenedPoints: null, valid: false, reasons: ['日結果がありません'] };
+    const areaMean = {};
+    for (const a of t.areas)
+        areaMean[a.id] = a.meanDeficitW;
+    areaMean.all = t.all?.meanDeficitW ?? null;
+    return { status: t.status, coolingWaterLPerDay: t.resources?.waterLPerDay ?? null, electricityKwhPerDay: t.resources?.totalKwhPerDay ?? null,
+        areaMean, allMax: t.all?.maxDeficitW ?? null,
+        worsenedPoints: null, valid: t.status === 'complete' && t.all?.meanDeficitW != null, reasons: t.reasons };
+}
+/** Points-map accessor kept separate so the serializable summary stays flat. */
+function worsenedCount(r, start) {
+    const a = r?.dailyThermal?.points, b = start?.dailyThermal?.points;
+    if (!a || !b)
+        return null;
+    const base = new Map(b.map(q => [q.probeId, q.meanDeficitW]));
+    let n = 0;
+    for (const q of a)
+        if (q.meanDeficitW > (base.get(q.probeId) ?? 0) + exports.EPS)
+            n++;
+    return n;
+}
+function checkConstraints(c, start, k) {
+    const v = [];
+    if (!c.valid)
+        return ['日計算が未評価です（0不足・0消費にはしません）'];
+    if (k.maxWaterLPerDay != null && (c.coolingWaterLPerDay ?? Infinity) > k.maxWaterLPerDay + exports.EPS)
+        v.push(`冷却水 ${c.coolingWaterLPerDay} L/日が上限 ${k.maxWaterLPerDay} を超過`);
+    if (k.maxElectricityKwhPerDay != null && (c.electricityKwhPerDay ?? Infinity) > k.maxElectricityKwhPerDay + exports.EPS)
+        v.push(`電力 ${c.electricityKwhPerDay} kWh/日が上限 ${k.maxElectricityKwhPerDay} を超過`);
+    if (start.valid)
+        for (const a of k.protectAreas) {
+            const cm = c.areaMean[a], sm = start.areaMean[a];
+            if (cm != null && sm != null && cm > sm + exports.EPS)
+                v.push(`保護区域 ${a} の日平均不足が開始案より増加（${sm}→${cm} W）`);
+            if (cm != null && sm == null)
+                v.push(`保護区域 ${a} の開始案値が未評価のため比較不可`);
+        }
+    if (k.protectWorst && start.valid && c.allMax != null && start.allMax != null && c.allMax > start.allMax + exports.EPS)
+        v.push(`全地点の最大不足が開始案より増加（${start.allMax}→${c.allMax} W）`);
+    return v;
+}
+function improvesPriorityArea(c, start, priorityArea) {
+    const cm = c.areaMean[priorityArea], sm = start.areaMean[priorityArea];
+    return cm != null && sm != null && cm < sm - exports.EPS;
+}
+/** Deterministic ordering; returns candidate ids best-first. Only called on
+ * constraint-satisfying candidates. Ties fall back to candidate id. */
+function rankCandidates(entries, priorityArea, mode) {
+    const val = (s, k) => k === 'priority' ? (s.areaMean[priorityArea] ?? Infinity) : k === 'allMax' ? (s.allMax ?? Infinity) : k === 'water' ? (s.coolingWaterLPerDay ?? Infinity) : (s.electricityKwhPerDay ?? Infinity);
+    const pool = mode === 'water' ? entries.filter(e => e.improves) : entries;
+    const keys = {
+        deficit: ['priority', 'allMax', 'water', 'kwh'],
+        water: ['water', 'priority', 'kwh'],
+        worst: ['allMax', 'priority', 'water', 'kwh'],
+    };
+    return [...pool].sort((a, b) => {
+        for (const k of keys[mode]) {
+            const d = val(a.s, k) - val(b.s, k);
+            if (Math.abs(d) > exports.EPS)
+                return d;
+        }
+        return a.id.localeCompare(b.id);
+    }).map(e => e.id);
 }
 
 },

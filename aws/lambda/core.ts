@@ -5,8 +5,8 @@
 import type {Project} from '../../src/domain/project.js';
 import {validateProject} from '../../src/domain/validation.js';
 import {createProject} from '../../src/data/defaults.js';
-import {evaluateOnProject,MODEL_NOTES} from '../../src/mcp/commands.js';
-import type {EditArgs,EvalJob} from '../../src/mcp/commands.js';
+import {evaluateOnProject,compareOnProject,MODEL_NOTES} from '../../src/mcp/commands.js';
+import type {EditArgs,EvalJob,CompareArgs} from '../../src/mcp/commands.js';
 import {buildLayout} from '../../src/template/layout.js';
 import {buildAreas} from '../../src/template/faces.js';
 import {simulate} from '../../src/model/simulation.js';
@@ -39,6 +39,17 @@ export function evaluateProject(args:EvaluateInput){
   operations:args.operations??[],
   scenarioId:args.scenarioId,
   includeDaily:args.includeDaily,
+ },runSimulation);
+}
+
+export interface CompareInput{project?:unknown;scenarioId?:string;candidates?:CompareArgs['candidates'];constraints?:CompareArgs['constraints'];ranking?:CompareArgs['ranking']}
+
+/** Stateless constrained candidate comparison; each candidate is applied to a
+ * fresh clone of the start project (never cumulative). */
+export function compareProject(args:CompareInput){
+ return compareOnProject(resolveProject(args.project),{
+  candidates:args.candidates??[],scenarioId:args.scenarioId,
+  constraints:args.constraints,ranking:args.ranking,
  },runSimulation);
 }
 
