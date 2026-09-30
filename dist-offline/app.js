@@ -11969,6 +11969,7 @@ function layout() {
  <span id="status" role="status" data-state="calculating">計算準備中</span>
  <div class="header-actions">
   <button data-action="evidence" class="quiet">${(0, dom_js_1.icon)('info', 15)} 根拠</button>
+  <button data-action="help" class="quiet" title="操作と結果の読み方・AIエージェント(MCP)接続情報">？ ヘルプ</button>
   <button data-action="settings" class="quiet">設定・保存</button>
   <button data-action="load" class="quiet">読込</button>
   <button data-action="save" class="primary">${(0, dom_js_1.icon)('save', 15)} 保存</button>
