@@ -8,7 +8,8 @@
 
 - Endpoint: https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/ (streamable HTTP, Bearer auth)
 - Tools: `get_default_project` (既定Project JSON), `evaluate` (操作列を複製へ適用→熱・水・乳量を計算), `describe_model` (モデル構造・仮定・限界), `get_doc` (モデル理論の文書本文)
-- Client config: `{"type":"http","url":"<endpoint>","headers":{"Authorization":"Bearer <token>"}}`
+- Public demo token (freely usable; rate abuse → rotation): `demo-581fKusGqNgk7YrycFNw6M_5`
+- Client config: `{"type":"http","url":"https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/","headers":{"Authorization":"Bearer demo-581fKusGqNgk7YrycFNw6M_5"}}`
 
 ## Links
 

@@ -7,7 +7,8 @@
 import {describe,evaluateProject} from './core.js';
 import {APP_VERSION} from '../../src/data/defaults.js';
 
-const TOKEN=process.env.MCP_BEARER_TOKEN??'';
+// Private token + published demo token (see mcp.ts).
+const TOKENS=new Set([process.env.MCP_BEARER_TOKEN,process.env.MCP_DEMO_TOKEN].filter(Boolean) as string[]);
 
 const json=(statusCode:number,data:unknown)=>({statusCode,headers:{'content-type':'application/json'},body:JSON.stringify(data)});
 
@@ -19,7 +20,7 @@ interface FunctionUrlEvent{
 
 export async function lambdaHandler(event:FunctionUrlEvent){
  const auth=event.headers?.authorization??event.headers?.Authorization??'';
- if(TOKEN&&auth!==`Bearer ${TOKEN}`)return json(401,{error:'unauthorized'});
+ if(TOKENS.size&&!TOKENS.has(auth.startsWith('Bearer ')?auth.slice(7):''))return json(401,{error:'unauthorized'});
  const method=event.requestContext.http.method,path=event.rawPath;
  console.log(JSON.stringify({method,path})); // evidence log for CloudWatch
  if(method==='GET'&&path==='/health')return json(200,{ok:true,version:APP_VERSION});

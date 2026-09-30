@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.okajun35/cooling-planner",
+  "title": "Cooling Planner",
+  "description": "MCP simulator for dairy barn cooling: evaluate equipment, roof and weather on heat, water and milk.",
+  "version": "0.9.0-preview.1",
+  "websiteUrl": "https://main.da05znjm47ziu.amplifyapp.com",
+  "repository": {
+    "url": "https://github.com/okajun35/cooling-planner",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Public demo bearer token for the shared evaluation endpoint.",
+          "value": "Bearer demo-581fKusGqNgk7YrycFNw6M_5",
+          "isRequired": true
+        }
+      ]
+    }
+  ]
+}

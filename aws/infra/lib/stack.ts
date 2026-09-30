@@ -15,13 +15,14 @@ export class CoolingPlannerStack extends cdk.Stack{
   super(scope,id,props);
   const token=this.node.tryGetContext('mcpBearerToken') as string|undefined;
   if(!token)throw new Error('CDK context mcpBearerToken is required — deploy via `node aws/deploy.mjs`');
+  const demoToken=this.node.tryGetContext('mcpDemoToken') as string|undefined;
   const distDir=fileURLToPath(new URL('../../dist',import.meta.url));
 
   const shared={
    runtime:lambda.Runtime.NODEJS_22_X,
    memorySize:1024,
    timeout:cdk.Duration.seconds(180),
-   environment:{MCP_BEARER_TOKEN:token},
+   environment:{MCP_BEARER_TOKEN:token,...(demoToken?{MCP_DEMO_TOKEN:demoToken}:{})},
   };
   const mcpFn=new lambda.Function(this,'McpFunction',{
    functionName:'cooling-planner-mcp',

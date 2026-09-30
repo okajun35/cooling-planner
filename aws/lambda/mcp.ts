@@ -9,7 +9,9 @@ import {defaultProject,describe,evaluateProject} from './core.js';
 import {DOCS} from './docs.js';
 import {APP_VERSION} from '../../src/data/defaults.js';
 
-const TOKEN=process.env.MCP_BEARER_TOKEN??'';
+// Accepted Bearer tokens: private (MCP_BEARER_TOKEN) and the published demo
+// token (MCP_DEMO_TOKEN, shown in llms.txt/README/registry so anyone can try).
+const TOKENS=new Set([process.env.MCP_BEARER_TOKEN,process.env.MCP_DEMO_TOKEN].filter(Boolean) as string[]);
 
 const asText=(data:unknown,isError=false)=>({content:[{type:'text' as const,text:typeof data==='string'?data:JSON.stringify(data)}],...(isError?{isError:true}:{})});
 const call=async(fn:()=>unknown|Promise<unknown>)=>{try{return asText(await fn())}catch(e){return asText(e instanceof Error?e.message:String(e),true)}};
@@ -126,7 +128,7 @@ interface FunctionUrlEvent{
 
 export async function lambdaHandler(event:FunctionUrlEvent){
  const auth=event.headers?.authorization??event.headers?.Authorization??'';
- if(TOKEN&&auth!==`Bearer ${TOKEN}`){
+ if(TOKENS.size&&!TOKENS.has(auth.startsWith('Bearer ')?auth.slice(7):'')){
   return{statusCode:401,headers:{'content-type':'application/json','www-authenticate':'Bearer realm="cooling-planner-mcp"'},body:JSON.stringify({error:'unauthorized'})};
  }
  const headers=new Headers(event.headers??{});

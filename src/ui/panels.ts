@@ -194,8 +194,9 @@ export function renderHelp(){
  <tr><th>風・散水</th><td>ファン風と水滴は作用の模式表現です。CFDではありません。</td></tr>
  <tr><th>乳量・受胎</th><td>日乳量は仮説モデル（demo_assumption）、受胎はTHI区分の参考シナリオです。実農場の予測値ではありません。</td></tr></tbody></table>
  <h3>AIエージェント (MCP) から使う</h3><table><tbody>
- <tr><th>リモートMCP</th><td>この計算モデルをMCP (Model Context Protocol) 経由で外部エージェントから呼べます。<br><code>https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/</code><br>ツール: get_default_project / evaluate / describe_model / get_doc。要Bearerトークン。</td></tr>
- <tr><th>接続設定例</th><td><code>{"type":"http","url":"&lt;上のURL&gt;","headers":{"Authorization":"Bearer &lt;トークン&gt;"}}</code></td></tr>
+ <tr><th>リモートMCP</th><td>この計算モデルをMCP (Model Context Protocol) 経由で外部エージェントから呼べます。<br><code>https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/</code><br>ツール: get_default_project / evaluate / describe_model / get_doc。</td></tr>
+ <tr><th>公開デモトークン</th><td><code>demo-581fKusGqNgk7YrycFNw6M_5</code>（誰でも使える公開用。悪用時はこのトークンのみ停止します）</td></tr>
+ <tr><th>接続設定例</th><td><code>{"type":"http","url":"&lt;上のURL&gt;","headers":{"Authorization":"Bearer demo-581fKusGqNgk7YrycFNw6M_5"}}</code></td></tr>
  <tr><th>ローカルMCP</th><td>リポジトリで <code>npm run mcp</code> を実行すると、開いている画面をAIが直接操作するPoC版が使えます。</td></tr></tbody></table>
  <p class="micro"><button data-action="guide-restart" class="text-button">初回ガイドをもう一度見る</button> · <button data-action="evidence" class="text-button">モデルの根拠と仮定 →</button></p>`);
 }

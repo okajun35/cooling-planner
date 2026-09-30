@@ -125,10 +125,10 @@ devin mcp add cooling-planner -- node /home/hddwm390/tmp/cooling-planner/scripts
 
 ### リモートMCP への接続
 
-Kiro・Claude・その他のMCPクライアントに以下を登録します（Bearerトークンは `aws/deploy.local.json` の `mcpBearerToken`、git管理外）：
+Kiro・Claude・その他のMCPクライアントに以下を登録します。公開デモトークン `demo-581fKusGqNgk7YrycFNw6M_5` は誰でも利用可能です（悪用時はローテーション）。管理用の私有トークンは `aws/deploy.local.json` の `mcpBearerToken`（git管理外）：
 
 ```json
-{"cooling-planner-remote":{"type":"http","url":"https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/","headers":{"Authorization":"Bearer <トークン>"}}}
+{"cooling-planner-remote":{"type":"http","url":"https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/","headers":{"Authorization":"Bearer demo-581fKusGqNgk7YrycFNw6M_5"}}}
 ```
 
 ```sh

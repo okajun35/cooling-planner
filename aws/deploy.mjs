@@ -27,6 +27,11 @@ if(!state.mcpBearerToken){
  writeFileSync(STATE_FILE,JSON.stringify(state,null,2));
  log('generated MCP bearer token ->',STATE_FILE);
 }
+if(!state.mcpDemoToken){
+ state.mcpDemoToken='demo-'+randomBytes(18).toString('base64url');
+ writeFileSync(STATE_FILE,JSON.stringify(state,null,2));
+ log('generated MCP demo token ->',STATE_FILE);
+}
 
 // ---- 1. site build --------------------------------------------------------
 if(!ARGS.has('--skip-site')){
@@ -59,6 +64,7 @@ if(!ARGS.has('--skip-cdk')){
  log('cdk deploy');
  run('npx',['aws-cdk','deploy','--require-approval','never',
   '-c',`mcpBearerToken=${state.mcpBearerToken}`,
+  '-c',`mcpDemoToken=${state.mcpDemoToken}`,
   '--outputs-file',path.join(AWS_DIR,'cdk-outputs.json')],{cwd:INFRA,stdio:'inherit'});
  const outputs=JSON.parse(readFileSync(path.join(AWS_DIR,'cdk-outputs.json'),'utf8')).CoolingPlanner;
  Object.assign(state,outputs);
