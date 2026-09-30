@@ -1,0 +1,16 @@
+# Cooling Planner
+
+> モデル牛舎の設備配置・屋根条件を変え、環境・水資源・代表牛の放熱・日乳量(仮説モデル)を比較するブラウザシミュレーター。実農場の確定予測ではなく、代表条件の縮約モデル。
+
+## Remote MCP (Model Context Protocol)
+
+計算モデルを外部エージェントから呼べるステートレスなリモートMCPを提供している。
+
+- Endpoint: https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/ (streamable HTTP, Bearer auth)
+- Tools: `get_default_project` (既定Project JSON), `evaluate` (操作列を複製へ適用→熱・水・乳量を計算), `describe_model` (モデル構造・仮定・限界), `get_doc` (モデル理論の文書本文)
+- Client config: `{"type":"http","url":"<endpoint>","headers":{"Authorization":"Bearer <token>"}}`
+
+## Links
+
+- Source & docs: https://github.com/okajun35/cooling-planner
+- Model spec: reference/thermal/MODEL.md, docs/MILK_HEAT_MODEL_V0_1.md (same content via `get_doc`)

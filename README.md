@@ -121,7 +121,15 @@ devin mcp add cooling-planner -- node /home/hddwm390/tmp/cooling-planner/scripts
 
 ## AWS へのデプロイ
 
-実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト、GitHub連携で `main` への push で自動デプロイ）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `describe_model`（操作語彙はローカル版と同一）。
+実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト、GitHub連携で `main` への push で自動デプロイ）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `describe_model` / `get_doc`（操作語彙はローカル版と同一）。
+
+### リモートMCP への接続
+
+Kiro・Claude・その他のMCPクライアントに以下を登録します（Bearerトークンは `aws/deploy.local.json` の `mcpBearerToken`、git管理外）：
+
+```json
+{"cooling-planner-remote":{"type":"http","url":"https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/","headers":{"Authorization":"Bearer <トークン>"}}}
+```
 
 ```sh
 cd aws && npm ci && cd ..

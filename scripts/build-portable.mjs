@@ -15,6 +15,7 @@ const threeLicense=await readFile(path.join(root,'node_modules/three/LICENSE'),'
 const css=await readFile(path.join(root,'src/styles.css'),'utf8'),app=`/* Three.js license\n${threeLicense}\n*/\n`+bundle('main.js'),html=await readFile(path.join(root,'index.html'),'utf8');
 await writeFile(path.join(out,'THREE-LICENSE.txt'),threeLicense);
 await writeFile(path.join(out,'styles.css'),css);await writeFile(path.join(out,'app.js'),app);await writeFile(path.join(out,'worker.js'),worker);
+await writeFile(path.join(out,'llms.txt'),await readFile(path.join(root,'llms.txt'),'utf8'));
 const portable=html.replace('./src/styles.css','./styles.css').replace('<script type="module" src="./src/main.ts"></script>','<script src="./app.js"></script>');await writeFile(path.join(out,'index.html'),portable);
 const script=s=>s.replace(/<\/script/gi,'<\\/script');
 const standalone=portable.replace('<link rel="stylesheet" href="./styles.css">',`<style>${css}</style>`).replace('<script src="./app.js"></script>',`<script>window.__DCS_WORKER_SOURCE__=${JSON.stringify(worker).replace(/<\/script/gi,'<\\/script')};</script><script>${script(app)}</script>`);
