@@ -67,7 +67,7 @@ export function defaultProject(){
   scenarios:p.scenarios.map(s=>({id:s.id,name:s.name,readOnly:s.readOnly,fanIds:s.fans.map(f=>f.id),systemIds:s.waterSystems.map(w=>w.id),nozzleIds:s.waterSystems.flatMap(w=>w.nozzles.map(n=>n.id))})),
   probes:l.probes.map(q=>({id:q.id,label:q.label,kind:q.kind})),
   areas:buildAreas(l).map(a=>({id:a.id,label:a.label,probeIds:a.probeIds})),
-  note:'projectをevaluateへそのまま渡せる。schemaVersion必須',
+  note:'the project can be passed straight to evaluate. schemaVersion is required',
   modelNotes:MODEL_NOTES,
  };
 }

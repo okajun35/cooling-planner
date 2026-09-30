@@ -9,10 +9,10 @@ import decisionsV06Md from '../../docs/cooling_planner_decisions_v0_6.md';
 export interface DocEntry{title:string;path:string;text:string}
 
 export const DOCS={
- thermal_model:{title:'熱・散水モデル仕様 (MODEL.md)',path:'reference/thermal/MODEL.md',text:modelMd},
- milk_model:{title:'日乳量仮説モデル (MILK_HEAT_MODEL_V0_1.md)',path:'docs/MILK_HEAT_MODEL_V0_1.md',text:milkMd},
- decisions_v08:{title:'設計決定ログ v0.8 (DECISIONS_v0_8.md)',path:'docs/DECISIONS_v0_8.md',text:decisionsV08Md},
- decisions_v06:{title:'設計決定ログ v0.6 (cooling_planner_decisions_v0_6.md)',path:'docs/cooling_planner_decisions_v0_6.md',text:decisionsV06Md},
+ thermal_model:{title:'Heat and spray model spec (MODEL.md)',path:'reference/thermal/MODEL.md',text:modelMd},
+ milk_model:{title:'Daily-milk hypothesis model (MILK_HEAT_MODEL_V0_1.md)',path:'docs/MILK_HEAT_MODEL_V0_1.md',text:milkMd},
+ decisions_v08:{title:'Design decision log v0.8 (DECISIONS_v0_8.md)',path:'docs/DECISIONS_v0_8.md',text:decisionsV08Md},
+ decisions_v06:{title:'Design decision log v0.6 (cooling_planner_decisions_v0_6.md)',path:'docs/cooling_planner_decisions_v0_6.md',text:decisionsV06Md},
 } satisfies Record<string,DocEntry>;
 
 export const DOC_NAMES=Object.keys(DOCS) as (keyof typeof DOCS)[];

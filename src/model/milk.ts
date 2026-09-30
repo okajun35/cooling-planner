@@ -29,15 +29,15 @@ const MILK_ZONES:MilkZone[]=['stall','feeding','waiting'];
  */
 export function occupancyWeights(probes:readonly Pick<Probe,'id'|'kind'>[],fractions:MilkSimulation['occupancyFractions']):
   {weights:Map<string,number>;counts:Record<MilkZone,number>}|{error:string}{
-  if(!MILK_ZONES.every(k=>Number.isFinite(fractions[k])&&fractions[k]>=0))return {error:'区域の滞在割合が不正です'};
+  if(!MILK_ZONES.every(k=>Number.isFinite(fractions[k])&&fractions[k]>=0))return {error:'invalid zone occupancy fractions'};
   const sum=MILK_ZONES.reduce((a,k)=>a+fractions[k],0);
-  if(Math.abs(sum-1)>1e-9)return {error:'区域の滞在割合の合計が1ではありません'};
+  if(Math.abs(sum-1)>1e-9)return {error:'zone occupancy fractions do not sum to 1'};
   const counts:Record<MilkZone,number>={stall:0,feeding:0,waiting:0};
   for(const q of probes){
-    if(!MILK_ZONES.includes(q.kind as MilkZone))return {error:`評価地点 ${q.id} の区域対応がありません`};
+    if(!MILK_ZONES.includes(q.kind as MilkZone))return {error:`evaluation point ${q.id} has no zone mapping`};
     counts[q.kind as MilkZone]++;
   }
-  for(const k of MILK_ZONES)if(counts[k]===0&&fractions[k]>0)return {error:'滞在割合に対応する評価地点がありません'};
+  for(const k of MILK_ZONES)if(counts[k]===0&&fractions[k]>0)return {error:'no evaluation points exist for a zone with nonzero occupancy'};
   const weights=new Map<string,number>();
   for(const q of probes)weights.set(q.id,fractions[q.kind as MilkZone]/counts[q.kind as MilkZone]);
   return {weights,counts};
@@ -70,24 +70,24 @@ export const deltaYield=(a:{yieldKgPerCowDay:number}|null|undefined,b:{yieldKgPe
 /** Settings validation for the v0.1 contract. Returns reasons; empty means usable. Never repairs values. */
 export function validateMilkSettings(m:MilkSimulation):string[]{
   const r:string[]=[];
-  if(m.modelId!==MILK_MODEL_ID)r.push('乳量モデルIDが未対応です');
-  if(m.mode!=='repeated-day')r.push('時間モードは代表日の繰り返しのみです');
-  if(m.weatherMode!=='constant-environment'&&m.weatherMode!=='hourly-representative-day')r.push('気象モードが未対応です');
-  if(m.operationPolicy!=='daily-window-reset-v1')r.push('運転ポリシーが未対応です');
-  if(m.assumptionClass!=='demo_assumption')r.push('仮定の分類が不正です');
-  if(!Number.isFinite(m.potentialMilkKgPerCowDay)||m.potentialMilkKgPerCowDay<=0)r.push('基準日乳量は正の有限値が必要です');
-  if(!Number.isFinite(m.referenceCoolingWPerCow)||m.referenceCoolingWPerCow<0)r.push('基準放熱量は非負の有限値が必要です');
-  if(!Number.isFinite(m.responseKgPerCowDayPerW)||m.responseKgPerCowDayPerW<0)r.push('換算係数は非負の有限値が必要です');
-  if(!Number.isFinite(m.maxLossFraction)||m.maxLossFraction<0||m.maxLossFraction>1)r.push('低下上限率は0〜1が必要です');
+  if(m.modelId!==MILK_MODEL_ID)r.push('unsupported milk model ID');
+  if(m.mode!=='repeated-day')r.push('the time mode only supports a repeating representative day');
+  if(m.weatherMode!=='constant-environment'&&m.weatherMode!=='hourly-representative-day')r.push('unsupported weather mode');
+  if(m.operationPolicy!=='daily-window-reset-v1')r.push('unsupported operation policy');
+  if(m.assumptionClass!=='demo_assumption')r.push('invalid assumption class');
+  if(!Number.isFinite(m.potentialMilkKgPerCowDay)||m.potentialMilkKgPerCowDay<=0)r.push('baseline daily milk must be a positive finite value');
+  if(!Number.isFinite(m.referenceCoolingWPerCow)||m.referenceCoolingWPerCow<0)r.push('reference cooling must be a non-negative finite value');
+  if(!Number.isFinite(m.responseKgPerCowDayPerW)||m.responseKgPerCowDayPerW<0)r.push('the response coefficient must be a non-negative finite value');
+  if(!Number.isFinite(m.maxLossFraction)||m.maxLossFraction<0||m.maxLossFraction>1)r.push('max loss fraction must be 0–1');
   const w=m.lagWeights;
-  if(!Array.isArray(w)||w.length!==3||!w.every(x=>Number.isFinite(x)&&x>=0))r.push('遅れの重みは非負の3要素が必要です');
-  else if(Math.abs(w[0]+w[1]+w[2]-1)>1e-9)r.push('遅れの重みの合計が1ではありません');
+  if(!Array.isArray(w)||w.length!==3||!w.every(x=>Number.isFinite(x)&&x>=0))r.push('lag weights must be 3 non-negative elements');
+  else if(Math.abs(w[0]+w[1]+w[2]-1)>1e-9)r.push('lag weights do not sum to 1');
   const o=m.occupancyFractions;
-  if(!o||typeof o!=='object'||!MILK_ZONES.every(k=>Number.isFinite(o[k])&&o[k]>=0))r.push('区域の滞在割合は非負の3区域が必要です');
-  else if(Math.abs(o.stall+o.feeding+o.waiting-1)>1e-9)r.push('区域の滞在割合の合計が1ではありません');
+  if(!o||typeof o!=='object'||!MILK_ZONES.every(k=>Number.isFinite(o[k])&&o[k]>=0))r.push('occupancy fractions must cover 3 non-negative zones');
+  else if(Math.abs(o.stall+o.feeding+o.waiting-1)>1e-9)r.push('zone occupancy fractions do not sum to 1');
   const b=m.responseSensitivityKgPerCowDayPerW;
-  if(!Array.isArray(b)||b.length!==3||!b.every(x=>Number.isFinite(x)&&x>=0))r.push('感度比較は非負の3条件が必要です');
-  if(m.warmupDurationSec!==86400||m.evaluationDurationSec!==86400)r.push('準備・評価は各86400秒のみです');
-  if(m.timeStepSec!==1)r.push('日計算の時間刻みは1秒のみです');
+  if(!Array.isArray(b)||b.length!==3||!b.every(x=>Number.isFinite(x)&&x>=0))r.push('sensitivity comparison requires 3 non-negative betas');
+  if(m.warmupDurationSec!==86400||m.evaluationDurationSec!==86400)r.push('warmup and evaluation must each be 86400 s');
+  if(m.timeStepSec!==1)r.push('the daily calculation time step is 1 s only');
   return r;
 }

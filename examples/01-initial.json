@@ -1,5 +1,9 @@
 {
-  "schemaVersion": 9,
+  "schemaVersion": 10,
+  "dailyWeather": {
+    "mode": "constant",
+    "hours": []
+  },
   "references": {
     "milkModel": "milk-table-cowbell178-v1",
     "baselineMilkKgPerDay": 35,
@@ -42,7 +46,7 @@
     "timeStepSec": 1,
     "assumptionClass": "demo_assumption"
   },
-  "appVersion": "0.9.0-preview.1",
+  "appVersion": "0.10.0-preview.1",
   "template": {
     "id": "fs-amr1-50-guided-reference",
     "version": 1,
@@ -60,7 +64,7 @@
     "solarRoofWm2": 800
   },
   "model": {
-    "version": "cooling-integrated-v0.9",
+    "version": "cooling-integrated-v0.10",
     "roof": {
       "version": "cooling-thermal-v0.5-assumptions-1",
       "backgroundSensibleW": 10000,
@@ -92,7 +96,7 @@
     "profiles": [
       {
         "id": "low",
-        "name": "低値側の仮定",
+        "name": "Low-side assumption",
         "outletMultiplier": 0.8,
         "hcMultiplier": 0.8,
         "mistEfficiency": 0.4,
@@ -100,7 +104,7 @@
       },
       {
         "id": "reference",
-        "name": "基準の仮定",
+        "name": "Reference assumption",
         "outletMultiplier": 1,
         "hcMultiplier": 1,
         "mistEfficiency": 0.6,
@@ -108,7 +112,7 @@
       },
       {
         "id": "high",
-        "name": "高値側の仮定",
+        "name": "High-side assumption",
         "outletMultiplier": 1.2,
         "hcMultiplier": 1.2,
         "mistEfficiency": 0.8,
@@ -121,7 +125,7 @@
   "scenarios": [
     {
       "id": "baseline",
-      "name": "基準案",
+      "name": "Baseline",
       "readOnly": true,
       "roof": {
         "reflectance": 0.2,
@@ -137,7 +141,7 @@
       "fans": [
         {
           "id": "fan-feeding-1",
-          "label": "採食帯 ファン 1",
+          "label": "Feeding alley fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 6,
@@ -157,7 +161,7 @@
         },
         {
           "id": "fan-feeding-2",
-          "label": "採食帯 ファン 2",
+          "label": "Feeding alley fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 6,
@@ -177,7 +181,7 @@
         },
         {
           "id": "fan-stall-A-1",
-          "label": "牛床 A ファン 1",
+          "label": "Stalls A fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 9.25,
@@ -197,7 +201,7 @@
         },
         {
           "id": "fan-stall-A-2",
-          "label": "牛床 A ファン 2",
+          "label": "Stalls A fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 9.25,
@@ -217,7 +221,7 @@
         },
         {
           "id": "fan-stall-B-1",
-          "label": "牛床 B ファン 1",
+          "label": "Stalls B fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 14.25,
@@ -237,7 +241,7 @@
         },
         {
           "id": "fan-stall-B-2",
-          "label": "牛床 B ファン 2",
+          "label": "Stalls B fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 14.25,
@@ -257,7 +261,7 @@
         },
         {
           "id": "fan-stall-C-1",
-          "label": "牛床 C ファン 1",
+          "label": "Stalls C fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 16.75,
@@ -277,7 +281,7 @@
         },
         {
           "id": "fan-stall-C-2",
-          "label": "牛床 C ファン 2",
+          "label": "Stalls C fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 16.75,
@@ -297,7 +301,7 @@
         },
         {
           "id": "fan-stall-D-1",
-          "label": "牛床 D ファン 1",
+          "label": "Stalls D fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 21.75,
@@ -317,7 +321,7 @@
         },
         {
           "id": "fan-stall-D-2",
-          "label": "牛床 D ファン 2",
+          "label": "Stalls D fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 21.75,
@@ -349,7 +353,7 @@
           "nozzles": [
             {
               "id": "soaker-1",
-              "label": "ソーカー 1",
+              "label": "Soaker 1",
               "enabled": true,
               "x": 3.5583333333333336,
               "y": 5.75,
@@ -366,7 +370,7 @@
             },
             {
               "id": "soaker-2",
-              "label": "ソーカー 2",
+              "label": "Soaker 2",
               "enabled": true,
               "x": 5.674999999999999,
               "y": 5.75,
@@ -383,7 +387,7 @@
             },
             {
               "id": "soaker-3",
-              "label": "ソーカー 3",
+              "label": "Soaker 3",
               "enabled": true,
               "x": 7.791666666666667,
               "y": 5.75,
@@ -400,7 +404,7 @@
             },
             {
               "id": "soaker-4",
-              "label": "ソーカー 4",
+              "label": "Soaker 4",
               "enabled": true,
               "x": 9.908333333333331,
               "y": 5.75,
@@ -417,7 +421,7 @@
             },
             {
               "id": "soaker-5",
-              "label": "ソーカー 5",
+              "label": "Soaker 5",
               "enabled": true,
               "x": 12.025,
               "y": 5.75,
@@ -434,7 +438,7 @@
             },
             {
               "id": "soaker-6",
-              "label": "ソーカー 6",
+              "label": "Soaker 6",
               "enabled": true,
               "x": 14.141666666666666,
               "y": 5.75,
@@ -451,7 +455,7 @@
             },
             {
               "id": "soaker-7",
-              "label": "ソーカー 7",
+              "label": "Soaker 7",
               "enabled": true,
               "x": 16.258333333333333,
               "y": 5.75,
@@ -468,7 +472,7 @@
             },
             {
               "id": "soaker-8",
-              "label": "ソーカー 8",
+              "label": "Soaker 8",
               "enabled": true,
               "x": 18.375,
               "y": 5.75,
@@ -485,7 +489,7 @@
             },
             {
               "id": "soaker-9",
-              "label": "ソーカー 9",
+              "label": "Soaker 9",
               "enabled": true,
               "x": 20.491666666666664,
               "y": 5.75,
@@ -502,7 +506,7 @@
             },
             {
               "id": "soaker-10",
-              "label": "ソーカー 10",
+              "label": "Soaker 10",
               "enabled": true,
               "x": 22.60833333333333,
               "y": 5.75,
@@ -519,7 +523,7 @@
             },
             {
               "id": "soaker-11",
-              "label": "ソーカー 11",
+              "label": "Soaker 11",
               "enabled": true,
               "x": 24.724999999999998,
               "y": 5.75,
@@ -536,7 +540,7 @@
             },
             {
               "id": "soaker-12",
-              "label": "ソーカー 12",
+              "label": "Soaker 12",
               "enabled": true,
               "x": 26.841666666666665,
               "y": 5.75,
@@ -565,7 +569,7 @@
           "nozzles": [
             {
               "id": "mist-1",
-              "label": "ミスト 1",
+              "label": "Mist 1",
               "enabled": true,
               "x": 3.5583333333333336,
               "y": 5.75,
@@ -582,7 +586,7 @@
             },
             {
               "id": "mist-2",
-              "label": "ミスト 2",
+              "label": "Mist 2",
               "enabled": true,
               "x": 5.674999999999999,
               "y": 5.75,
@@ -599,7 +603,7 @@
             },
             {
               "id": "mist-3",
-              "label": "ミスト 3",
+              "label": "Mist 3",
               "enabled": true,
               "x": 7.791666666666667,
               "y": 5.75,
@@ -616,7 +620,7 @@
             },
             {
               "id": "mist-4",
-              "label": "ミスト 4",
+              "label": "Mist 4",
               "enabled": true,
               "x": 9.908333333333331,
               "y": 5.75,
@@ -633,7 +637,7 @@
             },
             {
               "id": "mist-5",
-              "label": "ミスト 5",
+              "label": "Mist 5",
               "enabled": true,
               "x": 12.025,
               "y": 5.75,
@@ -650,7 +654,7 @@
             },
             {
               "id": "mist-6",
-              "label": "ミスト 6",
+              "label": "Mist 6",
               "enabled": true,
               "x": 14.141666666666666,
               "y": 5.75,
@@ -667,7 +671,7 @@
             },
             {
               "id": "mist-7",
-              "label": "ミスト 7",
+              "label": "Mist 7",
               "enabled": true,
               "x": 16.258333333333333,
               "y": 5.75,
@@ -684,7 +688,7 @@
             },
             {
               "id": "mist-8",
-              "label": "ミスト 8",
+              "label": "Mist 8",
               "enabled": true,
               "x": 18.375,
               "y": 5.75,
@@ -701,7 +705,7 @@
             },
             {
               "id": "mist-9",
-              "label": "ミスト 9",
+              "label": "Mist 9",
               "enabled": true,
               "x": 20.491666666666664,
               "y": 5.75,
@@ -718,7 +722,7 @@
             },
             {
               "id": "mist-10",
-              "label": "ミスト 10",
+              "label": "Mist 10",
               "enabled": true,
               "x": 22.60833333333333,
               "y": 5.75,
@@ -735,7 +739,7 @@
             },
             {
               "id": "mist-11",
-              "label": "ミスト 11",
+              "label": "Mist 11",
               "enabled": true,
               "x": 24.724999999999998,
               "y": 5.75,
@@ -752,7 +756,7 @@
             },
             {
               "id": "mist-12",
-              "label": "ミスト 12",
+              "label": "Mist 12",
               "enabled": true,
               "x": 26.841666666666665,
               "y": 5.75,
@@ -773,7 +777,7 @@
     },
     {
       "id": "working-soaker",
-      "name": "編集案 A",
+      "name": "Draft A",
       "readOnly": false,
       "roof": {
         "reflectance": 0.2,
@@ -789,7 +793,7 @@
       "fans": [
         {
           "id": "fan-feeding-1",
-          "label": "採食帯 ファン 1",
+          "label": "Feeding alley fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 6,
@@ -809,7 +813,7 @@
         },
         {
           "id": "fan-feeding-2",
-          "label": "採食帯 ファン 2",
+          "label": "Feeding alley fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 6,
@@ -829,7 +833,7 @@
         },
         {
           "id": "fan-stall-A-1",
-          "label": "牛床 A ファン 1",
+          "label": "Stalls A fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 9.25,
@@ -849,7 +853,7 @@
         },
         {
           "id": "fan-stall-A-2",
-          "label": "牛床 A ファン 2",
+          "label": "Stalls A fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 9.25,
@@ -869,7 +873,7 @@
         },
         {
           "id": "fan-stall-B-1",
-          "label": "牛床 B ファン 1",
+          "label": "Stalls B fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 14.25,
@@ -889,7 +893,7 @@
         },
         {
           "id": "fan-stall-B-2",
-          "label": "牛床 B ファン 2",
+          "label": "Stalls B fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 14.25,
@@ -909,7 +913,7 @@
         },
         {
           "id": "fan-stall-C-1",
-          "label": "牛床 C ファン 1",
+          "label": "Stalls C fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 16.75,
@@ -929,7 +933,7 @@
         },
         {
           "id": "fan-stall-C-2",
-          "label": "牛床 C ファン 2",
+          "label": "Stalls C fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 16.75,
@@ -949,7 +953,7 @@
         },
         {
           "id": "fan-stall-D-1",
-          "label": "牛床 D ファン 1",
+          "label": "Stalls D fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 21.75,
@@ -969,7 +973,7 @@
         },
         {
           "id": "fan-stall-D-2",
-          "label": "牛床 D ファン 2",
+          "label": "Stalls D fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 21.75,
@@ -1001,7 +1005,7 @@
           "nozzles": [
             {
               "id": "soaker-1",
-              "label": "ソーカー 1",
+              "label": "Soaker 1",
               "enabled": true,
               "x": 3.5583333333333336,
               "y": 5.75,
@@ -1018,7 +1022,7 @@
             },
             {
               "id": "soaker-2",
-              "label": "ソーカー 2",
+              "label": "Soaker 2",
               "enabled": true,
               "x": 5.674999999999999,
               "y": 5.75,
@@ -1035,7 +1039,7 @@
             },
             {
               "id": "soaker-3",
-              "label": "ソーカー 3",
+              "label": "Soaker 3",
               "enabled": true,
               "x": 7.791666666666667,
               "y": 5.75,
@@ -1052,7 +1056,7 @@
             },
             {
               "id": "soaker-4",
-              "label": "ソーカー 4",
+              "label": "Soaker 4",
               "enabled": true,
               "x": 9.908333333333331,
               "y": 5.75,
@@ -1069,7 +1073,7 @@
             },
             {
               "id": "soaker-5",
-              "label": "ソーカー 5",
+              "label": "Soaker 5",
               "enabled": true,
               "x": 12.025,
               "y": 5.75,
@@ -1086,7 +1090,7 @@
             },
             {
               "id": "soaker-6",
-              "label": "ソーカー 6",
+              "label": "Soaker 6",
               "enabled": true,
               "x": 14.141666666666666,
               "y": 5.75,
@@ -1103,7 +1107,7 @@
             },
             {
               "id": "soaker-7",
-              "label": "ソーカー 7",
+              "label": "Soaker 7",
               "enabled": true,
               "x": 16.258333333333333,
               "y": 5.75,
@@ -1120,7 +1124,7 @@
             },
             {
               "id": "soaker-8",
-              "label": "ソーカー 8",
+              "label": "Soaker 8",
               "enabled": true,
               "x": 18.375,
               "y": 5.75,
@@ -1137,7 +1141,7 @@
             },
             {
               "id": "soaker-9",
-              "label": "ソーカー 9",
+              "label": "Soaker 9",
               "enabled": true,
               "x": 20.491666666666664,
               "y": 5.75,
@@ -1154,7 +1158,7 @@
             },
             {
               "id": "soaker-10",
-              "label": "ソーカー 10",
+              "label": "Soaker 10",
               "enabled": true,
               "x": 22.60833333333333,
               "y": 5.75,
@@ -1171,7 +1175,7 @@
             },
             {
               "id": "soaker-11",
-              "label": "ソーカー 11",
+              "label": "Soaker 11",
               "enabled": true,
               "x": 24.724999999999998,
               "y": 5.75,
@@ -1188,7 +1192,7 @@
             },
             {
               "id": "soaker-12",
-              "label": "ソーカー 12",
+              "label": "Soaker 12",
               "enabled": true,
               "x": 26.841666666666665,
               "y": 5.75,
@@ -1217,7 +1221,7 @@
           "nozzles": [
             {
               "id": "mist-1",
-              "label": "ミスト 1",
+              "label": "Mist 1",
               "enabled": true,
               "x": 3.5583333333333336,
               "y": 5.75,
@@ -1234,7 +1238,7 @@
             },
             {
               "id": "mist-2",
-              "label": "ミスト 2",
+              "label": "Mist 2",
               "enabled": true,
               "x": 5.674999999999999,
               "y": 5.75,
@@ -1251,7 +1255,7 @@
             },
             {
               "id": "mist-3",
-              "label": "ミスト 3",
+              "label": "Mist 3",
               "enabled": true,
               "x": 7.791666666666667,
               "y": 5.75,
@@ -1268,7 +1272,7 @@
             },
             {
               "id": "mist-4",
-              "label": "ミスト 4",
+              "label": "Mist 4",
               "enabled": true,
               "x": 9.908333333333331,
               "y": 5.75,
@@ -1285,7 +1289,7 @@
             },
             {
               "id": "mist-5",
-              "label": "ミスト 5",
+              "label": "Mist 5",
               "enabled": true,
               "x": 12.025,
               "y": 5.75,
@@ -1302,7 +1306,7 @@
             },
             {
               "id": "mist-6",
-              "label": "ミスト 6",
+              "label": "Mist 6",
               "enabled": true,
               "x": 14.141666666666666,
               "y": 5.75,
@@ -1319,7 +1323,7 @@
             },
             {
               "id": "mist-7",
-              "label": "ミスト 7",
+              "label": "Mist 7",
               "enabled": true,
               "x": 16.258333333333333,
               "y": 5.75,
@@ -1336,7 +1340,7 @@
             },
             {
               "id": "mist-8",
-              "label": "ミスト 8",
+              "label": "Mist 8",
               "enabled": true,
               "x": 18.375,
               "y": 5.75,
@@ -1353,7 +1357,7 @@
             },
             {
               "id": "mist-9",
-              "label": "ミスト 9",
+              "label": "Mist 9",
               "enabled": true,
               "x": 20.491666666666664,
               "y": 5.75,
@@ -1370,7 +1374,7 @@
             },
             {
               "id": "mist-10",
-              "label": "ミスト 10",
+              "label": "Mist 10",
               "enabled": true,
               "x": 22.60833333333333,
               "y": 5.75,
@@ -1387,7 +1391,7 @@
             },
             {
               "id": "mist-11",
-              "label": "ミスト 11",
+              "label": "Mist 11",
               "enabled": true,
               "x": 24.724999999999998,
               "y": 5.75,
@@ -1404,7 +1408,7 @@
             },
             {
               "id": "mist-12",
-              "label": "ミスト 12",
+              "label": "Mist 12",
               "enabled": true,
               "x": 26.841666666666665,
               "y": 5.75,
@@ -1425,7 +1429,7 @@
     },
     {
       "id": "working-mist",
-      "name": "編集案 B",
+      "name": "Draft B",
       "readOnly": false,
       "roof": {
         "reflectance": 0.2,
@@ -1441,7 +1445,7 @@
       "fans": [
         {
           "id": "fan-feeding-1",
-          "label": "採食帯 ファン 1",
+          "label": "Feeding alley fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 6,
@@ -1461,7 +1465,7 @@
         },
         {
           "id": "fan-feeding-2",
-          "label": "採食帯 ファン 2",
+          "label": "Feeding alley fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 6,
@@ -1481,7 +1485,7 @@
         },
         {
           "id": "fan-stall-A-1",
-          "label": "牛床 A ファン 1",
+          "label": "Stalls A fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 9.25,
@@ -1501,7 +1505,7 @@
         },
         {
           "id": "fan-stall-A-2",
-          "label": "牛床 A ファン 2",
+          "label": "Stalls A fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 9.25,
@@ -1521,7 +1525,7 @@
         },
         {
           "id": "fan-stall-B-1",
-          "label": "牛床 B ファン 1",
+          "label": "Stalls B fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 14.25,
@@ -1541,7 +1545,7 @@
         },
         {
           "id": "fan-stall-B-2",
-          "label": "牛床 B ファン 2",
+          "label": "Stalls B fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 14.25,
@@ -1561,7 +1565,7 @@
         },
         {
           "id": "fan-stall-C-1",
-          "label": "牛床 C ファン 1",
+          "label": "Stalls C fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 16.75,
@@ -1581,7 +1585,7 @@
         },
         {
           "id": "fan-stall-C-2",
-          "label": "牛床 C ファン 2",
+          "label": "Stalls C fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 16.75,
@@ -1601,7 +1605,7 @@
         },
         {
           "id": "fan-stall-D-1",
-          "label": "牛床 D ファン 1",
+          "label": "Stalls D fan 1",
           "enabled": true,
           "x": 5.04,
           "y": 21.75,
@@ -1621,7 +1625,7 @@
         },
         {
           "id": "fan-stall-D-2",
-          "label": "牛床 D ファン 2",
+          "label": "Stalls D fan 2",
           "enabled": true,
           "x": 17.74,
           "y": 21.75,
@@ -1653,7 +1657,7 @@
           "nozzles": [
             {
               "id": "soaker-1",
-              "label": "ソーカー 1",
+              "label": "Soaker 1",
               "enabled": true,
               "x": 3.5583333333333336,
               "y": 5.75,
@@ -1670,7 +1674,7 @@
             },
             {
               "id": "soaker-2",
-              "label": "ソーカー 2",
+              "label": "Soaker 2",
               "enabled": true,
               "x": 5.674999999999999,
               "y": 5.75,
@@ -1687,7 +1691,7 @@
             },
             {
               "id": "soaker-3",
-              "label": "ソーカー 3",
+              "label": "Soaker 3",
               "enabled": true,
               "x": 7.791666666666667,
               "y": 5.75,
@@ -1704,7 +1708,7 @@
             },
             {
               "id": "soaker-4",
-              "label": "ソーカー 4",
+              "label": "Soaker 4",
               "enabled": true,
               "x": 9.908333333333331,
               "y": 5.75,
@@ -1721,7 +1725,7 @@
             },
             {
               "id": "soaker-5",
-              "label": "ソーカー 5",
+              "label": "Soaker 5",
               "enabled": true,
               "x": 12.025,
               "y": 5.75,
@@ -1738,7 +1742,7 @@
             },
             {
               "id": "soaker-6",
-              "label": "ソーカー 6",
+              "label": "Soaker 6",
               "enabled": true,
               "x": 14.141666666666666,
               "y": 5.75,
@@ -1755,7 +1759,7 @@
             },
             {
               "id": "soaker-7",
-              "label": "ソーカー 7",
+              "label": "Soaker 7",
               "enabled": true,
               "x": 16.258333333333333,
               "y": 5.75,
@@ -1772,7 +1776,7 @@
             },
             {
               "id": "soaker-8",
-              "label": "ソーカー 8",
+              "label": "Soaker 8",
               "enabled": true,
               "x": 18.375,
               "y": 5.75,
@@ -1789,7 +1793,7 @@
             },
             {
               "id": "soaker-9",
-              "label": "ソーカー 9",
+              "label": "Soaker 9",
               "enabled": true,
               "x": 20.491666666666664,
               "y": 5.75,
@@ -1806,7 +1810,7 @@
             },
             {
               "id": "soaker-10",
-              "label": "ソーカー 10",
+              "label": "Soaker 10",
               "enabled": true,
               "x": 22.60833333333333,
               "y": 5.75,
@@ -1823,7 +1827,7 @@
             },
             {
               "id": "soaker-11",
-              "label": "ソーカー 11",
+              "label": "Soaker 11",
               "enabled": true,
               "x": 24.724999999999998,
               "y": 5.75,
@@ -1840,7 +1844,7 @@
             },
             {
               "id": "soaker-12",
-              "label": "ソーカー 12",
+              "label": "Soaker 12",
               "enabled": true,
               "x": 26.841666666666665,
               "y": 5.75,
@@ -1869,7 +1873,7 @@
           "nozzles": [
             {
               "id": "mist-1",
-              "label": "ミスト 1",
+              "label": "Mist 1",
               "enabled": true,
               "x": 3.5583333333333336,
               "y": 5.75,
@@ -1886,7 +1890,7 @@
             },
             {
               "id": "mist-2",
-              "label": "ミスト 2",
+              "label": "Mist 2",
               "enabled": true,
               "x": 5.674999999999999,
               "y": 5.75,
@@ -1903,7 +1907,7 @@
             },
             {
               "id": "mist-3",
-              "label": "ミスト 3",
+              "label": "Mist 3",
               "enabled": true,
               "x": 7.791666666666667,
               "y": 5.75,
@@ -1920,7 +1924,7 @@
             },
             {
               "id": "mist-4",
-              "label": "ミスト 4",
+              "label": "Mist 4",
               "enabled": true,
               "x": 9.908333333333331,
               "y": 5.75,
@@ -1937,7 +1941,7 @@
             },
             {
               "id": "mist-5",
-              "label": "ミスト 5",
+              "label": "Mist 5",
               "enabled": true,
               "x": 12.025,
               "y": 5.75,
@@ -1954,7 +1958,7 @@
             },
             {
               "id": "mist-6",
-              "label": "ミスト 6",
+              "label": "Mist 6",
               "enabled": true,
               "x": 14.141666666666666,
               "y": 5.75,
@@ -1971,7 +1975,7 @@
             },
             {
               "id": "mist-7",
-              "label": "ミスト 7",
+              "label": "Mist 7",
               "enabled": true,
               "x": 16.258333333333333,
               "y": 5.75,
@@ -1988,7 +1992,7 @@
             },
             {
               "id": "mist-8",
-              "label": "ミスト 8",
+              "label": "Mist 8",
               "enabled": true,
               "x": 18.375,
               "y": 5.75,
@@ -2005,7 +2009,7 @@
             },
             {
               "id": "mist-9",
-              "label": "ミスト 9",
+              "label": "Mist 9",
               "enabled": true,
               "x": 20.491666666666664,
               "y": 5.75,
@@ -2022,7 +2026,7 @@
             },
             {
               "id": "mist-10",
-              "label": "ミスト 10",
+              "label": "Mist 10",
               "enabled": true,
               "x": 22.60833333333333,
               "y": 5.75,
@@ -2039,7 +2043,7 @@
             },
             {
               "id": "mist-11",
-              "label": "ミスト 11",
+              "label": "Mist 11",
               "enabled": true,
               "x": 24.724999999999998,
               "y": 5.75,
@@ -2056,7 +2060,7 @@
             },
             {
               "id": "mist-12",
-              "label": "ミスト 12",
+              "label": "Mist 12",
               "enabled": true,
               "x": 26.841666666666665,
               "y": 5.75,
@@ -2097,51 +2101,51 @@
     {
       "id": "dimensions",
       "classification": "adapted-reference",
-      "note": "原事例36.4×23.5m・70頭の外形を参考に、内部を50床の独自配置へ変更。設計推奨ではない。",
+      "note": "Outer dimensions (36.4×23.5 m, 70 cows) adapted from the reference barn; the interior was rearranged into an original 50-stall layout. Not a design recommendation.",
       "url": "https://holstein.pl/nowoczesna-obora-w-gospodarstwie-rodzinnym/"
     },
     {
       "id": "layout",
       "classification": "adapted-reference",
-      "note": "採食・休息・搾乳の区画関係を参考にした独自配置。原図やメーカー3Dデータは同梱しない。",
+      "note": "Original layout informed by the spatial relation of feeding, resting and milking zones. No original drawings or manufacturer 3D data are bundled.",
       "url": "https://www.orionkikai.co.jp/rakuno/how_to/auto-milking-system/"
     },
     {
       "id": "psychrometrics",
       "classification": "source-based",
-      "note": "SIの飽和蒸気圧・湿度比・エンタルピー・比体積の関係。仮換気量の妥当性を保証するものではない。",
+      "note": "SI relations of saturation vapour pressure, humidity ratio, enthalpy and specific volume. Does not guarantee the assumed ventilation rate is sound.",
       "url": "https://psychrometrics.github.io/psychrolib/api_docs.html"
     },
     {
       "id": "milk",
       "classification": "source-based",
-      "note": "全酪連COWBELL No.178（2025年10月）p.6の送風体感温度式、p.8の乳量表。日本飼養標準2017・柴田ら1984の抜粋。乳量は掲載6条件・RH60〜70%のみ。"
+      "note": "Fan-aided feels-like formula from JDLA COWBELL No.178 (Oct 2025) p.6 and the milk table on p.8. Excerpt from Japanese Feeding Standard 2017 and Shibata et al. 1984. Milk covers only the 6 published conditions at RH 60–70%."
     },
     {
       "id": "milk-daily",
       "classification": "design-assumption",
-      "note": "乳量仮説モデル milk-heat-deficit-v0.1 の係数は demo_assumption に相当する仮定。Y0=40kg、Qref=630W、beta=0.010、上限25%、遅れ0.2/0.5/0.3、滞在14/6/4時間相当。文献からの回帰係数ではなく、信頼区間でもない。"
+      "note": "Coefficients of the milk hypothesis model milk-heat-deficit-v0.1 are demo_assumption-grade assumptions: Y0=40kg, Qref=630W, beta=0.010, cap 25%, lag 0.2/0.5/0.3, occupancy 14/6/4 h equivalent. Neither a literature regression nor a confidence interval."
     },
     {
       "id": "roof",
       "classification": "design-assumption",
-      "note": "屋根の係数と背景熱は熱モデルv0.5の固定仮定。遮熱反射率0.7・断熱20mm。放射・風・散水の効果をTHIや深部体温へ換算しない。"
+      "note": "Roof coefficients and background heat are fixed assumptions of thermal model v0.5: reflective coating reflectance 0.7, insulation 20mm. Radiation, wind and spray effects are not converted to THI or core body temperature."
     },
     {
       "id": "fertility",
       "classification": "source-based",
-      "note": "Baccouri et al. (2025) Table 2の5期間OR。仮の基準確率40%。屋外THIから局所THIへの適用はアプリの追加仮定。",
+      "note": "5-period OR from Baccouri et al. (2025) Table 2. Hypothetical baseline probability 40%. Applying outdoor THI to local THI is an added assumption of this app.",
       "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12249091/"
     },
     {
       "id": "model",
       "classification": "design-assumption",
-      "note": "風速曲線、熱伝達係数、体表35℃、面積4.5m²、換気量、蒸発率、保持水量は仕様v0.4の実装仮定。現場未検証。"
+      "note": "Wind-speed curve, heat-transfer coefficient, skin 35°C, area 4.5m², ventilation, evaporation rate and film capacity are implementation assumptions of spec v0.4. Not validated in the field."
     },
     {
       "id": "calculation",
       "classification": "derived",
-      "note": "70地点は独立試行。放熱Wを牛群へ合算しない。日乳量は仮説モデルv0.1の牛群平均、受胎は別の52日代表シナリオ。乳量の掲載表は資料として保持。"
+      "note": "The 70 points are independent trials; heat loss (W) is not summed over the herd. Daily milk is the herd mean of hypothesis model v0.1; conception is a separate 52-day representative scenario. The published milk table is kept as reference material."
     }
   ]
 }

@@ -27,11 +27,11 @@ def scene_click(page,fx=.5,fy=.5):
 def test_GUI01_first_open_orientation(page):
     assert page.locator('canvas[data-testid=scene3d]').count()==1
     assert page.locator('#guide-card').is_visible(),'first-use guide should be visible'
-    assert '暑さの分布を見る' in page.locator('#guide-card').inner_text()
+    assert 'See the heat distribution' in page.locator('#guide-card').inner_text()
     for b in ['place-fan','place-soaker','place-mist']:assert page.locator(f'[data-action={b}]').is_enabled()
     assert page.locator('#sum-deficit').is_visible()
     # scenario tabs stay reachable; baseline marked fixed
-    assert '固定' in page.locator('#scenario-tabs').inner_text()
+    assert 'Fixed' in page.locator('#scenario-tabs').inner_text()
 
 def test_GUI12_guide_skip_restart_and_finish(page):
     assert workspace(page)['guide']['done'] is False
@@ -124,10 +124,10 @@ def test_GUI07_selection_opens_matching_panel(page):
     assert workspace(page)['panel'] is None and not page.locator('#selection-panel').is_visible()
 
 def test_GUI08_sheet_tabs_and_close(page):
-    open_sheet(page,'compare');assert '基準案' in page.locator('#comparison').inner_text()
+    open_sheet(page,'compare');assert 'Baseline' in page.locator('#comparison').inner_text()
     open_sheet(page,'areas');assert page.locator('#sheet-areas').is_visible()
     open_sheet(page,'timeline');assert page.locator('#timeline-chart').is_visible()
-    open_sheet(page,'reference');assert '乳量' in page.locator('#reference-pane').inner_text()
+    open_sheet(page,'reference');assert 'milk' in page.locator('#reference-pane').inner_text()
     page.locator('[data-action=close-sheet]').click()
     assert workspace(page)['sheet'] is None and not page.locator('#sheet').is_visible()
 
@@ -135,7 +135,7 @@ def test_GUI09_summary_strip_reflects_selected_point(page):
     open_panel(page,'probe');page.locator('#probe-select').select_option('stall-A-01');ready(page)
     assert 'A1' in page.locator('#sum-deficit-label').inner_text()
     v=page.locator('#sum-deficit-value').inner_text()
-    assert '計算中' not in v and '—' not in v
+    assert 'Calculating' not in v and '—' not in v
 
 # GUI10: display-only operations never change the physics hash.
 def test_GUI10_panel_sheet_navigation_never_recalculates(page):
@@ -160,7 +160,7 @@ def test_GUI11_external_edit_cancels_placement(page):
 def test_GUI13_help_lists_controls_and_glossary(page):
     page.locator('#help-button').click()
     text=page.locator('#help-body').inner_text()
-    for w in ['設備を置く','放熱不足','風速','乳量']:assert w in text
+    for w in ['Place equipment','Cooling deficit','Wind','Milk']:assert w in text
     page.locator('[data-close=help-dialog]').click()
     assert not page.locator('#help-dialog').is_visible()
 

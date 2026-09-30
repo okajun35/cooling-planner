@@ -47,17 +47,17 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
   const e=p.environment,m=p.model,soaker=s.waterSystems.find(w=>w.kind==='soaker')!,mist=s.waterSystems.find(w=>w.kind==='mist')!;
   const invalidDevices=[...s.fans.filter(f=>f.enabled&&f.hoursPerDay>0),...s.waterSystems.filter(w=>w.enabled&&w.hoursPerDay>0&&w.onSec>0).flatMap(w=>w.nozzles.filter(n=>n.enabled&&n.flowLpm>0))].filter(d=>layout.solids.some(box=>insideBox(world(d),box)));
   const warnings:string[]=[];
-  if(soaker.enabled)warnings.push('牛体散水の水蒸気は、牛舎全体の湿度へ戻さない仮定です。');
-  if(invalidDevices.length)warnings.push('稼働設備が管理室内にあります。移動するまで地点の計算は無効です。');
-  if(soaker.enabled&&soaker.nozzles.some(n=>n.enabled&&n.y<4))warnings.push('飼料帯への散水配置があります。');
+  if(soaker.enabled)warnings.push('Assumption: water vapour from cow sprinkling is not returned to the barn-wide humidity.');
+  if(invalidDevices.length)warnings.push('An active device sits inside the utility room. Point results stay invalid until it is moved.');
+  if(soaker.enabled&&soaker.nozzles.some(n=>n.enabled&&n.y<4))warnings.push('A spray nozzle is placed over the feed alley.');
   const mistWater=mistDistribution(p,s,layout,rays),pv=e.relativeHumidityPct/100*saturationPressure(e.temperatureC);
   const n=roof.states.length;
   // Share air states across points in the same cell. Exact numeric keys; no model rounding.
   const airCache=new Map<string,ReturnType<typeof mistAir>>();
   const points=layout.probes.map((q):PointResult=>{
     const cellId=`cell-${Math.min(Math.floor(q.x/2),Math.ceil(p.template.lengthM/2)-1)}-${Math.min(Math.floor(q.y/2),Math.ceil(p.template.widthM/2)-1)}`;
-    const blank:PointResult={probeId:q.id,inputHash:hash,modelVersion:m.version,meanSpeedMps:null,meanAirTemperatureC:null,meanRelativeHumidityPct:null,meanQrefW:null,deltaQrefW:null,components:null,parameterEnvelopeW:null,profileDeltas:{},status:'invalid',warnings:[],cellId,captureFraction:0,film:null,meanRadiantC:null,meanFeelsLikeC:null,milk:{status:'out_of_scope',ratioPct:null,kgPerDay:null,reasons:['地点の計算が無効です']},fertility:fertilityReference(p.references.fertility,null,null),series:[],meanDeficitW:null,meanFilmKg:null,fanActionFraction:null,soakerArrivalFraction:null,mistEvaporationActionFraction:null,mistSupplyFraction:null};
-    if(invalidDevices.length){blank.warnings.push('管理室内の設備を移動してください');return blank}
+    const blank:PointResult={probeId:q.id,inputHash:hash,modelVersion:m.version,meanSpeedMps:null,meanAirTemperatureC:null,meanRelativeHumidityPct:null,meanQrefW:null,deltaQrefW:null,components:null,parameterEnvelopeW:null,profileDeltas:{},status:'invalid',warnings:[],cellId,captureFraction:0,film:null,meanRadiantC:null,meanFeelsLikeC:null,milk:{status:'out_of_scope',ratioPct:null,kgPerDay:null,reasons:['point calculation is invalid']},fertility:fertilityReference(p.references.fertility,null,null),series:[],meanDeficitW:null,meanFilmKg:null,fanActionFraction:null,soakerArrivalFraction:null,mistEvaporationActionFraction:null,mistSupplyFraction:null};
+    if(invalidDevices.length){blank.warnings.push('Move the device out of the utility room');return blank}
     let capturedFlow=0,maxFraction=0;
     if(soaker.enabled)for(const nozzle of soaker.nozzles){if(!nozzle.enabled||nozzle.flowLpm<=0)continue;const f=captureFraction(nozzle,q,m,layout.solids,rays);capturedFlow+=nozzle.flowLpm/60*f;maxFraction=Math.max(maxFraction,f)}
     const cell=layout.cells.find(c=>c.id===cellId)!;
@@ -76,7 +76,7 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
       const t=i*dt,st=roof.states[i],soakerOn=soaker.enabled&&isOn(t,soaker.onSec,soaker.offSec,soaker.hoursPerDay),mistOn=mist.enabled&&isOn(t,mist.onSec,mist.offSec,mist.hoursPerDay);
       const windKey=s.fans.map(f=>+(f.enabled&&t<f.hoursPerDay*3600)).join('');
       let wind=windCache.get(windKey);if(!wind){wind=windAt(s.fans,world(q),e,m,profile,layout.solids,t);windCache.set(windKey,wind)}
-      if(wind.interference&&!blank.warnings.length)blank.warnings.push('対向噴流の干渉は未解析です');
+      if(wind.interference&&!blank.warnings.length)blank.warnings.push('Interaction of opposing jets is not analysed');
       const flow=mistOn?(mistWater.get(cellId)??0):0,airKey=`${cellId}:${st.airC}:${flow}`;
       let air=airCache.get(airKey);
       if(!air){const rh=100*pv/saturationPressure(st.airC);air=mistAir(st.airC,rh,e.pressurePa,cell.areaM2*e.ventilationM3sPerM2,flow,profile.mistEfficiency);airCache.set(airKey,air)}
@@ -106,7 +106,7 @@ function runScenario(p:Project,s:Scenario,layout:Layout,profile:Profile,dt:numbe
   return {id:s.id,points,resources:resources(s,p),warnings,roof:roof.result,...trialResources(s,p),dailyMilk:null,dailyThermal:null};
 }
 export function simulate(p:Project,opts:{dt?:number;rays?:number;envelope?:boolean;collectQSeries?:boolean}={}):SimulationResult{
-  const dt=opts.dt??1,rays=opts.rays??256;if(dt!==1&&dt!==.5)throw Error('時間刻みは1秒または0.5秒です');if(![256,1024].includes(rays))throw Error('積分レイ数は256または1024です');
+  const dt=opts.dt??1,rays=opts.rays??256;if(dt!==1&&dt!==.5)throw Error('time step must be 1 s or 0.5 s');if(![256,1024].includes(rays))throw Error('integration ray count must be 256 or 1024');
   const hash=inputHash(p),layout=buildLayout(p.template),profiles=opts.envelope===false?p.model.profiles.filter(x=>x.id==='reference'):[...p.model.profiles].sort((a,b)=>a.id==='reference'?-1:b.id==='reference'?1:0);
   const roofCache=new Map<string,ReturnType<typeof roofTimeline>>(),cache=new Map<string,ScenarioResult>(),all=new Map<string,ScenarioResult[]>();
   for(const profile of profiles){
@@ -127,7 +127,7 @@ export function simulate(p:Project,opts:{dt?:number;rays?:number;envelope?:boole
     const q=s.points[i],deltas:Record<string,number>={};
     for(const profile of profiles){const d=all.get(profile.id)!.find(x=>x.id===s.id)!.points[i].deltaQrefW;if(d!==null)deltas[profile.id]=d}
     q.profileDeltas=deltas;const vals=Object.values(deltas);if(vals.length===3)q.parameterEnvelopeW=[Math.min(...vals),Math.max(...vals)];
-    if(q.parameterEnvelopeW&&q.parameterEnvelopeW[0]<0&&q.parameterEnvelopeW[1]>0)q.warnings.push('仮定を変えると増減が逆転');
+    if(q.parameterEnvelopeW&&q.parameterEnvelopeW[0]<0&&q.parameterEnvelopeW[1]>0)q.warnings.push('The sign of the effect flips under varied assumptions');
   }
   return {inputHash:hash,modelVersion:p.model.version,scenarios:reference,profiles:profiles.map(x=>x.id),timeStepSec:dt,rayCount:rays,durationSec:3600,dailyMilkStatus:'pending'};
 }

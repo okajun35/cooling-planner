@@ -21,9 +21,9 @@ def test_mcp_json_paste_and_undo(page):
 def test_comparison_inspects_remaining_place(page):
     open_sheet(page, 'compare')
     card = page.locator('[data-comparison="working-soaker"]')
-    assert '平均放熱不足' in card.inner_text()
-    assert '最大の不足' in card.inner_text()
-    assert 'L/日' in card.inner_text() and 'kWh/日' in card.inner_text()
+    assert 'mean cooling deficit' in card.inner_text()
+    assert 'Worst deficit' in card.inner_text()
+    assert 'L/day' in card.inner_text() and 'kWh/day' in card.inner_text()
     chosen = page.locator('#remaining-deficits [data-inspect-probe]').first
     probe_id = chosen.get_attribute('data-inspect-probe')
     chosen.click()

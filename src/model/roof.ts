@@ -18,7 +18,7 @@ export function solveRoof(p:Project,s:Scenario,waterKgM2:number,dt:number,env?:P
     return {outerC,underC,airC,evaporatedKgsM2,residualWm2,radiantC};
   }
   let lo=0,hi=130,flo=at(lo).residualWm2,fhi=at(hi).residualWm2;
-  if(!Number.isFinite(flo)||!Number.isFinite(fhi)||flo*fhi>0)throw Error('屋根の熱収支を解けません。入力範囲を確認してください');
+  if(!Number.isFinite(flo)||!Number.isFinite(fhi)||flo*fhi>0)throw Error('cannot solve the roof heat balance; check input ranges');
   for(let i=0;i<60;i++){
     const mid=(lo+hi)/2,st=at(mid);if(Math.abs(st.residualWm2)<1e-9||hi-lo<1e-9)return st;
     if(flo*st.residualWm2<=0)hi=mid;else {lo=mid;flo=st.residualWm2}

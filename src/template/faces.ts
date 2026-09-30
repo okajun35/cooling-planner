@@ -30,10 +30,10 @@ export interface AreaGroup {id:string;label:string;probeIds:string[];subtotal?:b
 /** Display areas: stall rows A-D, feeding, waiting, plus the all-stall subtotal. */
 export function buildAreas(l:Layout):AreaGroup[]{
   const out:AreaGroup[]=[];
-  for(const row of ['A','B','C','D'])out.push({id:`stall-${row}`,label:`牛床 ${row}`,probeIds:l.probes.filter(q=>q.zoneId===`stall-${row}`).map(q=>q.id)});
-  out.push({id:'feeding',label:'採食帯',probeIds:l.probes.filter(q=>q.kind==='feeding').map(q=>q.id)});
-  out.push({id:'waiting',label:'待機場所',probeIds:l.probes.filter(q=>q.kind==='waiting').map(q=>q.id)});
-  out.push({id:'stalls',label:'牛床全体（小計）',subtotal:true,probeIds:l.probes.filter(q=>q.kind==='stall').map(q=>q.id)});
+  for(const row of ['A','B','C','D'])out.push({id:`stall-${row}`,label:`Stalls ${row}`,probeIds:l.probes.filter(q=>q.zoneId===`stall-${row}`).map(q=>q.id)});
+  out.push({id:'feeding',label:'Feeding alley',probeIds:l.probes.filter(q=>q.kind==='feeding').map(q=>q.id)});
+  out.push({id:'waiting',label:'Waiting area',probeIds:l.probes.filter(q=>q.kind==='waiting').map(q=>q.id)});
+  out.push({id:'stalls',label:'All stalls (subtotal)',subtotal:true,probeIds:l.probes.filter(q=>q.kind==='stall').map(q=>q.id)});
   return out;
 }
 

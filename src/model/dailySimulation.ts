@@ -66,7 +66,7 @@ function runDaily(p:Project,s:Scenario,layout:Layout,profile:Profile,rays:number
   const e=p.environment,m=p.model,soaker=s.waterSystems.find(w=>w.kind==='soaker')!,mist=s.waterSystems.find(w=>w.kind==='mist')!;
   const invalidDevices=[...s.fans.filter(f=>f.enabled&&f.hoursPerDay>0),...s.waterSystems.filter(w=>w.enabled&&w.hoursPerDay>0&&w.onSec>0).flatMap(w=>w.nozzles.filter(n=>n.enabled&&n.flowLpm>0))].filter(d=>layout.solids.some(box=>insideBox(world(d),box)));
   const reasons:string[]=[];
-  if(invalidDevices.length)reasons.push('稼働設備が管理室内にあります。移動するまで日乳量は計算できません。');
+  if(invalidDevices.length)reasons.push('An active device sits inside the utility room. Daily milk cannot be calculated until it is moved.');
   const weights='error' in zw?null:zw.weights;
   if('error' in zw)reasons.push(zw.error);
   const resources=dailyResources(p,s);
@@ -188,7 +188,7 @@ function runDaily(p:Project,s:Scenario,layout:Layout,profile:Profile,rays:number
    fanActionFraction:pr.fanS/evalLen,soakerArrivalFraction:pr.soakS/evalLen,mistEvaporationActionFraction:pr.mistEvapS/evalLen,mistSupplyFraction:pr.mistSupS/evalLen}));
   const thermal:DailyThermalResult={status:'complete',reasons:[],evaluationDurationSec:evalLen,weatherMode:p.dailyWeather.mode,modelVersion:m.version,points:thermalPoints,
    areas:buildAreas(layout).map(a=>dailyAreaStats(thermalPoints,a)),
-   all:dailyAreaStats(thermalPoints,{id:'all',label:'全地点',probeIds:layout.probes.map(q=>q.id)}),resources};
+   all:dailyAreaStats(thermalPoints,{id:'all',label:'All points',probeIds:layout.probes.map(q=>q.id)}),resources};
   const calc=dailyFromDeficit(dailyDeficitWPerCow,ms);
   const out:DailyMilkResult={
     ...blankDaily(ms,'available',[]),zoneCounts:counts,resources,
@@ -223,8 +223,8 @@ export function simulateDaily(p:Project,opts:{rays?:number;warmupSec?:number;eva
       if(pq)probeQ[s.id]=pq;if(pqs)probeQSeries[s.id]=pqs;if(st)states[s.id]=st;
     }catch(err){
       status='error';error=err instanceof Error?err.message:String(err);
-      daily[s.id]={...blankDaily(ms,'calculation_error',['日乳量の計算に失敗しました']),resources:dailyResources(p,s)};
-      thermal[s.id]=blankThermal(p,ms,'calculation_error',['日熱集計に失敗しました'],dailyResources(p,s));
+      daily[s.id]={...blankDaily(ms,'calculation_error',['daily milk calculation failed']),resources:dailyResources(p,s)};
+      thermal[s.id]=blankThermal(p,ms,'calculation_error',['daily thermal aggregation failed'],dailyResources(p,s));
     }
   }
   const base=daily[p.baselineScenarioId];

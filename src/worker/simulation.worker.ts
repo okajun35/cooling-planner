@@ -6,7 +6,7 @@ const scope=globalThis as unknown as {onmessage:(e:MessageEvent<Job>)=>void;post
 scope.onmessage=(e)=>{
  const {jobId,inputHash:expected,project}=e.data;
  try{
-  validateProject(project);if(inputHash(project)!==expected)throw Error('入力ハッシュ不一致');
+  validateProject(project);if(inputHash(project)!==expected)throw Error('input hash mismatch');
   // Stage 1: existing 60-minute result. Stage 2: representative-day milk aggregation.
   scope.postMessage({jobId,inputHash:expected,kind:'thermal-result',result:simulate(project)});
   try{

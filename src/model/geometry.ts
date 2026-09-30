@@ -36,7 +36,7 @@ const rayCache=new Map<string,Vec3[]>();
 /** Deterministic equal-area disk samples. Ray count is unrelated to rendering quality. */
 export function sprayDirections(n:Nozzle,count=256):Vec3[]{
  const key=`${n.yawDeg}:${n.pitchDownDeg}:${n.halfAngleDeg}:${count}`;const old=rayCache.get(key);if(old)return old;
- if(count<1||!Number.isInteger(count))throw Error('積分レイ数が不正です');
+ if(count<1||!Number.isInteger(count))throw Error('invalid integration ray count');
  const axis=direction(n.yawDeg,n.pitchDownDeg),u=normalize(cross(axis,Math.abs(axis[1])>.9?[1,0,0]:[0,1,0])),v=cross(axis,u),scale=Math.tan(n.halfAngleDeg*Math.PI/180);
  const rays=Array.from({length:count},(_,i)=>{const r=Math.sqrt((i+.5)/count)*scale,angle=i*Math.PI*(3-Math.sqrt(5)),c=Math.cos(angle)*r,s=Math.sin(angle)*r;return normalize([axis[0]+c*u[0]+s*v[0],axis[1]+c*u[1]+s*v[1],axis[2]+c*u[2]+s*v[2]])});
  if(rayCache.size>256)rayCache.clear();rayCache.set(key,rays);return rays;

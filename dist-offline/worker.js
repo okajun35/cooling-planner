@@ -10,7 +10,7 @@ scope.onmessage = (e) => {
     try {
         (0, validation_js_1.validateProject)(project);
         if ((0, simulation_js_1.inputHash)(project) !== expected)
-            throw Error('入力ハッシュ不一致');
+            throw Error('input hash mismatch');
         // Stage 1: existing 60-minute result. Stage 2: representative-day milk aggregation.
         scope.postMessage({ jobId, inputHash: expected, kind: 'thermal-result', result: (0, simulation_js_1.simulate)(project) });
         try {
@@ -105,20 +105,20 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof, collectQSeries
     const invalidDevices = [...s.fans.filter(f => f.enabled && f.hoursPerDay > 0), ...s.waterSystems.filter(w => w.enabled && w.hoursPerDay > 0 && w.onSec > 0).flatMap(w => w.nozzles.filter(n => n.enabled && n.flowLpm > 0))].filter(d => layout.solids.some(box => (0, geometry_js_1.insideBox)((0, geometry_js_1.world)(d), box)));
     const warnings = [];
     if (soaker.enabled)
-        warnings.push('牛体散水の水蒸気は、牛舎全体の湿度へ戻さない仮定です。');
+        warnings.push('Assumption: water vapour from cow sprinkling is not returned to the barn-wide humidity.');
     if (invalidDevices.length)
-        warnings.push('稼働設備が管理室内にあります。移動するまで地点の計算は無効です。');
+        warnings.push('An active device sits inside the utility room. Point results stay invalid until it is moved.');
     if (soaker.enabled && soaker.nozzles.some(n => n.enabled && n.y < 4))
-        warnings.push('飼料帯への散水配置があります。');
+        warnings.push('A spray nozzle is placed over the feed alley.');
     const mistWater = mistDistribution(p, s, layout, rays), pv = e.relativeHumidityPct / 100 * (0, physics_js_1.saturationPressure)(e.temperatureC);
     const n = roof.states.length;
     // Share air states across points in the same cell. Exact numeric keys; no model rounding.
     const airCache = new Map();
     const points = layout.probes.map((q) => {
         const cellId = `cell-${Math.min(Math.floor(q.x / 2), Math.ceil(p.template.lengthM / 2) - 1)}-${Math.min(Math.floor(q.y / 2), Math.ceil(p.template.widthM / 2) - 1)}`;
-        const blank = { probeId: q.id, inputHash: hash, modelVersion: m.version, meanSpeedMps: null, meanAirTemperatureC: null, meanRelativeHumidityPct: null, meanQrefW: null, deltaQrefW: null, components: null, parameterEnvelopeW: null, profileDeltas: {}, status: 'invalid', warnings: [], cellId, captureFraction: 0, film: null, meanRadiantC: null, meanFeelsLikeC: null, milk: { status: 'out_of_scope', ratioPct: null, kgPerDay: null, reasons: ['地点の計算が無効です'] }, fertility: (0, references_js_1.fertilityReference)(p.references.fertility, null, null), series: [], meanDeficitW: null, meanFilmKg: null, fanActionFraction: null, soakerArrivalFraction: null, mistEvaporationActionFraction: null, mistSupplyFraction: null };
+        const blank = { probeId: q.id, inputHash: hash, modelVersion: m.version, meanSpeedMps: null, meanAirTemperatureC: null, meanRelativeHumidityPct: null, meanQrefW: null, deltaQrefW: null, components: null, parameterEnvelopeW: null, profileDeltas: {}, status: 'invalid', warnings: [], cellId, captureFraction: 0, film: null, meanRadiantC: null, meanFeelsLikeC: null, milk: { status: 'out_of_scope', ratioPct: null, kgPerDay: null, reasons: ['point calculation is invalid'] }, fertility: (0, references_js_1.fertilityReference)(p.references.fertility, null, null), series: [], meanDeficitW: null, meanFilmKg: null, fanActionFraction: null, soakerArrivalFraction: null, mistEvaporationActionFraction: null, mistSupplyFraction: null };
         if (invalidDevices.length) {
-            blank.warnings.push('管理室内の設備を移動してください');
+            blank.warnings.push('Move the device out of the utility room');
             return blank;
         }
         let capturedFlow = 0, maxFraction = 0;
@@ -151,7 +151,7 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof, collectQSeries
                 windCache.set(windKey, wind);
             }
             if (wind.interference && !blank.warnings.length)
-                blank.warnings.push('対向噴流の干渉は未解析です');
+                blank.warnings.push('Interaction of opposing jets is not analysed');
             const flow = mistOn ? (mistWater.get(cellId) ?? 0) : 0, airKey = `${cellId}:${st.airC}:${flow}`;
             let air = airCache.get(airKey);
             if (!air) {
@@ -216,9 +216,9 @@ function runScenario(p, s, layout, profile, dt, rays, hash, roof, collectQSeries
 function simulate(p, opts = {}) {
     const dt = opts.dt ?? 1, rays = opts.rays ?? 256;
     if (dt !== 1 && dt !== .5)
-        throw Error('時間刻みは1秒または0.5秒です');
+        throw Error('time step must be 1 s or 0.5 s');
     if (![256, 1024].includes(rays))
-        throw Error('積分レイ数は256または1024です');
+        throw Error('integration ray count must be 256 or 1024');
     const hash = inputHash(p), layout = (0, layout_js_1.buildLayout)(p.template), profiles = opts.envelope === false ? p.model.profiles.filter(x => x.id === 'reference') : [...p.model.profiles].sort((a, b) => a.id === 'reference' ? -1 : b.id === 'reference' ? 1 : 0);
     const roofCache = new Map(), cache = new Map(), all = new Map();
     for (const profile of profiles) {
@@ -260,7 +260,7 @@ function simulate(p, opts = {}) {
             if (vals.length === 3)
                 q.parameterEnvelopeW = [Math.min(...vals), Math.max(...vals)];
             if (q.parameterEnvelopeW && q.parameterEnvelopeW[0] < 0 && q.parameterEnvelopeW[1] > 0)
-                q.warnings.push('仮定を変えると増減が逆転');
+                q.warnings.push('The sign of the effect flips under varied assumptions');
         }
     return { inputHash: hash, modelVersion: p.model.version, scenarios: reference, profiles: profiles.map(x => x.id), timeStepSec: dt, rayCount: rays, durationSec: 3600, dailyMilkStatus: 'pending' };
 }
@@ -275,26 +275,26 @@ exports.positionFromAnchor = positionFromAnchor;
 function buildLayout(t) {
     const L = t.lengthM, W = t.widthM, a = (W - 18.5) / 2;
     const zones = [
-        { id: 'feed', name: '飼料・給餌車両', x: 0, y: 0, widthM: L, depthM: 4, kind: 'feed' },
-        { id: 'feeding', name: '採食帯', x: 2.5, y: 4, widthM: L - 11, depthM: 4, kind: 'feeding' },
+        { id: 'feed', name: 'Feed rail / feed vehicle', x: 0, y: 0, widthM: L, depthM: 4, kind: 'feed' },
+        { id: 'feeding', name: 'Feeding alley', x: 2.5, y: 4, widthM: L - 11, depthM: 4, kind: 'feeding' },
     ];
     const rows = [['A', 8, 13], ['B', 10.5 + a, 12], ['C', 13 + a, 13], ['D', 15.5 + 2 * a, 12]];
     const stalls = [], probes = [];
     for (const [row, y, n] of rows) {
-        zones.push({ id: `stall-${row}`, name: `牛床 ${row}`, x: 2.5, y, widthM: L - 11, depthM: 2.5, kind: 'stall' });
+        zones.push({ id: `stall-${row}`, name: `Stalls ${row}`, x: 2.5, y, widthM: L - 11, depthM: 2.5, kind: 'stall' });
         const left = Math.ceil(n / 2), start = 2.5 + ((L - 11) - (n * 1.2 + 2.5)) / 2;
         for (let i = 0; i < n; i++) {
             const x = start + i * 1.2 + (i >= left ? 2.5 : 0), id = `stall-${row}-${String(i + 1).padStart(2, '0')}`;
             stalls.push({ id, x, y, widthM: 1.2, depthM: 2.5, row });
-            probes.push({ id, label: `牛床 ${row}${i + 1}`, x: x + .6, y: y + 1.25, heightM: .5, zoneId: `stall-${row}`, patchYawDeg: 90, kind: 'stall' });
+            probes.push({ id, label: `Stall ${row}${i + 1}`, x: x + .6, y: y + 1.25, heightM: .5, zoneId: `stall-${row}`, patchYawDeg: 90, kind: 'stall' });
         }
     }
-    zones.push({ id: 'aisle-1', name: '牛通路 1', x: 0, y: 10.5, widthM: L - 6, depthM: a, kind: 'aisle' }, { id: 'aisle-2', name: '牛通路 2', x: 0, y: 15.5 + a, widthM: L - 6, depthM: a, kind: 'aisle' }, { id: 'robot', name: '搾乳ロボット', x: L - 6, y: 8, widthM: 3, depthM: 3, kind: 'robot' }, { id: 'utility', name: '機器・管理室', x: L - 3, y: 8, widthM: 3, depthM: 3, kind: 'utility', solid: true }, { id: 'waiting', name: 'ロボット前', x: L - 6, y: 11, widthM: 6, depthM: W - 15, kind: 'waiting' }, { id: 'isolation-1', name: '隔離', x: L - 6, y: W - 4, widthM: 3, depthM: 4, kind: 'isolation' }, { id: 'isolation-2', name: '管理', x: L - 3, y: W - 4, widthM: 3, depthM: 4, kind: 'isolation' });
+    zones.push({ id: 'aisle-1', name: 'Cow alley 1', x: 0, y: 10.5, widthM: L - 6, depthM: a, kind: 'aisle' }, { id: 'aisle-2', name: 'Cow alley 2', x: 0, y: 15.5 + a, widthM: L - 6, depthM: a, kind: 'aisle' }, { id: 'robot', name: 'Milking robot', x: L - 6, y: 8, widthM: 3, depthM: 3, kind: 'robot' }, { id: 'utility', name: 'Equipment / utility room', x: L - 3, y: 8, widthM: 3, depthM: 3, kind: 'utility', solid: true }, { id: 'waiting', name: 'Robot queue', x: L - 6, y: 11, widthM: 6, depthM: W - 15, kind: 'waiting' }, { id: 'isolation-1', name: 'Isolation', x: L - 6, y: W - 4, widthM: 3, depthM: 4, kind: 'isolation' }, { id: 'isolation-2', name: 'Office', x: L - 3, y: W - 4, widthM: 3, depthM: 4, kind: 'isolation' });
     for (let i = 0; i < 12; i++)
-        probes.push({ id: `feed-${String(i + 1).padStart(2, '0')}`, label: `採食 ${i + 1}`, x: 2.5 + (i + .5) * (L - 11) / 12, y: 5.75, heightM: 1.3, zoneId: 'feeding', patchYawDeg: 90, kind: 'feeding' });
+        probes.push({ id: `feed-${String(i + 1).padStart(2, '0')}`, label: `Feeding ${i + 1}`, x: 2.5 + (i + .5) * (L - 11) / 12, y: 5.75, heightM: 1.3, zoneId: 'feeding', patchYawDeg: 90, kind: 'feeding' });
     for (let j = 0; j < 4; j++)
         for (let i = 0; i < 2; i++)
-            probes.push({ id: `wait-${j * 2 + i + 1}`, label: `ロボット前 ${j * 2 + i + 1}`, x: L - 6 + (i + .5) * 3, y: 11 + (j + .5) * (W - 15) / 4, heightM: 1.3, zoneId: 'waiting', patchYawDeg: 90, kind: 'waiting' });
+            probes.push({ id: `wait-${j * 2 + i + 1}`, label: `Robot queue ${j * 2 + i + 1}`, x: L - 6 + (i + .5) * 3, y: 11 + (j + .5) * (W - 15) / 4, heightM: 1.3, zoneId: 'waiting', patchYawDeg: 90, kind: 'waiting' });
     const cells = [];
     for (let iy = 0; iy < Math.ceil(W / 2); iy++)
         for (let ix = 0; ix < Math.ceil(L / 2); ix++) {
@@ -382,7 +382,7 @@ function sprayDirections(n, count = 256) {
     if (old)
         return old;
     if (count < 1 || !Number.isInteger(count))
-        throw Error('積分レイ数が不正です');
+        throw Error('invalid integration ray count');
     const axis = direction(n.yawDeg, n.pitchDownDeg), u = (0, exports.normalize)((0, exports.cross)(axis, Math.abs(axis[1]) > .9 ? [1, 0, 0] : [0, 1, 0])), v = (0, exports.cross)(axis, u), scale = Math.tan(n.halfAngleDeg * Math.PI / 180);
     const rays = Array.from({ length: count }, (_, i) => { const r = Math.sqrt((i + .5) / count) * scale, angle = i * Math.PI * (3 - Math.sqrt(5)), c = Math.cos(angle) * r, s = Math.sin(angle) * r; return (0, exports.normalize)([axis[0] + c * u[0] + s * v[0], axis[1] + c * u[1] + s * v[1], axis[2] + c * u[2] + s * v[2]]); });
     if (rayCache.size > 256)
@@ -427,7 +427,7 @@ exports.filmStep = filmStep;
 function thi(t, rh) { return .8 * t + (rh / 100) * (t - 14.4) + 46.4; }
 function onTotalSeconds(hours, on, off) {
     if (![hours, on, off].every(Number.isFinite) || hours < 0 || on < 0 || off < 0 || on + off <= 0)
-        throw Error('ON/OFF周期が不正です（両方0は不可）');
+        throw Error('Invalid ON/OFF cycle (both cannot be 0)');
     const h = hours * 3600, p = on + off;
     return Math.floor(h / p) * on + Math.min(h % p, on);
 }
@@ -436,7 +436,7 @@ exports.isOn = isOn;
 /** ASHRAE SI eq. 5/6, as documented by PsychroLib. Temperatures -100..200 C. */
 function saturationPressure(t) {
     if (!Number.isFinite(t) || t < -100 || t > 200)
-        throw Error('飽和蒸気圧の温度範囲外');
+        throw Error('temperature outside saturation vapour pressure range');
     const T = t + 273.15;
     const ln = t <= .01 ? -5674.5359 / T + 6.3925247 - .009677843 * T + .00000062215701 * T * T + 2.0747825e-9 * T ** 3 - 9.484024e-13 * T ** 4 + 4.1635019 * Math.log(T) : -5800.2206 / T + 1.3914993 - .048640239 * T + .000041764768 * T * T - .000000014452093 * T ** 3 + 6.5459673 * Math.log(T);
     return Math.exp(ln);
@@ -452,7 +452,7 @@ exports.relativeHumidity = relativeHumidity;
 function mistAir(t, rh, pressure, volume, waterKgs, eta) {
     const wi = (0, exports.humidityRatio)(t, rh, pressure), h = (0, exports.enthalpy)(t, wi), md = volume / (0, exports.specificVolume)(t, wi, pressure);
     if (md <= 0)
-        throw Error('空気交換量が0以下です');
+        throw Error('air exchange must be positive');
     if (waterKgs <= 0 || eta <= 0 || rh >= 100 - 1e-10)
         return { temperatureC: t, rhPct: rh, enthalpyJkg: h, evaporatedKgs: 0, unevaporatedKgs: waterKgs };
     let lo = -80, hi = t;
@@ -466,7 +466,7 @@ function mistAir(t, rh, pressure, volume, waterKgs, eta) {
     const ws = (0, exports.humidityRatio)((lo + hi) / 2, 100, pressure), dw = Math.min(eta * waterKgs / md, Math.max(0, ws - wi)), wo = wi + dw;
     const temperatureC = (h / 1000 - 2501 * wo) / (1.006 + 1.86 * wo), outRH = (0, exports.relativeHumidity)(temperatureC, wo, pressure);
     if (outRH > 100 + 1e-6 || outRH < 0)
-        throw Error('ミスト計算が飽和制約を超えました');
+        throw Error('mist calculation exceeded the saturation bound');
     return { temperatureC, rhPct: Math.min(100, outRH), enthalpyJkg: (0, exports.enthalpy)(temperatureC, wo), evaporatedKgs: md * dw, unevaporatedKgs: waterKgs - md * dw };
 }
 function convectiveHeat(area, ts, ta, speed, mult = 1) { return area * (3.5 + 4 * Math.sqrt(speed)) * mult * (ts - ta); }
@@ -482,7 +482,7 @@ function filmStep(mass, capturedKgs, terms, m, p, dt) {
     const potential = terms.km * m.wetAreaM2 * (1 - m.baseWetFraction) * (pre / p.maxFilmKg) * Math.max(terms.drho, 0), evaporated = Math.min(potential * dt, pre), next = pre - evaporated;
     const residual = next - mass - (capturedKgs * dt + condensed * dt - evaporated - runoff);
     if (next < -1e-12 || next > p.maxFilmKg + 1e-12 || Math.abs(residual) > 1e-8)
-        throw Error('体表水の収支が不整合です');
+        throw Error('skin water balance mismatch');
     return { mass: Math.max(0, next), capturedKg: capturedKgs * dt, condensedKg: condensed * dt, evaporatedKg: evaporated, runoffKg: runoff, residualKg: residual, heatW: evaporated / dt * m.latentHeatJkg };
 }
 
@@ -512,7 +512,7 @@ function solveRoof(p, s, waterKgM2, dt, env) {
     }
     let lo = 0, hi = 130, flo = at(lo).residualWm2, fhi = at(hi).residualWm2;
     if (!Number.isFinite(flo) || !Number.isFinite(fhi) || flo * fhi > 0)
-        throw Error('屋根の熱収支を解けません。入力範囲を確認してください');
+        throw Error('cannot solve the roof heat balance; check input ranges');
     for (let i = 0; i < 60; i++) {
         const mid = (lo + hi) / 2, st = at(mid);
         if (Math.abs(st.residualWm2) < 1e-9 || hi - lo < 1e-9)
@@ -565,16 +565,16 @@ exports.MILK_ROWS = [
 ];
 function milkReference(t, rh, v, baseline, staticInputs = true) {
     if (![t, rh, v].every(Number.isFinite) || rh < 0 || rh > 100 || v < 0 || baseline !== null && (!Number.isFinite(baseline) || baseline < 0))
-        return { status: 'invalid_input', ratioPct: null, kgPerDay: null, reasons: ['入力を確認してください'] };
+        return { status: 'invalid_input', ratioPct: null, kgPerDay: null, reasons: ['check the inputs'] };
     const reasons = [];
     if (!staticInputs)
-        reasons.push('時間変動する条件は対象外');
+        reasons.push('time-varying conditions are out of scope');
     if (![27, 35].some(x => Math.abs(x - t) <= 1e-9))
-        reasons.push('気温は27℃・35℃のみ');
+        reasons.push('temperature must be 27℃ or 35℃');
     if (![.18, 2.24, 4.02].some(x => Math.abs(x - v) <= 1e-9))
-        reasons.push('風速は0.18・2.24・4.02m/sのみ');
+        reasons.push('wind speed must be 0.18, 2.24 or 4.02 m/s');
     if (rh < 60 || rh > 70)
-        reasons.push('湿度は60〜70%のみ');
+        reasons.push('humidity must be 60–70%');
     const row = exports.MILK_ROWS.find(x => Math.abs(x.temperatureC - t) <= 1e-9 && Math.abs(x.speedMps - v) <= 1e-9);
     if (reasons.length || !row)
         return { status: 'out_of_scope', ratioPct: null, kgPerDay: null, reasons };
@@ -585,25 +585,25 @@ exports.FERTILITY_OR = [
     [1, .823, .697, .773], [1, .973, .913, 1.005], [1, .926, .887, .693],
     [1, .941, .935, .922], [1, 1.058, .941, .854],
 ];
-exports.FERTILITY_CATEGORIES = ['基準区分', '軽度区分', '中等度区分', '高暑熱区分'];
+exports.FERTILITY_CATEGORIES = ['reference band', 'mild band', 'moderate band', 'high-heat band'];
 const fertilityTHI = (t, rh) => (1.8 * t + 32) - (.55 - .55 * rh / 100) * (1.8 * t - 26);
 exports.fertilityTHI = fertilityTHI;
 function categoryOfTHI(thi) { return thi < 60 ? 0 : thi < 68 ? 1 : thi < 72 ? 2 : 3; }
 function fertilityByPeriods(ths, p0) {
     if (ths.length !== 5 || !ths.every(Number.isFinite) || !Number.isFinite(p0) || p0 <= 0 || p0 >= 1)
-        throw Error('受胎シナリオの入力が不正です');
+        throw Error('invalid conception-scenario inputs');
     const oddsRatio = ths.reduce((r, thi, i) => r * exports.FERTILITY_OR[i][categoryOfTHI(thi)], 1);
     return { oddsRatio, probability: p0 * oddsRatio / (1 - p0 + p0 * oddsRatio) };
 }
 function fertilityReference(settings, localT, localRH) {
     const blank = { probability: null, oddsRatio: null, thi: null, category: null, source: settings.mode, exposureAssumed: settings.exposureAssumed };
     if (!settings.exposureAssumed)
-        return { ...blank, status: 'out_of_scope', reasons: ['授精前後52日間の代表条件の仮定が未採用です'] };
+        return { ...blank, status: 'out_of_scope', reasons: ['the 52-day representative-condition assumption is not adopted'] };
     const t = settings.mode === 'manual' ? settings.temperatureC : localT, rh = settings.mode === 'manual' ? settings.relativeHumidityPct : localRH;
     if (t === null || rh === null)
-        return { ...blank, status: 'out_of_scope', reasons: ['地点の計算が無効です'] };
+        return { ...blank, status: 'out_of_scope', reasons: ['point calculation is invalid'] };
     if (![t, rh, settings.p0].every(Number.isFinite) || rh < 0 || rh > 100 || settings.p0 <= 0 || settings.p0 >= 1)
-        return { ...blank, status: 'invalid_input', reasons: ['受胎シナリオの入力が不正です'] };
+        return { ...blank, status: 'invalid_input', reasons: ['invalid conception-scenario inputs'] };
     const thi = (0, exports.fertilityTHI)(t, rh), cat = categoryOfTHI(thi), calculation = fertilityByPeriods([thi, thi, thi, thi, thi], settings.p0);
     return { ...blank, ...calculation, thi, category: exports.FERTILITY_CATEGORIES[cat], status: 'available_reference', reasons: [] };
 }
@@ -687,7 +687,7 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
     const invalidDevices = [...s.fans.filter(f => f.enabled && f.hoursPerDay > 0), ...s.waterSystems.filter(w => w.enabled && w.hoursPerDay > 0 && w.onSec > 0).flatMap(w => w.nozzles.filter(n => n.enabled && n.flowLpm > 0))].filter(d => layout.solids.some(box => (0, geometry_js_1.insideBox)((0, geometry_js_1.world)(d), box)));
     const reasons = [];
     if (invalidDevices.length)
-        reasons.push('稼働設備が管理室内にあります。移動するまで日乳量は計算できません。');
+        reasons.push('An active device sits inside the utility room. Daily milk cannot be calculated until it is moved.');
     const weights = 'error' in zw ? null : zw.weights;
     if ('error' in zw)
         reasons.push(zw.error);
@@ -888,7 +888,7 @@ function runDaily(p, s, layout, profile, rays, zw, ms, opts) {
         fanActionFraction: pr.fanS / evalLen, soakerArrivalFraction: pr.soakS / evalLen, mistEvaporationActionFraction: pr.mistEvapS / evalLen, mistSupplyFraction: pr.mistSupS / evalLen }));
     const thermal = { status: 'complete', reasons: [], evaluationDurationSec: evalLen, weatherMode: p.dailyWeather.mode, modelVersion: m.version, points: thermalPoints,
         areas: (0, faces_js_1.buildAreas)(layout).map(a => dailyAreaStats(thermalPoints, a)),
-        all: dailyAreaStats(thermalPoints, { id: 'all', label: '全地点', probeIds: layout.probes.map(q => q.id) }), resources };
+        all: dailyAreaStats(thermalPoints, { id: 'all', label: 'All points', probeIds: layout.probes.map(q => q.id) }), resources };
     const calc = (0, milk_js_1.dailyFromDeficit)(dailyDeficitWPerCow, ms);
     const out = {
         ...blankDaily(ms, 'available', []), zoneCounts: counts, resources,
@@ -945,8 +945,8 @@ function simulateDaily(p, opts = {}) {
         catch (err) {
             status = 'error';
             error = err instanceof Error ? err.message : String(err);
-            daily[s.id] = { ...blankDaily(ms, 'calculation_error', ['日乳量の計算に失敗しました']), resources: dailyResources(p, s) };
-            thermal[s.id] = blankThermal(p, ms, 'calculation_error', ['日熱集計に失敗しました'], dailyResources(p, s));
+            daily[s.id] = { ...blankDaily(ms, 'calculation_error', ['daily milk calculation failed']), resources: dailyResources(p, s) };
+            thermal[s.id] = blankThermal(p, ms, 'calculation_error', ['daily thermal aggregation failed'], dailyResources(p, s));
         }
     }
     const base = daily[p.baselineScenarioId];
@@ -1000,10 +1000,10 @@ function buildFaces(l) {
 function buildAreas(l) {
     const out = [];
     for (const row of ['A', 'B', 'C', 'D'])
-        out.push({ id: `stall-${row}`, label: `牛床 ${row}`, probeIds: l.probes.filter(q => q.zoneId === `stall-${row}`).map(q => q.id) });
-    out.push({ id: 'feeding', label: '採食帯', probeIds: l.probes.filter(q => q.kind === 'feeding').map(q => q.id) });
-    out.push({ id: 'waiting', label: '待機場所', probeIds: l.probes.filter(q => q.kind === 'waiting').map(q => q.id) });
-    out.push({ id: 'stalls', label: '牛床全体（小計）', subtotal: true, probeIds: l.probes.filter(q => q.kind === 'stall').map(q => q.id) });
+        out.push({ id: `stall-${row}`, label: `Stalls ${row}`, probeIds: l.probes.filter(q => q.zoneId === `stall-${row}`).map(q => q.id) });
+    out.push({ id: 'feeding', label: 'Feeding alley', probeIds: l.probes.filter(q => q.kind === 'feeding').map(q => q.id) });
+    out.push({ id: 'waiting', label: 'Waiting area', probeIds: l.probes.filter(q => q.kind === 'waiting').map(q => q.id) });
+    out.push({ id: 'stalls', label: 'All stalls (subtotal)', subtotal: true, probeIds: l.probes.filter(q => q.kind === 'stall').map(q => q.id) });
     return out;
 }
 /** Which display area a probe belongs to (used for area-row highlighting). */
@@ -1088,23 +1088,23 @@ exports.secondsToWeatherBoundary = secondsToWeatherBoundary;
 function dailyWeatherReasons(dw) {
     const r = [];
     if (dw === null || typeof dw !== 'object' || Array.isArray(dw))
-        return ['日気象はオブジェクトが必要です'];
+        return ['dailyWeather must be an object'];
     const w = dw;
     if (w.mode !== 'constant' && w.mode !== 'hourly')
-        r.push('日気象のモードはconstantまたはhourlyです');
+        r.push('dailyWeather mode must be constant or hourly');
     if (w.hours !== undefined && !Array.isArray(w.hours))
-        r.push('日気象のhoursは配列が必要です');
+        r.push('dailyWeather.hours must be an array');
     const rows = (w.hours ?? []);
     const seen = new Set();
     let prev = -1;
     for (const row of rows) {
         if (row === null || typeof row !== 'object' || Array.isArray(row)) {
-            r.push('日気象の行はオブジェクトが必要です');
+            r.push('each dailyWeather row must be an object');
             continue;
         }
         const h = row.hour;
         if (typeof h !== 'number' || !Number.isInteger(h) || h < 0 || h > 23 || seen.has(h) || h <= prev) {
-            r.push('日気象のhourは0〜23の一意・昇順が必要です');
+            r.push('dailyWeather hour must be unique and ascending in 0–23');
             continue;
         }
         seen.add(h);
@@ -1112,14 +1112,14 @@ function dailyWeatherReasons(dw) {
         const f = (k, lo, hi, label) => {
             const v = row[k];
             if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi)
-                r.push(`日気象${h}時の${label}は${lo}〜${hi}の有限数が必要です`);
+                r.push(`dailyWeather hour ${h} ${label} must be a finite number in ${lo}–${hi}`);
         };
-        f('temperatureC', 20, 40, '気温');
-        f('relativeHumidityPct', 0, 100, '湿度');
-        f('solarRoofWm2', 0, 1200, '屋根面日射');
+        f('temperatureC', 20, 40, 'temperature');
+        f('relativeHumidityPct', 0, 100, 'humidity');
+        f('solarRoofWm2', 0, 1200, 'roof solar');
     }
     if (w.mode === 'hourly' && (seen.size !== 24 || !seen.has(0) || !seen.has(23)))
-        r.push('hourlyモードは0〜23時の24行が必要です');
+        r.push('hourly mode requires 24 rows for hours 0–23');
     return r;
 }
 /** Keep the legacy milk weatherMode consistent with the single weather source. */
@@ -1164,19 +1164,19 @@ const MILK_ZONES = ['stall', 'feeding', 'waiting'];
  */
 function occupancyWeights(probes, fractions) {
     if (!MILK_ZONES.every(k => Number.isFinite(fractions[k]) && fractions[k] >= 0))
-        return { error: '区域の滞在割合が不正です' };
+        return { error: 'invalid zone occupancy fractions' };
     const sum = MILK_ZONES.reduce((a, k) => a + fractions[k], 0);
     if (Math.abs(sum - 1) > 1e-9)
-        return { error: '区域の滞在割合の合計が1ではありません' };
+        return { error: 'zone occupancy fractions do not sum to 1' };
     const counts = { stall: 0, feeding: 0, waiting: 0 };
     for (const q of probes) {
         if (!MILK_ZONES.includes(q.kind))
-            return { error: `評価地点 ${q.id} の区域対応がありません` };
+            return { error: `evaluation point ${q.id} has no zone mapping` };
         counts[q.kind]++;
     }
     for (const k of MILK_ZONES)
         if (counts[k] === 0 && fractions[k] > 0)
-            return { error: '滞在割合に対応する評価地点がありません' };
+            return { error: 'no evaluation points exist for a zone with nonzero occupancy' };
     const weights = new Map();
     for (const q of probes)
         weights.set(q.id, fractions[q.kind] / counts[q.kind]);
@@ -1206,40 +1206,40 @@ exports.deltaYield = deltaYield;
 function validateMilkSettings(m) {
     const r = [];
     if (m.modelId !== exports.MILK_MODEL_ID)
-        r.push('乳量モデルIDが未対応です');
+        r.push('unsupported milk model ID');
     if (m.mode !== 'repeated-day')
-        r.push('時間モードは代表日の繰り返しのみです');
+        r.push('the time mode only supports a repeating representative day');
     if (m.weatherMode !== 'constant-environment' && m.weatherMode !== 'hourly-representative-day')
-        r.push('気象モードが未対応です');
+        r.push('unsupported weather mode');
     if (m.operationPolicy !== 'daily-window-reset-v1')
-        r.push('運転ポリシーが未対応です');
+        r.push('unsupported operation policy');
     if (m.assumptionClass !== 'demo_assumption')
-        r.push('仮定の分類が不正です');
+        r.push('invalid assumption class');
     if (!Number.isFinite(m.potentialMilkKgPerCowDay) || m.potentialMilkKgPerCowDay <= 0)
-        r.push('基準日乳量は正の有限値が必要です');
+        r.push('baseline daily milk must be a positive finite value');
     if (!Number.isFinite(m.referenceCoolingWPerCow) || m.referenceCoolingWPerCow < 0)
-        r.push('基準放熱量は非負の有限値が必要です');
+        r.push('reference cooling must be a non-negative finite value');
     if (!Number.isFinite(m.responseKgPerCowDayPerW) || m.responseKgPerCowDayPerW < 0)
-        r.push('換算係数は非負の有限値が必要です');
+        r.push('the response coefficient must be a non-negative finite value');
     if (!Number.isFinite(m.maxLossFraction) || m.maxLossFraction < 0 || m.maxLossFraction > 1)
-        r.push('低下上限率は0〜1が必要です');
+        r.push('max loss fraction must be 0–1');
     const w = m.lagWeights;
     if (!Array.isArray(w) || w.length !== 3 || !w.every(x => Number.isFinite(x) && x >= 0))
-        r.push('遅れの重みは非負の3要素が必要です');
+        r.push('lag weights must be 3 non-negative elements');
     else if (Math.abs(w[0] + w[1] + w[2] - 1) > 1e-9)
-        r.push('遅れの重みの合計が1ではありません');
+        r.push('lag weights do not sum to 1');
     const o = m.occupancyFractions;
     if (!o || typeof o !== 'object' || !MILK_ZONES.every(k => Number.isFinite(o[k]) && o[k] >= 0))
-        r.push('区域の滞在割合は非負の3区域が必要です');
+        r.push('occupancy fractions must cover 3 non-negative zones');
     else if (Math.abs(o.stall + o.feeding + o.waiting - 1) > 1e-9)
-        r.push('区域の滞在割合の合計が1ではありません');
+        r.push('zone occupancy fractions do not sum to 1');
     const b = m.responseSensitivityKgPerCowDayPerW;
     if (!Array.isArray(b) || b.length !== 3 || !b.every(x => Number.isFinite(x) && x >= 0))
-        r.push('感度比較は非負の3条件が必要です');
+        r.push('sensitivity comparison requires 3 non-negative betas');
     if (m.warmupDurationSec !== 86400 || m.evaluationDurationSec !== 86400)
-        r.push('準備・評価は各86400秒のみです');
+        r.push('warmup and evaluation must each be 86400 s');
     if (m.timeStepSec !== 1)
-        r.push('日計算の時間刻みは1秒のみです');
+        r.push('the daily calculation time step is 1 s only');
     return r;
 }
 
@@ -1257,34 +1257,34 @@ const dailyWeather_js_1 = require("../model/dailyWeather.js");
 const fail = (path, message) => { throw new Error(`${path}: ${message}`); };
 const record = (v, path) => {
     if (v === null || typeof v !== 'object' || Array.isArray(v))
-        fail(path, 'オブジェクトが必要です');
+        fail(path, 'an object is required');
     return v;
 };
 const number = (v, lo, hi, path) => {
     if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi)
-        fail(path, `${lo}〜${hi}の有限数が必要です`);
+        fail(path, `a finite number in ${lo}–${hi} is required`);
 };
 const bool = (v, path) => {
     if (typeof v !== 'boolean')
-        fail(path, 'true/falseが必要です');
+        fail(path, 'true/false is required');
 };
 const text = (v, path, max = 160) => {
     if (typeof v !== 'string' || v.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v))
-        fail(path, '文字列が不正です');
+        fail(path, 'invalid string');
 };
 const id = (v, path) => {
     if (typeof v !== 'string' || !/^[a-zA-Z0-9_.-]{1,90}$/.test(v))
-        fail(path, 'IDが不正です');
+        fail(path, 'invalid ID');
 };
 function safeTree(v, depth = 0) {
     if (depth > 24)
-        fail('JSON', '階層が深すぎます');
+        fail('JSON', 'nesting is too deep');
     if (v && typeof v === 'object') {
         if (Array.isArray(v) && v.length > 2000)
-            fail('JSON', '配列が大きすぎます');
+            fail('JSON', 'array is too large');
         for (const [k, x] of Object.entries(v)) {
             if (['__proto__', 'prototype', 'constructor'].includes(k))
-                fail('JSON', '禁止されたキーです');
+                fail('JSON', 'forbidden key');
             safeTree(x, depth + 1);
         }
     }
@@ -1302,22 +1302,22 @@ function validateProject(input) {
         p.schemaVersion = 10;
     }
     if (p.schemaVersion !== 10)
-        fail('schemaVersion', 'この版では保存形式10のみ対応です（v9は自動変換）。旧形式・未知の形式は未対応のため読み込めません。現在の案は保持します');
+        fail('schemaVersion', 'This build supports save format 10 only (v9 is converted automatically). Older or unknown formats are unsupported and cannot be loaded. The current scenario is kept');
     text(p.appVersion, 'appVersion', 80);
     const t = record(p.template, 'template');
     if (t.id !== 'fs-amr1-50-guided-reference' || t.version !== 1)
-        fail('template', '対応していないテンプレートです');
-    number(t.lengthM, 32, 48, '牛舎の長さ');
-    number(t.widthM, 23.5, 30, '牛舎の幅');
+        fail('template', 'unsupported template');
+    number(t.lengthM, 32, 48, 'barn length');
+    number(t.widthM, 23.5, 30, 'barn width');
     if (t.eaveHeightM !== 4 || t.ridgeHeightM !== 8.7)
-        fail('屋根', '本版は軒4m・棟8.7m固定です');
+        fail('roof', 'this build fixes eave 4m and ridge 8.7m');
     const e = record(p.environment, 'environment');
-    number(e.temperatureC, 20, 40, '気温');
-    number(e.relativeHumidityPct, 0, 100, '湿度');
-    number(e.pressurePa, 50000, 110000, '気圧');
-    number(e.backgroundSpeedMps, 0, 10, '背景風速');
-    number(e.ventilationM3sPerM2, .0001, 1, '換気量');
-    number(e.solarRoofWm2, 0, 1200, '屋根面日射');
+    number(e.temperatureC, 20, 40, 'temperature');
+    number(e.relativeHumidityPct, 0, 100, 'humidity');
+    number(e.pressurePa, 50000, 110000, 'pressure');
+    number(e.backgroundSpeedMps, 0, 10, 'background wind');
+    number(e.ventilationM3sPerM2, .0001, 1, 'ventilation');
+    number(e.solarRoofWm2, 0, 1200, 'roof solar');
     const dwObj = p.dailyWeather;
     if (dwObj && typeof dwObj === 'object' && !Array.isArray(dwObj) && dwObj.hours === undefined)
         dwObj.hours = [];
@@ -1326,50 +1326,50 @@ function validateProject(input) {
         fail('dailyWeather', dwReasons[0]);
     const m = record(p.model, 'model');
     if (m.version !== defaults_js_1.MODEL.version)
-        fail('model', '未対応のモデル版です');
+        fail('model', 'unsupported model version');
     for (const [key, value] of Object.entries(defaults_js_1.MODEL))
         if (typeof value === 'number')
             number(m[key], key === 'radiantOffsetC' ? -20 : 0, key === 'latentHeatJkg' ? 5e6 : key === 'vaporGasConstant' ? 1000 : key === 'airCpJkgK' ? 10000 : 100, `model.${key}`);
     if (m.areaM2 <= 0 || m.wetAreaM2 > m.areaM2 || m.baseWetFraction > 1 || m.emissivity > 1 || m.kDecay <= 0 || m.airDensityKgM3 <= 0 || m.airCpJkgK <= 0 || m.vaporGasConstant <= 0 || m.patchLengthM <= 0 || m.patchWidthM <= 0)
-        fail('model', '面積・係数の関係が不正です');
+        fail('model', 'invalid relation between areas or coefficients');
     const rm = record(m.roof, 'model.roof');
     if (rm.version !== defaults_js_1.MODEL.roof.version)
-        fail('roof.model', '未対応の屋根モデルです');
+        fail('roof.model', 'unsupported roof model');
     for (const [k, value] of Object.entries(defaults_js_1.MODEL.roof))
         if (typeof value === 'number') {
             number(rm[k], 0, k === 'backgroundSensibleW' ? 1e6 : 100, `roof.${k}`);
             if (k !== 'backgroundSensibleW' && k !== 'viewFactor' && rm[k] <= 0)
-                fail('roof', '係数は正数です');
+                fail('roof', 'coefficients must be positive');
         }
     if (rm.viewFactor > 1)
-        fail('roof.viewFactor', '0〜1です');
+        fail('roof.viewFactor', 'must be 0–1');
     const refs = record(p.references, 'references');
     if (refs.milkModel !== 'milk-table-cowbell178-v1')
-        fail('references', '未対応の乳量表');
+        fail('references', 'unsupported milk table');
     if (refs.baselineMilkKgPerDay !== null)
-        number(refs.baselineMilkKgPerDay, 0, 100, '基準乳量');
+        number(refs.baselineMilkKgPerDay, 0, 100, 'baseline milk');
     const f = record(refs.fertility, 'references.fertility');
     if (f.model !== 'fertility-thi-period-or-baccouri2025-v1' || f.profileVersion !== 1)
-        fail('fertility', '未対応モデル');
-    number(f.p0, .001, .999, '基準受胎率');
+        fail('fertility', 'unsupported model');
+    number(f.p0, .001, .999, 'baseline conception');
     if (!['manual', 'simulation'].includes(f.mode))
-        fail('fertility.mode', '未対応入力');
+        fail('fertility.mode', 'unsupported input');
     bool(f.exposureAssumed, 'fertility.exposureAssumed');
-    number(f.temperatureC, -20, 50, '代表気温');
-    number(f.relativeHumidityPct, 0, 100, '代表湿度');
+    number(f.temperatureC, -20, 50, 'reference temperature');
+    number(f.relativeHumidityPct, 0, 100, 'reference humidity');
     const ms = record(p.milkSimulation, 'milkSimulation');
     const milkReasons = (0, milk_js_1.validateMilkSettings)(ms);
     if (milkReasons.length)
         fail('milkSimulation', milkReasons[0]);
     if (ms.weatherMode !== (0, dailyWeather_js_1.weatherModeOf)(p.dailyWeather))
-        fail('milkSimulation.weatherMode', '日気象モードと一致していません');
+        fail('milkSimulation.weatherMode', 'does not match the daily-weather mode');
     if (!Array.isArray(m.profiles) || m.profiles.length !== 3)
-        fail('model.profiles', '3プロファイルが必要です');
+        fail('model.profiles', '3 profiles are required');
     const profileIds = new Set();
     for (const x of m.profiles) {
         record(x, 'profile');
         if (!['low', 'reference', 'high'].includes(x.id) || profileIds.has(x.id))
-            fail('profile.id', '重複または未知のID');
+            fail('profile.id', 'duplicate or unknown ID');
         profileIds.add(x.id);
         text(x.name, 'profile.name');
         number(x.outletMultiplier, .01, 5, 'outletMultiplier');
@@ -1378,104 +1378,104 @@ function validateProject(input) {
         number(x.maxFilmKg, .001, 5, 'maxFilmKg');
     }
     if (!Array.isArray(p.scenarios) || p.scenarios.length !== 3)
-        fail('scenarios', '基準と2編集案が必要です');
+        fail('scenarios', 'a baseline plus two editable scenarios are required');
     const layout = (0, layout_js_1.buildLayout)(t), ids = new Set();
     for (const s of p.scenarios) {
         record(s, 'scenario');
         id(s.id, 'scenario.id');
         if (ids.has(s.id))
-            fail('scenario.id', '重複しています');
+            fail('scenario.id', 'duplicate');
         ids.add(s.id);
         text(s.name, 'scenario.name');
         bool(s.readOnly, 'readOnly');
         if (!Array.isArray(s.fans) || s.fans.length > 40)
-            fail('fans', '最大40台です');
+            fail('fans', 'max 40 units');
         if (!Array.isArray(s.waterSystems) || s.waterSystems.length !== 2)
-            fail('waterSystems', 'ソーカーとミストの2系統が必要です');
+            fail('waterSystems', 'exactly two systems (soaker and mist) are required');
         const roof = record(s.roof, 'scenario.roof');
-        number(roof.reflectance, 0, 1, '屋根反射率');
-        number(roof.insulationM, 0, .1, '断熱材厚さ');
-        bool(roof.sprayEnabled, '屋根散水');
-        number(roof.flowLpmM2, 0, 1, '屋根流量');
-        number(roof.onSec, 0, 86400, '屋根ON');
-        number(roof.offSec, 0, 86400, '屋根OFF');
+        number(roof.reflectance, 0, 1, 'roof reflectance');
+        number(roof.insulationM, 0, .1, 'insulation thickness');
+        bool(roof.sprayEnabled, 'roof sprinkling');
+        number(roof.flowLpmM2, 0, 1, 'roof flow');
+        number(roof.onSec, 0, 86400, 'roof ON');
+        number(roof.offSec, 0, 86400, 'roof OFF');
         if (roof.onSec + roof.offSec <= 0)
-            fail('屋根周期', '両方0は不可');
-        number(roof.hoursPerDay, 0, 24, '屋根運転時間');
-        number(roof.pumpPowerKw, 0, 20, '屋根ポンプ');
+            fail('roof cycle', 'both cannot be 0');
+        number(roof.hoursPerDay, 0, 24, 'roof hours');
+        number(roof.pumpPowerKw, 0, 20, 'roof pump');
         if (!(0, dailySchedule_js_1.validDailyStartHour)(roof.dailyStartHour))
-            fail('屋根運転開始', '0〜24未満・0.25時間刻みが必要です');
+            fail('roof start', 'must be in 0–24 in 0.25-hour steps');
         const deviceIds = new Set(), systemIds = new Set(), kinds = new Set();
         let nozzleCount = 0;
         const pose = (d, isFan) => {
             record(d, 'device');
             id(d.id, 'device.id');
             if (deviceIds.has(d.id))
-                fail('device.id', '案内でIDが重複しています');
+                fail('device.id', 'duplicate ID within a scenario');
             deviceIds.add(d.id);
             text(d.label, 'device.label');
             bool(d.enabled, 'device.enabled');
             number(d.x, 0, t.lengthM, `${d.label}.x`);
             number(d.y, 0, t.widthM, `${d.label}.y`);
-            number(d.heightM, isFan ? d.diameterM / 2 : 1.8, 4, `${d.label}.高さ`);
-            number(d.yawDeg, 0, 360, `${d.label}.向き`);
-            number(d.pitchDownDeg, isFan ? 0 : 30, 90, `${d.label}.下向き角`);
+            number(d.heightM, isFan ? d.diameterM / 2 : 1.8, 4, `${d.label}.height`);
+            number(d.yawDeg, 0, 360, `${d.label}.yaw`);
+            number(d.pitchDownDeg, isFan ? 0 : 30, 90, `${d.label}.downward angle`);
             const a = record(d.anchor, 'anchor');
             if (a.zoneId !== 'barn' && !layout.zones.some(z => z.id === a.zoneId))
-                fail('anchor.zoneId', '未知のゾーンです');
+                fail('anchor.zoneId', 'unknown zone');
             number(a.u, 0, 1, 'anchor.u');
             number(a.v, 0, 1, 'anchor.v');
             const xy = (0, layout_js_1.positionFromAnchor)(d, t, layout);
             if (Math.abs(xy.x - d.x) > 1e-6 || Math.abs(xy.y - d.y) > 1e-6)
-                fail('anchor', '座標とアンカーが一致していません');
+                fail('anchor', 'coordinates and anchor do not match');
         };
         for (const f of s.fans) {
-            number(f.diameterM, .2, 3, 'ファン径');
-            number(f.outletSpeedMps, 0, 30, '出口風速');
-            number(f.powerKw, 0, 20, 'ファン電力');
-            number(f.hoursPerDay, 0, 24, 'ファン運転時間');
+            number(f.diameterM, .2, 3, 'fan diameter');
+            number(f.outletSpeedMps, 0, 30, 'outlet speed');
+            number(f.powerKw, 0, 20, 'fan power');
+            number(f.hoursPerDay, 0, 24, 'fan hours');
             if (!(0, dailySchedule_js_1.validDailyStartHour)(f.dailyStartHour))
-                fail(`${f.id}.dailyStartHour`, '運転開始は0〜24未満・0.25時間刻みが必要です');
+                fail(`${f.id}.dailyStartHour`, 'start must be in 0–24 in 0.25-hour steps');
             pose(f, true);
         }
         for (const w of s.waterSystems) {
             record(w, 'waterSystem');
             id(w.id, 'waterSystem.id');
             if (systemIds.has(w.id))
-                fail('waterSystem.id', '重複');
+                fail('waterSystem.id', 'duplicate');
             systemIds.add(w.id);
             if (!['soaker', 'mist'].includes(w.kind) || kinds.has(w.kind))
-                fail('waterSystem.kind', '方式は各1系統です');
+                fail('waterSystem.kind', 'one system per kind');
             kinds.add(w.kind);
             bool(w.enabled, 'waterSystem.enabled');
-            number(w.onSec, 0, 86400, '散水ON秒');
-            number(w.offSec, 0, 86400, '散水OFF秒');
+            number(w.onSec, 0, 86400, 'spray ON sec');
+            number(w.offSec, 0, 86400, 'spray OFF sec');
             if (w.onSec + w.offSec <= 0)
-                fail('散水周期', 'ON/OFFの両方0は不可');
-            number(w.hoursPerDay, 0, 24, '散水運転時間');
+                fail('spray cycle', 'ON/OFF cannot both be 0');
+            number(w.hoursPerDay, 0, 24, 'spray hours');
             if (!(0, dailySchedule_js_1.validDailyStartHour)(w.dailyStartHour))
-                fail('散水運転開始', '0〜24未満・0.25時間刻みが必要です');
-            number(w.pumpPowerKw, 0, 20, 'ポンプ電力');
+                fail('spray start', 'must be in 0–24 in 0.25-hour steps');
+            number(w.pumpPowerKw, 0, 20, 'pump power');
             if (!Array.isArray(w.nozzles))
-                fail('nozzles', '配列が必要です');
+                fail('nozzles', 'an array is required');
             nozzleCount += w.nozzles.length;
             for (const n of w.nozzles) {
-                number(n.flowLpm, 0, 20, 'ノズル流量');
-                number(n.halfAngleDeg, 1, 85, '噴霧半角');
+                number(n.flowLpm, 0, 20, 'nozzle flow');
+                number(n.halfAngleDeg, 1, 85, 'spray half-angle');
                 pose(n, false);
             }
         }
         if (nozzleCount > 100)
-            fail('nozzles', '各案の全系統合計で最大100個です');
+            fail('nozzles', 'max 100 nozzles across all systems per scenario');
     }
     if (p.baselineScenarioId !== 'baseline' || !ids.has(p.baselineScenarioId) || !ids.has(p.activeScenarioId) || !ids.has('working-soaker') || !ids.has('working-mist'))
-        fail('scenario', '案ID・参照先が不正です');
+        fail('scenario', 'invalid scenario IDs or references');
     for (const s of p.scenarios)
         if (s.readOnly !== (s.id === p.baselineScenarioId))
-            fail('readOnly', '基準だけを読取専用にしてください');
+            fail('readOnly', 'only the baseline may be read-only');
     const v = record(p.view, 'view');
     if (!['2d', '3d'].includes(v.mode) || !['delta', 'deficit', 'speed', 'temperature'].includes(v.metric))
-        fail('view', '表示設定が不正です');
+        fail('view', 'invalid display settings');
     for (const k of ['roof', 'flow', 'particles'])
         bool(v[k], `view.${k}`);
     if (v.analysis !== undefined)
@@ -1487,12 +1487,12 @@ function validateProject(input) {
         id(v.selectedAreaId, 'view.selectedAreaId');
     number(v.timeSec, 0, 3600, 'view.timeSec');
     if (!layout.probes.some(q => q.id === v.selectedProbeId))
-        fail('selectedProbeId', '地点がありません');
+        fail('selectedProbeId', 'point does not exist');
     if (v.selectedDeviceId !== null) {
         id(v.selectedDeviceId, 'selectedDeviceId');
         const s = p.scenarios.find((s) => s.id === p.activeScenarioId);
         if (!s.fans.concat(s.waterSystems.flatMap((w) => w.nozzles)).some((d) => d.id === v.selectedDeviceId))
-            fail('selectedDeviceId', '設備がありません');
+            fail('selectedDeviceId', 'device does not exist');
     }
     if (v.camera !== null) {
         const c = record(v.camera, 'camera');
@@ -1500,7 +1500,7 @@ function validateProject(input) {
         number(c.elevation, .1, 1.56, 'camera.elevation');
         number(c.distance, 8, 160, 'camera.distance');
         if (!Array.isArray(c.target) || c.target.length !== 3)
-            fail('camera.target', '3座標が必要です');
+            fail('camera.target', '3 coordinates are required');
         c.target.forEach((n) => number(n, -100, 200, 'camera.target'));
     }
     const prices = record(p.prices, 'prices');
@@ -1508,29 +1508,29 @@ function validateProject(input) {
         if (prices[k] !== null)
             number(prices[k], 0, 1e6, `prices.${k}`);
     if (!Array.isArray(p.provenance) || p.provenance.length < 1 || p.provenance.length > 30)
-        fail('provenance', '根拠・仮定が必要です');
+        fail('provenance', 'evidence/assumptions are required');
     for (const item of p.provenance) {
         record(item, 'provenance');
         text(item.id, 'provenance.id');
         text(item.note, 'provenance.note', 3000);
         if (!['source-based', 'adapted-reference', 'design-assumption', 'derived'].includes(item.classification))
-            fail('provenance.classification', '分類が不正です');
+            fail('provenance.classification', 'invalid classification');
         if (item.url !== undefined) {
             text(item.url, 'provenance.url', 2000);
             if (!/^https:\/\//.test(item.url))
-                fail('provenance.url', 'HTTPSのみです');
+                fail('provenance.url', 'HTTPS only');
         }
     }
 }
 function parseProject(text) {
     if (new TextEncoder().encode(text).byteLength > 2 * 1024 * 1024)
-        fail('JSON', '最大2MiBです');
+        fail('JSON', 'max 2MiB');
     let p;
     try {
         p = JSON.parse(text);
     }
     catch {
-        fail('JSON', '読めないJSONです。現在の案は保持します');
+        fail('JSON', 'Unreadable JSON. The current scenario is kept');
     }
     // MCP evaluate and result exports carry a full Project under `project`.
     // Only inputs are restored; supplied calculation results are never trusted.
@@ -1551,9 +1551,9 @@ const layout_js_1 = require("../template/layout.js");
 const milk_js_1 = require("../model/milk.js");
 exports.APP_VERSION = '0.10.0-preview.1';
 exports.MODEL = { version: 'cooling-integrated-v0.10', roof: { version: 'cooling-thermal-v0.5-assumptions-1', backgroundSensibleW: 10000, bareResistance: .02, conductivity: .035, hOutConv: 10, hOutRad: 5, hInConv: 3, hInRad: 5, viewFactor: .35, waterCapacityKgM2: .05 }, surfaceTemperatureC: 35, areaM2: 4.5, wetAreaM2: 2, patchLengthM: 2, patchWidthM: .6, baseWetFraction: .06, emissivity: .95, radiantOffsetC: 2, kSpread: .1, kDecay: 4, latentHeatJkg: 2430000, airDensityKgM3: 1.2, airCpJkgK: 1006, vaporGasConstant: 461.5, hcIntercept: 3.5, hcSlope: 4, profiles: [
-        { id: 'low', name: '低値側の仮定', outletMultiplier: .8, hcMultiplier: .8, mistEfficiency: .4, maxFilmKg: .15 },
-        { id: 'reference', name: '基準の仮定', outletMultiplier: 1, hcMultiplier: 1, mistEfficiency: .6, maxFilmKg: .3 },
-        { id: 'high', name: '高値側の仮定', outletMultiplier: 1.2, hcMultiplier: 1.2, mistEfficiency: .8, maxFilmKg: .45 }
+        { id: 'low', name: 'Low-side assumption', outletMultiplier: .8, hcMultiplier: .8, mistEfficiency: .4, maxFilmKg: .15 },
+        { id: 'reference', name: 'Reference assumption', outletMultiplier: 1, hcMultiplier: 1, mistEfficiency: .6, maxFilmKg: .3 },
+        { id: 'high', name: 'High-side assumption', outletMultiplier: 1.2, hcMultiplier: 1.2, mistEfficiency: .8, maxFilmKg: .45 }
     ] };
 function createProject() {
     const template = { id: 'fs-amr1-50-guided-reference', version: 1, lengthM: 36.4, widthM: 23.5, eaveHeightM: 4, ridgeHeightM: 8.7 }, layout = (0, layout_js_1.buildLayout)(template);
@@ -1561,23 +1561,23 @@ function createProject() {
     for (const zoneId of ['feeding', 'stall-A', 'stall-B', 'stall-C', 'stall-D']) {
         const z = layout.zones.find(z => z.id === zoneId);
         for (const [i, u] of [.1, .6].entries())
-            fans.push({ id: `fan-${zoneId}-${i + 1}`, label: `${z.name} ファン ${i + 1}`, enabled: true, x: z.x + u * z.widthM, y: z.y + z.depthM / 2, heightM: 3, yawDeg: 0, pitchDownDeg: 10, diameterM: 1, outletSpeedMps: 5, powerKw: .4, hoursPerDay: 16, dailyStartHour: 8, anchor: { zoneId, u, v: .5 } });
+            fans.push({ id: `fan-${zoneId}-${i + 1}`, label: `${z.name} fan ${i + 1}`, enabled: true, x: z.x + u * z.widthM, y: z.y + z.depthM / 2, heightM: 3, yawDeg: 0, pitchDownDeg: 10, diameterM: 1, outletSpeedMps: 5, powerKw: .4, hoursPerDay: 16, dailyStartHour: 8, anchor: { zoneId, u, v: .5 } });
     }
-    const waterSystems = ['soaker', 'mist'].map(kind => ({ id: `water-${kind}`, kind, enabled: kind === 'soaker', onSec: kind === 'soaker' ? 120 : 60, offSec: kind === 'soaker' ? 600 : 240, hoursPerDay: 8, dailyStartHour: 8, pumpPowerKw: kind === 'soaker' ? .25 : 1, nozzles: layout.probes.filter(p => p.kind === 'feeding').map((p, i) => ({ id: `${kind}-${i + 1}`, label: `${kind === 'soaker' ? 'ソーカー' : 'ミスト'} ${i + 1}`, enabled: true, x: p.x, y: p.y, heightM: 2.5, yawDeg: 0, pitchDownDeg: 90, halfAngleDeg: kind === 'soaker' ? 25 : 60, flowLpm: kind === 'soaker' ? 1.3 : .1, anchor: (0, layout_js_1.anchorPose)(p, template, layout) })) }));
-    const baseline = { id: 'baseline', name: '基準案', readOnly: true, roof: { reflectance: .2, insulationM: 0, sprayEnabled: false, flowLpmM2: .05, onSec: 120, offSec: 480, hoursPerDay: 8, dailyStartHour: 8, pumpPowerKw: .25 }, fans, waterSystems };
-    const soaker = { ...structuredClone(baseline), id: 'working-soaker', name: '編集案 A', readOnly: false };
-    const mist = { ...structuredClone(baseline), id: 'working-mist', name: '編集案 B', readOnly: false };
+    const waterSystems = ['soaker', 'mist'].map(kind => ({ id: `water-${kind}`, kind, enabled: kind === 'soaker', onSec: kind === 'soaker' ? 120 : 60, offSec: kind === 'soaker' ? 600 : 240, hoursPerDay: 8, dailyStartHour: 8, pumpPowerKw: kind === 'soaker' ? .25 : 1, nozzles: layout.probes.filter(p => p.kind === 'feeding').map((p, i) => ({ id: `${kind}-${i + 1}`, label: `${kind === 'soaker' ? 'Soaker' : 'Mist'} ${i + 1}`, enabled: true, x: p.x, y: p.y, heightM: 2.5, yawDeg: 0, pitchDownDeg: 90, halfAngleDeg: kind === 'soaker' ? 25 : 60, flowLpm: kind === 'soaker' ? 1.3 : .1, anchor: (0, layout_js_1.anchorPose)(p, template, layout) })) }));
+    const baseline = { id: 'baseline', name: 'Baseline', readOnly: true, roof: { reflectance: .2, insulationM: 0, sprayEnabled: false, flowLpmM2: .05, onSec: 120, offSec: 480, hoursPerDay: 8, dailyStartHour: 8, pumpPowerKw: .25 }, fans, waterSystems };
+    const soaker = { ...structuredClone(baseline), id: 'working-soaker', name: 'Draft A', readOnly: false };
+    const mist = { ...structuredClone(baseline), id: 'working-mist', name: 'Draft B', readOnly: false };
     mist.waterSystems.forEach(w => w.enabled = w.kind === 'mist');
     return { schemaVersion: 10, dailyWeather: { mode: 'constant', hours: [] }, references: { milkModel: 'milk-table-cowbell178-v1', baselineMilkKgPerDay: 35, fertility: { model: 'fertility-thi-period-or-baccouri2025-v1', p0: .4, mode: 'manual', exposureAssumed: true, temperatureC: 26, relativeHumidityPct: 70, profileVersion: 1 } }, milkSimulation: structuredClone(milk_js_1.DEFAULT_MILK_SIMULATION), appVersion: exports.APP_VERSION, template, environment: { temperatureC: 32, relativeHumidityPct: 70, pressurePa: 101325, backgroundSpeedMps: .2, ventilationM3sPerM2: .015, solarRoofWm2: 800 }, model: structuredClone(exports.MODEL), baselineScenarioId: 'baseline', activeScenarioId: 'working-soaker', scenarios: [baseline, soaker, mist], view: { mode: '3d', metric: 'deficit', timeSec: 0, selectedProbeId: 'feed-07', selectedDeviceId: null, roof: false, flow: true, particles: true, camera: null, analysis: false, selectedAreaId: null }, prices: { electricityYenKwh: 27, waterYenM3: 300 }, provenance: [
-            { id: 'dimensions', classification: 'adapted-reference', note: '原事例36.4×23.5m・70頭の外形を参考に、内部を50床の独自配置へ変更。設計推奨ではない。', url: 'https://holstein.pl/nowoczesna-obora-w-gospodarstwie-rodzinnym/' },
-            { id: 'layout', classification: 'adapted-reference', note: '採食・休息・搾乳の区画関係を参考にした独自配置。原図やメーカー3Dデータは同梱しない。', url: 'https://www.orionkikai.co.jp/rakuno/how_to/auto-milking-system/' },
-            { id: 'psychrometrics', classification: 'source-based', note: 'SIの飽和蒸気圧・湿度比・エンタルピー・比体積の関係。仮換気量の妥当性を保証するものではない。', url: 'https://psychrometrics.github.io/psychrolib/api_docs.html' },
-            { id: 'milk', classification: 'source-based', note: '全酪連COWBELL No.178（2025年10月）p.6の送風体感温度式、p.8の乳量表。日本飼養標準2017・柴田ら1984の抜粋。乳量は掲載6条件・RH60〜70%のみ。' },
-            { id: 'milk-daily', classification: 'design-assumption', note: '乳量仮説モデル milk-heat-deficit-v0.1 の係数は demo_assumption に相当する仮定。Y0=40kg、Qref=630W、beta=0.010、上限25%、遅れ0.2/0.5/0.3、滞在14/6/4時間相当。文献からの回帰係数ではなく、信頼区間でもない。' },
-            { id: 'roof', classification: 'design-assumption', note: '屋根の係数と背景熱は熱モデルv0.5の固定仮定。遮熱反射率0.7・断熱20mm。放射・風・散水の効果をTHIや深部体温へ換算しない。' },
-            { id: 'fertility', classification: 'source-based', note: 'Baccouri et al. (2025) Table 2の5期間OR。仮の基準確率40%。屋外THIから局所THIへの適用はアプリの追加仮定。', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12249091/' },
-            { id: 'model', classification: 'design-assumption', note: '風速曲線、熱伝達係数、体表35℃、面積4.5m²、換気量、蒸発率、保持水量は仕様v0.4の実装仮定。現場未検証。' },
-            { id: 'calculation', classification: 'derived', note: '70地点は独立試行。放熱Wを牛群へ合算しない。日乳量は仮説モデルv0.1の牛群平均、受胎は別の52日代表シナリオ。乳量の掲載表は資料として保持。' }
+            { id: 'dimensions', classification: 'adapted-reference', note: 'Outer dimensions (36.4×23.5 m, 70 cows) adapted from the reference barn; the interior was rearranged into an original 50-stall layout. Not a design recommendation.', url: 'https://holstein.pl/nowoczesna-obora-w-gospodarstwie-rodzinnym/' },
+            { id: 'layout', classification: 'adapted-reference', note: 'Original layout informed by the spatial relation of feeding, resting and milking zones. No original drawings or manufacturer 3D data are bundled.', url: 'https://www.orionkikai.co.jp/rakuno/how_to/auto-milking-system/' },
+            { id: 'psychrometrics', classification: 'source-based', note: 'SI relations of saturation vapour pressure, humidity ratio, enthalpy and specific volume. Does not guarantee the assumed ventilation rate is sound.', url: 'https://psychrometrics.github.io/psychrolib/api_docs.html' },
+            { id: 'milk', classification: 'source-based', note: 'Fan-aided feels-like formula from JDLA COWBELL No.178 (Oct 2025) p.6 and the milk table on p.8. Excerpt from Japanese Feeding Standard 2017 and Shibata et al. 1984. Milk covers only the 6 published conditions at RH 60–70%.' },
+            { id: 'milk-daily', classification: 'design-assumption', note: 'Coefficients of the milk hypothesis model milk-heat-deficit-v0.1 are demo_assumption-grade assumptions: Y0=40kg, Qref=630W, beta=0.010, cap 25%, lag 0.2/0.5/0.3, occupancy 14/6/4 h equivalent. Neither a literature regression nor a confidence interval.' },
+            { id: 'roof', classification: 'design-assumption', note: 'Roof coefficients and background heat are fixed assumptions of thermal model v0.5: reflective coating reflectance 0.7, insulation 20mm. Radiation, wind and spray effects are not converted to THI or core body temperature.' },
+            { id: 'fertility', classification: 'source-based', note: '5-period OR from Baccouri et al. (2025) Table 2. Hypothetical baseline probability 40%. Applying outdoor THI to local THI is an added assumption of this app.', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12249091/' },
+            { id: 'model', classification: 'design-assumption', note: 'Wind-speed curve, heat-transfer coefficient, skin 35°C, area 4.5m², ventilation, evaporation rate and film capacity are implementation assumptions of spec v0.4. Not validated in the field.' },
+            { id: 'calculation', classification: 'derived', note: 'The 70 points are independent trials; heat loss (W) is not summed over the herd. Daily milk is the herd mean of hypothesis model v0.1; conception is a separate 52-day representative scenario. The published milk table is kept as reference material.' }
         ] };
 }
 

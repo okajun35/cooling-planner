@@ -46,6 +46,6 @@ test('placement outside the barn is rejected atomically — nothing committed',(
 
 test('baseline scenario refuses posed additions',()=>{
  const s=new ProjectStore();s.switchScenario('baseline');
- assert.throws(()=>s.addFan({x:5,y:5}),/基準/);
- assert.throws(()=>s.addNozzle('mist',{x:5,y:5}),/基準/);
+ assert.throws(()=>s.addFan({x:5,y:5}),/baseline/i);
+ assert.throws(()=>s.addNozzle('mist',{x:5,y:5}),/baseline/i);
 });

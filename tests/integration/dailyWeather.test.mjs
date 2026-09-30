@@ -68,8 +68,8 @@ test('DW05: update_daily_weather validates via Store; malformed rows rejected',(
  assert.equal(ok.applied.mode,'hourly');
  assert.equal(s.committed.milkSimulation.weatherMode,'hourly-representative-day');
  const h0=inputHash(s.committed);
- assert.throws(()=>applyOperation(s,{operation:'update_daily_weather',patch:{mode:'hourly',hours:flatHours(s.committed).slice(0,23)}}),/24行/);
- assert.throws(()=>applyOperation(s,{operation:'update_daily_weather',patch:{mode:'hourly',hours:[{hour:0,temperatureC:60,relativeHumidityPct:50,solarRoofWm2:0},...flatHours(s.committed).slice(1)]}}),/気温/);
+ assert.throws(()=>applyOperation(s,{operation:'update_daily_weather',patch:{mode:'hourly',hours:flatHours(s.committed).slice(0,23)}}),/24 rows/);
+ assert.throws(()=>applyOperation(s,{operation:'update_daily_weather',patch:{mode:'hourly',hours:[{hour:0,temperatureC:60,relativeHumidityPct:50,solarRoofWm2:0},...flatHours(s.committed).slice(1)]}}),/temperature/);
  assert.equal(inputHash(s.committed),h0); // failed edits must not mutate
  applyOperation(s,{operation:'update_daily_weather',patch:{mode:'constant'}});
  assert.equal(s.committed.dailyWeather.mode,'constant');
@@ -83,7 +83,7 @@ test('DW07: constant mode with hours omitted is normalized to an empty array on 
  assert.deepEqual(loaded.dailyWeather,{mode:'constant',hours:[]});
  // hourly still requires the 24 rows even after normalization
  const h=JSON.parse(new ProjectStore().serialize());h.dailyWeather={mode:'hourly'};h.milkSimulation.weatherMode='hourly-representative-day';
- assert.throws(()=>parseProject(JSON.stringify(h)),/24行/);
+ assert.throws(()=>parseProject(JSON.stringify(h)),/24 rows/);
 });
 
 test('DW06: dailyWeatherReasons enumerates structural errors',()=>{
@@ -91,5 +91,5 @@ test('DW06: dailyWeatherReasons enumerates structural errors',()=>{
  assert.equal(dailyWeatherReasons(null).length>0,true);
  assert.equal(dailyWeatherReasons({mode:'x',hours:[]}).length>0,true);
  const dup=Array.from({length:24},()=>({hour:3,temperatureC:30,relativeHumidityPct:50,solarRoofWm2:0}));
- assert.match(dailyWeatherReasons({mode:'hourly',hours:dup}).join(' '),/昇順/);
+ assert.match(dailyWeatherReasons({mode:'hourly',hours:dup}).join(' '),/ascending/);
 });

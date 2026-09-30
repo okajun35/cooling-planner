@@ -36,6 +36,6 @@ test('plain and wrapped imports validate atomically and ignore claimed results',
   assert.equal(store.serialize(),saved);
   assert.equal(store.undoCount,0);
  }
- assert.throws(()=>parseProject('{"project":{},"__proto__":{}}'),/禁止/);
+ assert.throws(()=>parseProject('{"project":{},"__proto__":{}}'),/forbidden/);
  assert.throws(()=>parseProject(' '.repeat(2*1024*1024+1)),/2MiB/);
 });

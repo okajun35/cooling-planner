@@ -58,10 +58,10 @@ test('edit rejects kind-mismatched, internal and unknown patch fields before tou
   {operation:'update_roof',patch:{fans:[]}},
   {operation:'update_system',systemId:'water-soaker',patch:{nozzles:[]}},
   {operation:'update_environment',patch:{scene:'beach'}},
- ])assert.throws(()=>c.edit(bad),/フィールド/,JSON.stringify(bad));
+ ])assert.throws(()=>c.edit(bad),/disallowed fields/,JSON.stringify(bad));
  assert.equal(inputHash(s.committed),h);
- assert.throws(()=>c.edit({operation:'update_device',deviceId:'fan-feeding-1',patch:{}}),/フィールド|空/);
- assert.throws(()=>c.edit({operation:'update_device',deviceId:'ghost',patch:{x:1}}),/見つかりません/);
+ assert.throws(()=>c.edit({operation:'update_device',deviceId:'fan-feeding-1',patch:{}}),/fields|empty/);
+ assert.throws(()=>c.edit({operation:'update_device',deviceId:'ghost',patch:{x:1}}),/not found/);
 });
 
 test('baseline scenario refuses edits; environment stays shared-editable; copy_to_other switches target',()=>{
@@ -69,8 +69,8 @@ test('baseline scenario refuses edits; environment stays shared-editable; copy_t
  s.updateDevice('fan-feeding-1',{heightM:2});
  c.edit({operation:'switch_scenario',scenarioId:'baseline'});
  assert.equal(s.committed.activeScenarioId,'baseline');
- assert.throws(()=>c.edit({operation:'update_device',deviceId:'fan-feeding-1',patch:{x:5}}),/基準案/);
- assert.throws(()=>c.edit({operation:'update_roof',patch:{reflectance:.9}}),/基準案/);
+ assert.throws(()=>c.edit({operation:'update_device',deviceId:'fan-feeding-1',patch:{x:5}}),/baseline/i);
+ assert.throws(()=>c.edit({operation:'update_roof',patch:{reflectance:.9}}),/baseline/i);
  const e=c.edit({operation:'update_environment',patch:{temperatureC:34}});
  assert.equal(s.committed.environment.temperatureC,34);
  c.edit({operation:'switch_scenario',scenarioId:'working-soaker'});
@@ -91,10 +91,10 @@ test('add, duplicate and remove devices return applied ids and undo cleanly',()=
  assert.equal(active(s).fans.length,12);
  c.edit({operation:'remove_device',deviceId:d.deviceId});
  assert.equal(active(s).fans.length,11);
- assert.throws(()=>c.edit({operation:'remove_device',deviceId:'ghost'}),/見つかりません|変化/i);
+ assert.throws(()=>c.edit({operation:'remove_device',deviceId:'ghost'}),/not found|change/i);
  const m=c.edit({operation:'add_device',kind:'mist'});
  assert.equal(active(s).waterSystems.find(w=>w.kind==='mist').nozzles.length,13);
- assert.throws(()=>c.edit({operation:'add_device',kind:'sprinkler'}),/種別|kind/i);
+ assert.throws(()=>c.edit({operation:'add_device',kind:'sprinkler'}),/kind|unknown/i);
 });
 
 test('set_view validates ids, couples probe to its area, never recalculates or undoes',()=>{
@@ -109,9 +109,9 @@ test('set_view validates ids, couples probe to its area, never recalculates or u
  assert.equal(v2.selectedProbeId,'stall-A-01');
  const v3=c.set_view({selectedDeviceId:'fan-feeding-1'});
  assert.equal(v3.selectedDeviceId,'fan-feeding-1');
- assert.throws(()=>c.set_view({selectedProbeId:'ghost'}),/地点/);
- assert.throws(()=>c.set_view({selectedDeviceId:'ghost'}),/設備/);
- assert.throws(()=>c.set_view({selectedAreaId:'ghost'}),/区画/);
+ assert.throws(()=>c.set_view({selectedProbeId:'ghost'}),/point/);
+ assert.throws(()=>c.set_view({selectedDeviceId:'ghost'}),/device/);
+ assert.throws(()=>c.set_view({selectedAreaId:'ghost'}),/area/);
  assert.equal(inputHash(s.committed),h);
  assert.equal(s.undoCount,0);
 });
@@ -163,8 +163,8 @@ test('get_results: ready only when daily stage finished; summaries and selected 
  assert.deepEqual(one.result.scenarios.map(x=>x.id),['baseline']);
  assert.equal(one.result.probe.id,'feed-01');
  assert.equal(one.result.probe.points['baseline'].probeId,'feed-01');
- assert.throws(()=>c.get_results({scenarioId:'ghost'}),/案/);
- assert.throws(()=>c.get_results({probeId:'ghost'}),/地点/);
+ assert.throws(()=>c.get_results({scenarioId:'ghost'}),/scenario/);
+ assert.throws(()=>c.get_results({probeId:'ghost'}),/point/);
 });
 
 test('get_results: editing, pending and worker-error states never leak numbers',()=>{
@@ -174,18 +174,18 @@ test('get_results: editing, pending and worker-error states never leak numbers',
  const out=cd.get_results({});
  assert.equal(out.status,'editing');
  assert.equal(out.result,null);
- assert.throws(()=>cd.edit({operation:'update_device',deviceId:'fan-feeding-1',patch:{x:1}}),/確定/);
- assert.throws(()=>cd.undo(),/確定/);
+ assert.throws(()=>cd.edit({operation:'update_device',deviceId:'fan-feeding-1',patch:{x:1}}),/Confirm|confirm/i);
+ assert.throws(()=>cd.undo(),/Confirm|confirm/i);
  const s2=new ProjectStore();
  const cp=createCommands(deps(s2,{result:r0,status:{pendingInput:true}}));
  assert.equal(cp.get_results({}).status,'editing');
  assert.equal(cp.get_results({}).result,null);
  const ci=createCommands(deps(s2,{result:r0,status:{invalidInput:true}}));
  assert.equal(ci.get_results({}).status,'editing');
- const ce=createCommands(deps(s2,{status:{workerError:'Workerが失敗しました'}}));
+ const ce=createCommands(deps(s2,{status:{workerError:'Worker failed'}}));
  const eo=ce.get_results({});
  assert.equal(eo.status,'error');
- assert.match(eo.reason,/失敗/);
+ assert.match(eo.reason,/failed/);
  assert.equal(eo.result,null);
 });
 
@@ -219,15 +219,15 @@ test('evaluate applies ops to a clone, returns results, and never touches the li
 test('evaluate propagates op errors and invalid placement without mutating',async()=>{
  const s=new ProjectStore(),c=createCommands(deps(s));
  const liveHash=inputHash(s.committed);
- await assert.rejects(()=>c.evaluate({operations:[{operation:'add_device',kind:'fan',x:-5,y:2}]}),/配置/);
- await assert.rejects(()=>c.evaluate({operations:[{operation:'update_device',deviceId:'nope',patch:{x:1}}]}),/設備/);
+ await assert.rejects(()=>c.evaluate({operations:[{operation:'add_device',kind:'fan',x:-5,y:2}]}),/place|Cannot/i);
+ await assert.rejects(()=>c.evaluate({operations:[{operation:'update_device',deviceId:'nope',patch:{x:1}}]}),/device/);
  assert.equal(inputHash(s.committed),liveHash);
  assert.equal(s.undoCount,0);
 });
 
 test('evaluate on the baseline scenario keeps read-only protection',async()=>{
  const s=new ProjectStore(),c=createCommands(deps(s));
- await assert.rejects(()=>c.evaluate({scenarioId:'baseline',operations:[{operation:'update_roof',patch:{reflectance:.9}}]}),/基準案/);
+ await assert.rejects(()=>c.evaluate({scenarioId:'baseline',operations:[{operation:'update_roof',patch:{reflectance:.9}}]}),/baseline/i);
  assert.equal(s.committed.scenarios.find(x=>x.id==='baseline').roof.reflectance,.2);
 });
 
@@ -247,7 +247,7 @@ test('update_model patches physics coefficients, nested roof and profiles, valid
  assert.equal(s.committed.model.profiles.find(x=>x.id==='reference').mistEfficiency,.8);
  assert.throws(()=>c.edit({operation:'update_model',patch:{emissivity:2}}));
  assert.throws(()=>c.edit({operation:'update_model',patch:{roof:{viewFactor:2}}}));
- assert.throws(()=>c.edit({operation:'update_model',patch:{profiles:{nope:{mistEfficiency:.5}}}}),/プロファイル/);
+ assert.throws(()=>c.edit({operation:'update_model',patch:{profiles:{nope:{mistEfficiency:.5}}}}),/profile/);
  assert.throws(()=>c.edit({operation:'update_model',patch:{version:'other'}}));
  const u=c.undo();assert.equal(u.changed,true);
  assert.equal(s.committed.model.kSpread,.1);
@@ -294,7 +294,7 @@ test('describe_model reports current coefficients after update_model/update_milk
  assert.match(m.model.keyAssumptions.cow,/36℃/);
  assert.match(m.model.keyAssumptions.cow,/0\.5/);
  assert.match(m.model.keyAssumptions.milk,/beta=0\.02/);
- assert.match(m.model.keyAssumptions.profiles,/ミスト効率0\.9/);
+ assert.match(m.model.keyAssumptions.profiles,/mist efficiency 0\.9/);
  assert.match(m.model.outputs.meanDeficitW,/500W/);
  assert.ok(m.model.modifiedFromDefaults.some(x=>x.startsWith('model.surfaceTemperatureC')));
  assert.ok(m.model.modifiedFromDefaults.some(x=>x.startsWith('model.roof.viewFactor')));

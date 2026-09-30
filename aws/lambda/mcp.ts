@@ -18,14 +18,14 @@ const call=async(fn:()=>unknown|Promise<unknown>)=>{try{return asText(await fn()
 
 // Same operation vocabulary as scripts/mcp-server.mjs editSchema.
 const DEVICE_PATCH=z.strictObject({
- x:z.number().optional().describe('牛舎の長さ方向 [m]'),
- y:z.number().optional().describe('牛舎の幅方向 [m]'),
- heightM:z.number().optional().describe('高さ [m]'),
+ x:z.number().optional().describe('along the barn length [m]'),
+ y:z.number().optional().describe('along the barn width [m]'),
+ heightM:z.number().optional().describe('height [m]'),
  yawDeg:z.number().optional(),pitchDownDeg:z.number().optional(),enabled:z.boolean().optional(),
  diameterM:z.number().optional(),outletSpeedMps:z.number().optional(),powerKw:z.number().optional(),
  hoursPerDay:z.number().optional(),dailyStartHour:z.number().optional(),
  flowLpm:z.number().optional(),halfAngleDeg:z.number().optional(),
-}).describe('設備の変更フィールド。ファンはdiameterM/outletSpeedMps/powerKw/hoursPerDay/dailyStartHour、ノズルはflowLpm/halfAngleDegのみ可。id/kind/anchorは変更不可。');
+}).describe('Device patch fields. Fans also accept diameterM/outletSpeedMps/powerKw/hoursPerDay/dailyStartHour; nozzles only flowLpm/halfAngleDeg. id/kind/anchor are immutable.');
 const ROOF_PATCH=z.strictObject({
  reflectance:z.number().optional(),insulationM:z.number().optional(),sprayEnabled:z.boolean().optional(),
  flowLpmM2:z.number().optional(),onSec:z.number().optional(),offSec:z.number().optional(),
@@ -40,29 +40,29 @@ const ENV_PATCH=z.strictObject({
  backgroundSpeedMps:z.number().optional(),ventilationM3sPerM2:z.number().optional(),solarRoofWm2:z.number().optional(),
 });
 const MODEL_PATCH=z.strictObject({
- surfaceTemperatureC:z.number().optional().describe('牛体表温度℃'),
+ surfaceTemperatureC:z.number().optional().describe('cow skin temperature ℃'),
  areaM2:z.number().optional(),wetAreaM2:z.number().optional(),patchLengthM:z.number().optional(),patchWidthM:z.number().optional(),
  baseWetFraction:z.number().optional(),emissivity:z.number().optional(),radiantOffsetC:z.number().optional(),
- kSpread:z.number().optional().describe('ファン噴流の拡散係数'),kDecay:z.number().optional().describe('ファン噴流の減衰係数'),
+ kSpread:z.number().optional().describe('fan-jet spread coefficient'),kDecay:z.number().optional().describe('fan-jet decay coefficient'),
  latentHeatJkg:z.number().optional(),airDensityKgM3:z.number().optional(),airCpJkgK:z.number().optional(),vaporGasConstant:z.number().optional(),
- hcIntercept:z.number().optional().describe('対流熱伝達率の切片 hc=a+b√v'),hcSlope:z.number().optional().describe('対流熱伝達率の傾き'),
+ hcIntercept:z.number().optional().describe('convective heat-transfer intercept hc=a+b√v'),hcSlope:z.number().optional().describe('convective heat-transfer slope'),
  roof:z.strictObject({
   backgroundSensibleW:z.number().optional(),bareResistance:z.number().optional(),conductivity:z.number().optional(),
   hOutConv:z.number().optional(),hOutRad:z.number().optional(),hInConv:z.number().optional(),hInRad:z.number().optional(),
   viewFactor:z.number().optional(),waterCapacityKgM2:z.number().optional(),
- }).optional().describe('屋根モデル係数'),
+ }).optional().describe('roof model coefficients'),
  profiles:z.record(z.string(),z.strictObject({
   outletMultiplier:z.number().optional(),hcMultiplier:z.number().optional(),mistEfficiency:z.number().optional(),maxFilmKg:z.number().optional(),
- })).optional().describe('プロファイルID(low/reference/high)→係数。感度仮定セットの調整'),
-}).describe('物理モデルの係数。仮定の感度試行に使う。モデル式そのものは変えられない');
+ })).optional().describe('profile ID (low/reference/high) -> coefficients. Adjusts the sensitivity assumption sets'),
+}).describe('Physical-model coefficients. Used for sensitivity trials of assumptions. The model formulas themselves cannot be changed');
 const MILK_PATCH=z.strictObject({
- potentialMilkKgPerCowDay:z.number().optional(),referenceCoolingWPerCow:z.number().optional().describe('放熱不足の基準放熱量Qref W'),
- responseKgPerCowDayPerW:z.number().optional().describe('不足1W当たりの乳量応答係数beta'),maxLossFraction:z.number().optional(),
+ potentialMilkKgPerCowDay:z.number().optional(),referenceCoolingWPerCow:z.number().optional().describe('reference heat-loss Qref [W] for the deficit'),
+ responseKgPerCowDayPerW:z.number().optional().describe('milk response coefficient beta per 1W of deficit'),maxLossFraction:z.number().optional(),
  lagWeights:z.tuple([z.number(),z.number(),z.number()]).optional(),
  occupancyFractions:z.strictObject({stall:z.number(),feeding:z.number(),waiting:z.number()}).optional(),
  responseSensitivityKgPerCowDayPerW:z.tuple([z.number(),z.number(),z.number()]).optional(),
  warmupDurationSec:z.number().optional(),evaluationDurationSec:z.number().optional(),timeStepSec:z.number().optional(),
-}).describe('乳量仮説モデル(milk-heat-deficit-v0.1)の係数');
+}).describe('Coefficients of the milk hypothesis model (milk-heat-deficit-v0.1)');
 const REFERENCES_PATCH=z.strictObject({
  baselineMilkKgPerDay:z.number().nullable().optional(),
  fertility:z.strictObject({
@@ -71,70 +71,70 @@ const REFERENCES_PATCH=z.strictObject({
  }).optional(),
 });
 const WEATHER_HOUR=z.strictObject({hour:z.number().int().min(0).max(23),temperatureC:z.number().min(20).max(40),relativeHumidityPct:z.number().min(0).max(100),solarRoofWm2:z.number().min(0).max(1200)});
-const DAILY_WEATHER_PATCH=z.strictObject({mode:z.enum(['constant','hourly']),hours:z.array(WEATHER_HOUR).optional()}).describe('代表日気象。mode:"hourly"のときhoursにhour=0〜23の24行を昇順で指定（hourlyは日シミュレーションのみ効き、60分評価はenvironment固定）。constantに戻すときhoursは省略可');
+const DAILY_WEATHER_PATCH=z.strictObject({mode:z.enum(['constant','hourly']),hours:z.array(WEATHER_HOUR).optional()}).describe('Representative-day weather. With mode:"hourly", supply 24 rows in hours with hour=0-23 ascending (hourly affects only the daily simulation; the 60-min evaluation uses the fixed environment). hours may be omitted when reverting to constant');
 const OPERATION=z.discriminatedUnion('operation',[
- z.strictObject({operation:z.literal('switch_scenario'),scenarioId:z.string().describe('切替先の案ID。基準案も閲覧用に選択可')}),
- z.strictObject({operation:z.literal('copy_to_other')}).describe('現在の編集案をもう一方の編集案へ上書きコピーし、その案へ切り替える。対象は設備と屋根。共通気象は全案共有で以前の値は残らない'),
+ z.strictObject({operation:z.literal('switch_scenario'),scenarioId:z.string().describe('target scenario ID. The baseline may be selected for viewing')}),
+ z.strictObject({operation:z.literal('copy_to_other')}).describe('Copies the current editable scenario over the other editable scenario and switches to it. Covers devices and the roof. Shared weather applies to all scenarios; previous values are not kept'),
  z.strictObject({operation:z.literal('update_device'),deviceId:z.string(),patch:DEVICE_PATCH}),
  z.strictObject({operation:z.literal('update_roof'),patch:ROOF_PATCH}),
  z.strictObject({operation:z.literal('update_system'),systemId:z.string(),patch:SYSTEM_PATCH}),
  z.strictObject({operation:z.literal('update_environment'),patch:ENV_PATCH}),
- z.strictObject({operation:z.literal('update_daily_weather'),patch:DAILY_WEATHER_PATCH}).describe('代表日の時刻別気象の設定・解除。全案共有'),
- z.strictObject({operation:z.literal('update_model'),patch:MODEL_PATCH}).describe('物理モデル係数の変更。共通気象と同様に全案へ効く'),
- z.strictObject({operation:z.literal('update_milk'),patch:MILK_PATCH}).describe('乳量仮説モデルの係数変更'),
- z.strictObject({operation:z.literal('update_references'),patch:REFERENCES_PATCH}).describe('参照設定(基準乳量・受胎参照)の変更'),
- z.strictObject({operation:z.literal('add_device'),kind:z.enum(['fan','soaker','mist']),x:z.number().optional().describe('長さ方向の設置位置[m]'),y:z.number().optional().describe('幅方向の設置位置[m]。xとyは両方指定')}),
+ z.strictObject({operation:z.literal('update_daily_weather'),patch:DAILY_WEATHER_PATCH}).describe('Set or clear representative-day hourly weather. Shared by all scenarios'),
+ z.strictObject({operation:z.literal('update_model'),patch:MODEL_PATCH}).describe('Change physical-model coefficients. Like shared weather, applies to all scenarios'),
+ z.strictObject({operation:z.literal('update_milk'),patch:MILK_PATCH}).describe('Change milk-hypothesis-model coefficients'),
+ z.strictObject({operation:z.literal('update_references'),patch:REFERENCES_PATCH}).describe('Change reference settings (baseline milk, conception reference)'),
+ z.strictObject({operation:z.literal('add_device'),kind:z.enum(['fan','soaker','mist']),x:z.number().optional().describe('placement along the length [m]'),y:z.number().optional().describe('placement along the width [m]. x and y must be given together')}),
  z.strictObject({operation:z.literal('duplicate_device'),deviceId:z.string()}),
  z.strictObject({operation:z.literal('remove_device'),deviceId:z.string()}),
 ]);
 
 function buildServer(){
  const server=new McpServer({name:'cooling-planner-remote',version:APP_VERSION},{instructions:[
-  'モデル牛舎の設備配置・屋根条件を変えて環境・水資源・代表牛の放熱・日乳量(仮説)を比較する計算サービス。ブラウザ画面は持たないステートレス版。',
-  '基本フロー: get_default_project で既定project(JSON)とID一覧を取得 → projectの設備/気象/係数を編集するかoperationsで操作を指定 → evaluate で計算。返ってきたprojectを次のevaluateの入力にすると逐次編集できる。',
-  'operationsの語彙はローカル版と同一。座標はx=牛舎長さ方向、y=幅方向、heightM=高さ。長さm、向きdeg。基準案は読取専用、update_environmentは全案に効く。',
-  '代表日の時刻別気象はupdate_daily_weatherで設定（mode:"hourly"はhour=0〜23の24行・昇順一意）。60分評価は常にenvironment固定気象、時刻別は日結果(dailyThermal/dailyMilk)のみに効く。',
-  '数値説明はevaluateの結果を使う。未計算・null・invalidをゼロと説明しない。meanQrefWは地点の正味放熱量、deltaQrefWは基準案からの放熱差、meanDeficitWは秒積算した不足の60分平均。',
-  '結果を解釈・説明する前にdescribe_modelでモデルの計算構造・仮定・限界を確認する。縮約モデルの数値を実牛舎の保証値と言わない。',
-  'モデル理論・係数の根拠となる文書(熱収支仕様/乳量仮説/設計決定ログ)のMarkdown本文はget_docで取得する。describe_modelのdocs一覧とnameが対応する。',
-  '日乳量は仮説モデル(milk-heat-deficit-v0.1)の参考値。includeDaily:trueで計算するが数十秒かかる。',
+  'A calculation service that compares environment, water/power resources, representative-cow heat loss and daily milk (hypothesis) across equipment placements and roof conditions in a model barn. Stateless version with no browser view.',
+  'Basic flow: get_default_project returns the default project (JSON) and ID list -> edit the project\'s devices/weather/coefficients or specify operations -> evaluate computes it. Feeding the returned project into the next evaluate enables sequential editing.',
+  'The operations vocabulary matches the local version. Coordinates: x along the barn length, y the width, heightM the height. Lengths in m, angles in deg. The baseline is read-only; update_environment affects all scenarios.',
+  'Representative-day hourly weather is set via update_daily_weather (mode:"hourly" takes 24 unique rows with hour=0-23 ascending). The 60-min evaluation always uses the fixed environment; hourly affects only daily results (dailyThermal/dailyMilk).',
+  'Explain numbers using evaluate results. Never describe "not calculated", null or invalid as zero. meanQrefW is a point\'s net heat loss; deltaQrefW is the heat-loss difference from baseline; meanDeficitW is the 60-min mean of per-second deficits.',
+  'Before interpreting results, call describe_model to check the model\'s structure, assumptions and limits. Never present reduced-order values as guaranteed real-farm values.',
+  'get_doc returns the Markdown source of the documents backing the model theory and coefficients (heat-balance spec / milk hypothesis / design decision logs). The name corresponds to the docs list in describe_model.',
+  'Daily milk is a reference value of the hypothesis model (milk-heat-deficit-v0.1). Computed with includeDaily:true, but takes tens of seconds.',
  ].join('\n')});
  server.registerTool('get_default_project',{
-  description:'既定のProject JSONと、operationsで使う案ID・設備ID・地点・区画の一覧を返す。入力を組み立てる起点。返るprojectはそのままevaluateのproject引数に使える。',
+  description:'Returns the default Project JSON and the scenario/device/point/area ID list used by operations. The starting point for building inputs. The returned project can be passed straight to evaluate.',
  },()=>call(()=>defaultProject()));
  server.registerTool('evaluate',{
-  description:'projectへ操作列operationsを複製へ適用して計算し、区画別集計・resources・roof・(includeDaily時)dailyMilkとdailyThermal（評価日24hの地点・区画別平均不足）と基準案を返す。project省略時は既定project。operations省略時はそのままの計算。返値のprojectを次回入力に使うと逐次編集できる。',
+  description:'Applies the operation list to a clone of project, computes it, and returns per-area aggregates, resources, roof, (with includeDaily) dailyMilk and dailyThermal (evaluation-day 24h per-point/area mean deficit) and the baseline. Without project, the default is used; without operations, it is computed as-is. Feeding the returned project back enables sequential editing.',
   inputSchema:z.strictObject({
-   project:z.unknown().optional().describe('対象Project JSON(get_default_projectの返値または前回evaluateの返値)。省略時は既定'),
-   scenarioId:z.string().optional().describe('操作を適用する案ID。省略時はprojectの現在の案。基準案は読取専用'),
-   operations:z.array(OPERATION).optional().describe('複製へ順に適用する操作列。空配列はそのまま計算'),
-   includeDaily:z.boolean().optional().describe('trueで日乳量の仮説モデルまで計算(数十秒かかる。省略時は60分熱計算のみ)'),
+   project:z.unknown().optional().describe('target Project JSON (the get_default_project return value or a previous evaluate result). Default: the default project'),
+   scenarioId:z.string().optional().describe('scenario ID to apply operations to. Default: the project\'s current scenario. The baseline is read-only'),
+   operations:z.array(OPERATION).optional().describe('operation list applied in order to the clone. An empty array computes it as-is'),
+   includeDaily:z.boolean().optional().describe('true also computes the daily-milk hypothesis model (takes tens of seconds. Default: 60-min thermal only)'),
   }),
  },args=>call(()=>evaluateProject(args)));
  server.registerTool('compare_candidates',{
-  description:'制約付きの候補比較。同じ開始projectへ1〜3案の操作列を別々に適用し、日結果（日平均不足・冷却水・電力・悪化地点数・乳量）と制約判定・順位を返す。候補操作はupdate_device（enabled/位置/向き/日運転）、update_system（onoff・日運転）、update_roofのみ。係数・気象・案切替・設備の追加削除は候補に使えない。順位はこの呼出し内だけ有効。各候補の日計算を含むため数十秒〜数分かかる。',
+  description:'Constrained candidate comparison. Applies 1-3 candidate operation lists separately to the same starting project and returns daily results (daily mean deficit, cooling water, power, worsened point count, milk), constraint verdicts and ranks. Candidate operations are only update_device (enabled/position/direction/daily schedule), update_system (onoff/daily schedule) and update_roof. Coefficients, weather, scenario switching and device add/remove are not allowed as candidates. Ranks hold only within the call. Takes tens of seconds to minutes as each candidate includes the daily computation.',
   inputSchema:z.strictObject({
-   project:z.unknown().optional().describe('開始Project JSON。省略時は既定'),
-   scenarioId:z.string().optional().describe('候補を適用する編集案ID。省略時はprojectの現在の案。基準案は不可'),
-   candidates:z.array(z.strictObject({id:z.string().describe('候補ID（呼出し内で一意）'),operations:z.array(OPERATION)})).min(1).max(3).describe('比較する候補。それぞれ開始projectの複製へ適用（累積しない）'),
+   project:z.unknown().optional().describe('starting Project JSON. Default: the default project'),
+   scenarioId:z.string().optional().describe('editable scenario ID to apply candidates to. Default: the project\'s current scenario. Baseline is not allowed'),
+   candidates:z.array(z.strictObject({id:z.string().describe('candidate ID (unique within the call)'),operations:z.array(OPERATION)})).min(1).max(3).describe('candidates to compare. Each applies to a fresh clone of the start project (not cumulative)'),
    constraints:z.strictObject({
-    maxWaterLPerDay:z.number().optional().describe('冷却設備（ソーカー・ミスト・屋根散水）の日供給水上限L'),
-    maxElectricityKwhPerDay:z.number().optional().describe('ファン＋ポンプの日電力量上限kWh'),
-    priorityArea:z.string().optional().describe('改善を優先する区域ID（既定stalls。stall-A〜D/feeding/waiting/stalls/all）'),
-    protectAreas:z.array(z.string()).optional().describe('開始案より日平均不足を増やさない区域（既定は3区域すべて）'),
-    protectWorst:z.boolean().optional().describe('全地点の最大不足を開始案より増やさない（既定true）'),
+    maxWaterLPerDay:z.number().optional().describe('daily supply-water cap [L] for cooling devices (soaker, mist, roof sprinkling)'),
+    maxElectricityKwhPerDay:z.number().optional().describe('daily electricity cap [kWh] for fans + pumps'),
+    priorityArea:z.string().optional().describe('area ID to prioritise for improvement (default stalls. stall-A..D/feeding/waiting/stalls/all)'),
+    protectAreas:z.array(z.string()).optional().describe('areas that must not increase daily mean deficit vs the start (default: all 3 areas)'),
+    protectWorst:z.boolean().optional().describe('do not increase the all-points max deficit vs the start (default true)'),
    }).optional(),
-   ranking:z.enum(['deficit','water','worst']).optional().describe('順位規則：deficit=優先区域不足→最大不足→水→電力 / water=節水優先（優先区域が改善する候補に限定） / worst=最大不足優先'),
+   ranking:z.enum(['deficit','water','worst']).optional().describe('ranking rule: deficit = priority-area deficit, then max deficit, water, power / water = water-saving first (limited to candidates that improve the priority area) / worst = max-deficit first'),
   }),
  },args=>call(()=>compareProject(args)));
 
  server.registerTool('describe_model',{
-  description:'この計算モデルが「何を・どう仮定して・何を無視して」計算しているかを返す。計算構造(屋根/風/散水/ミスト/牛体収支/日集計)、入出力の意味、主な仮定定数、限界、検証状態を含む。結果を解釈・説明する前に呼ぶ。docs一覧の文書本文はget_docで取得。',
-  inputSchema:z.strictObject({project:z.unknown().optional().describe('説明対象のproject。省略時は既定projectのモデル設定で説明')}),
+  description:'Returns what this model computes, what it assumes and what it ignores: the computation structure (roof/wind/spray/mist/cow balance/daily aggregate), input/output meanings, key assumed constants, limits and validation status. Call before interpreting results. get_doc fetches the documents in the docs list.',
+  inputSchema:z.strictObject({project:z.unknown().optional().describe('project to describe. Default: described with the default project\'s model settings')}),
  },args=>call(()=>describe(args.project)));
  server.registerTool('get_doc',{
-  description:'モデル理論・係数の根拠となる文書のMarkdown本文を返す。describe_modelのdocs一覧に対応: thermal_model=熱・散水モデル仕様(MODEL.md)、milk_model=日乳量仮説モデル(MILK_HEAT_MODEL_V0_1.md)、decisions_v08/decisions_v06=設計決定ログ。「なぜこの式・係数か」を説明するときに使う。',
-  inputSchema:z.strictObject({name:z.enum(['thermal_model','milk_model','decisions_v08','decisions_v06']).describe('取得する文書名')}),
+  description:'Returns the Markdown source of documents backing the model theory and coefficients. Corresponds to the docs list in describe_model: thermal_model = heat/spray model spec (MODEL.md), milk_model = daily-milk hypothesis model (MILK_HEAT_MODEL_V0_1.md), decisions_v08/decisions_v06 = design decision logs. Use to explain "why this formula or coefficient".',
+  inputSchema:z.strictObject({name:z.enum(['thermal_model','milk_model','decisions_v08','decisions_v06']).describe('document name to fetch')}),
  },({name})=>call(()=>DOCS[name]));
  return server;
 }

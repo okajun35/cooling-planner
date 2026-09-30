@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {comparisonStats} from '../../.compiled/model/comparisonStats.js';
 
 const q=(id,deficit,over={})=>({probeId:id,status:'valid',meanDeficitW:deficit,deltaQrefW:0,meanSpeedMps:1,meanAirTemperatureC:30,meanRelativeHumidityPct:60,fanActionFraction:1,soakerArrivalFraction:0,mistEvaporationActionFraction:0,...over});
-const area={id:'all',label:'全地点',probeIds:['a','b','c']};
+const area={id:'all',label:'All points',probeIds:['a','b','c']};
 
 test('average improvement does not conceal a worsened or unchanged remaining deficit',()=>{
  const st=comparisonStats([q('a',0),q('b',110),q('c',100)],[q('a',300),q('b',100),q('c',100)],area);

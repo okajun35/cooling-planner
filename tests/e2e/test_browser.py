@@ -73,8 +73,8 @@ def test_E01_initial_three_scenarios_70_points_webgl_and_no_placeholder_values(p
     assert r['scenarios'][1]['dailyMilk']['deltaKgPerCowDay']==0
     open_sheet(page,'reference')
     text=page.locator('#reference-pane').inner_text()
-    assert '乳量への参考影響' in text and 'kg/頭/日' in text
-    assert '参照表の対象外' not in text
+    assert 'Reference impact on milk yield' in text and 'kg/cow/day' in text
+    assert 'outside the published table' not in text
     page.locator('[data-action=close-sheet]').click()
     page.screenshot(path=str(OUT/'initial-desktop.png'),full_page=True)
 
@@ -129,7 +129,7 @@ def test_E07_zero_cycle_is_rejected_without_losing_state_and_recovery(page):
     number(page,'#system-on',0)
     page.locator('#system-off').fill('0');page.locator('#system-off').press('Tab')
     assert page.locator('#status').get_attribute('data-state')=='invalid'
-    assert '両方0' in page.locator('#error-message').inner_text()
+    assert 'cannot both be 0' in page.locator('#error-message').inner_text()
     assert snap(page)['scenarios'][1]['waterSystems'][0]['offSec']==600
     number(page,'#system-off',10)
     assert result(page)['scenarios'][1]['resources']['waterLPerDay']==0
@@ -165,7 +165,7 @@ def test_E09_actual_download_and_upload_of_roof_references_and_time(page,tmp_pat
 def test_E10_bad_import_legacy_schema_xss_and_atomic_state(page):
     p=snap(page)
     page.locator('#file-input').set_input_files({'name':'old.json','mimeType':'application/json','buffer':b'{"schemaVersion":4}'})
-    page.wait_for_function("document.querySelector('#error-message').textContent.includes('未対応')")
+    page.wait_for_function("document.querySelector('#error-message').textContent.includes('unsupported')")
     assert snap(page)==p
     p['scenarios'][1]['fans'][0]['label']='<img src=x onerror="window.__XSS=1">'
     p['view']['selectedDeviceId']='fan-feeding-1'
@@ -195,7 +195,7 @@ def test_E12_reference_values_and_explicit_fertility_connection(page):
     number(page,'#fertility-baseline',30)
     assert snap(page)['references']['fertility']['p0']==.3
     page.locator('[data-close=reference-dialog]').click()
-    assert '地点の温湿度を適用' in page.locator('#reference-pane').inner_text()
+    assert 'point weather applied' in page.locator('#reference-pane').inner_text()
 
 def test_E13_playback_changes_only_view_and_graph_not_physics(page):
     h=page.evaluate('window.__DCS__.hash()');before=result(page);count=page.evaluate('window.__DCS__.metrics().undoCount')
@@ -270,10 +270,10 @@ def test_E19_result_export_is_current_and_includes_provenance_and_series(page,tm
 def test_E20_evidence_lists_versions_assumptions_and_non_confidence_envelope(page):
     page.locator('[data-action=evidence]').click()
     text=page.locator('#evidence-body').inner_text()
-    assert '95%信頼区間ではありません' in text
+    assert 'not a 95% confidence interval' in text
     assert 'design-assumption' in text
     assert 'cooling-integrated-v0.10' in text
-    assert '熱v0.5、乳量表v0.6、受胎v0.7' in text
+    assert 'heat v0.5, milk table v0.6 and conception v0.7' in text
     assert 'milk-heat-deficit-v0.1' in text
 
 def test_E22_daily_milk_card_updates_and_probe_choice_does_not_change_it(page):
@@ -312,7 +312,7 @@ def test_E23_area_faces_deficit_metric_and_face_selection(page):
     page.locator('#probe-select').select_option('stall-A-01')
     assert snap(page)['view']['selectedProbeId']=='stall-A-01'
     text=page.locator('#results').inner_text()
-    assert '放熱不足' in text and '設備の作用' in text and '濡れ方' in text
+    assert 'Cooling deficit' in text and 'device action' in text and 'Wetting' in text
     # area table: 6 areas + stall subtotal; row click highlights faces
     open_sheet(page,'areas')
     rows=page.locator('#area-summary [data-area]')
@@ -379,8 +379,8 @@ def test_E24_invalid_device_shows_hatched_faces_and_unevaluated_areas(page):
     assert r['scenarios'][1]['points'][0]['meanDeficitW'] is None
     assert page.locator('svg rect[data-face]').count()==70
     assert page.locator('svg rect[data-face][fill="url(#invalid-hatch)"]').count()==70
-    assert '未評価' in page.locator('#area-summary').inner_text()
-    assert '放熱不足' in page.locator('#results').inner_text()
+    assert 'N/A' in page.locator('#area-summary').inner_text()
+    assert 'Cooling deficit' in page.locator('#results').inner_text()
     number(page,'#device-x',orig[0]);number(page,'#device-y',orig[1])
     assert result(page)['scenarios'][1]['points'][0]['status']=='valid'
 

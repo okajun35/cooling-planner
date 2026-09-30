@@ -142,7 +142,7 @@ def test_mcp_04_copy_compare_and_undo_restores_screen(client,page):
 def test_mcp_05_minimal_errors(client,page):
     err,_=client.tool('edit',{'operation':'switch_scenario','scenarioId':'baseline'})
     err,msg=client.tool('edit',{'operation':'update_roof','patch':{'reflectance':0.9}})
-    assert err is True and '基準案' in msg
+    assert err is True and 'baseline' in msg.lower()
     err,msg=client.tool('edit',{'operation':'update_device','deviceId':'fan-feeding-1','patch':{'x':1,'id':'x'}})
     assert err is True
 
@@ -151,7 +151,7 @@ def test_mcp_06_second_tab_is_rejected_and_shows_message(client,page,browser):
     pg2=ctx.new_page()
     pg2.goto(BASE+'/?mcp=1',wait_until='load')
     pg2.wait_for_selector('#toast:not([hidden])',timeout=10000)
-    assert '別のタブ' in pg2.locator('#toast').inner_text()
+    assert 'Another tab' in pg2.locator('#toast').inner_text()
     ctx.close()
     # the first tab still serves commands
     err,st=client.tool('get_state')

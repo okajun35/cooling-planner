@@ -40,7 +40,7 @@ const markGuideDone=()=>{if(ws.guide.done)try{localStorage.setItem(GUIDE_KEY,'do
 function status(){
  const milkPending=calculating&&result!==null;
  const state=invalid?'invalid':store.isDraft?'editing':pending?'pending':workerFailed?'error':calculating?'calculating':'ready';
- const labels:Record<string,string>={invalid:'入力エラー',editing:'配置を編集中',pending:'入力を確定してください',error:'計算エラー',calculating:milkPending?'乳量を計算中…':'計算中…',ready:`計算完了 · ${(lastCalculationMs/1000).toFixed(1)}秒`};
+ const labels:Record<string,string>={invalid:'Input error',editing:'Editing layout',pending:'Confirm the input',error:'Calculation error',calculating:milkPending?'Calculating milk…':'Calculating…',ready:`Done · ${(lastCalculationMs/1000).toFixed(1)}s`};
  el('status').textContent=labels[state];el('status').dataset.state=state;
  el('scene-busy').hidden=!calculating;el<HTMLButtonElement>('undo-button').disabled=!store.undoCount;el<HTMLButtonElement>('redo-button').disabled=!store.redoCount;
  document.querySelectorAll<HTMLButtonElement>('[data-action="save"],[data-action="export-results"]').forEach(b=>b.disabled=pending||invalid||store.isDraft);
@@ -52,7 +52,7 @@ function updateGhost(){
  const pt=scene.screenPoint([pl.x,pl.heightM,pl.y]);
  g.hidden=!pt.visible;g.style.left=`${pt.x}px`;g.style.top=`${pt.y}px`;
  g.dataset.valid=String(pl.valid);
- el('placement-ghost-label').textContent=pl.valid?{fan:'ファン',soaker:'ソーカー',mist:'ミスト'}[pl.kind]:'配置不可';
+ el('placement-ghost-label').textContent=pl.valid?{fan:'Fan',soaker:'Soaker',mist:'Mist'}[pl.kind]:'Cannot place';
 }
 function syncScene(){
  const p=store.project;
@@ -61,8 +61,8 @@ function syncScene(){
   const cb:ViewCallbacks={selectDevice:id=>safe(()=>{store.setView({selectedDeviceId:id});if(store.project.view.selectedDeviceId===id){openPanel(ws,'device');render()}}),selectProbe:id=>safe(()=>{store.setView({selectedProbeId:id});if(store.project.view.selectedProbeId===id){openPanel(ws,'probe');render()}}),begin:()=>store.begin(),preview:(id,patch)=>store.previewDevice(id,patch),commit:()=>store.commit(),cancel:()=>store.cancel(),camera:c=>store.setView({camera:c}),error:message=>{showError(message);if(store.project.view.mode==='3d'){store.setView({mode:'2d'})}},
    placeMove:pos=>{if(!ws.placement)return;if(pos)moveCandidate(ws,pos[0],pos[1],checkPlacement(store.project,pos[0],pos[1])==='ok');else moveCandidate(ws,null,null,false);updateGhost();renderChrome(store.project,currentResult(),ws)},
    // Capture kind before confirming: a valid confirmCandidate clears ws.placement.
-   placeCommit:()=>{const kind=ws.placement?.kind;if(!kind)return;const pose=confirmCandidate(ws);if(!pose){toast('ここには配置できません');updateGhost();renderChrome(store.project,currentResult(),ws);return}safe(()=>kind==='fan'?store.addFan({x:pose.x,y:pose.y}):store.addNozzle(kind,{x:pose.x,y:pose.y}))}};
-  if(mode==='3d'||mode==='realistic'){try{scene=new Viewport3D(el('scene'),cb,undefined,mode==='realistic')}catch{mode='2d';scene=new SVG2D(el('scene'),cb);queueMicrotask(()=>store.setView({mode:'2d'}));toast('3Dを初期化できないため、2Dで続行します。')}}else scene=new SVG2D(el('scene'),cb);
+   placeCommit:()=>{const kind=ws.placement?.kind;if(!kind)return;const pose=confirmCandidate(ws);if(!pose){toast('Cannot place here');updateGhost();renderChrome(store.project,currentResult(),ws);return}safe(()=>kind==='fan'?store.addFan({x:pose.x,y:pose.y}):store.addNozzle(kind,{x:pose.x,y:pose.y}))}};
+  if(mode==='3d'||mode==='realistic'){try{scene=new Viewport3D(el('scene'),cb,undefined,mode==='realistic')}catch{mode='2d';scene=new SVG2D(el('scene'),cb);queueMicrotask(()=>store.setView({mode:'2d'}));toast('3D could not be initialised; continuing in 2D.')}}else scene=new SVG2D(el('scene'),cb);
  }
  scene.setPlacement?.(ws.placement?{heightM:ws.placement.heightM}:null);
  scene.sync(p,currentResult());updateGhost();
@@ -107,7 +107,7 @@ function makeWorker(){
    else if(d.kind==='daily-result'){if(result&&result.inputHash===d.inputHash)mergeDaily(result,d.daily,d.thermal,d.dailyMilkStatus);calculating=false;lastCalculationMs=performance.now()-startTime}
    render();
   };
-  worker.onerror=()=>{calculating=false;workerFailed=true;workerError='計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。';showError(workerError);status()};
+  worker.onerror=()=>{calculating=false;workerFailed=true;workerError='Could not start the calculation worker. Open the single-file HTML build, or serve over HTTP.';showError(workerError);status()};
  }catch(e){workerFailed=true;showError(String(e));status()}
 }
 function recalculate(){
@@ -115,10 +115,10 @@ function recalculate(){
  if(calculating){worker?.terminate();worker=null}calculating=true;workerError=null;status();
  jobTimer=window.setTimeout(()=>{jobTimer=null;if(!worker)makeWorker();if(!worker){calculating=false;status();return}startTime=performance.now();worker.postMessage({jobId,inputHash:hash,project:store.committed})},100);
 }
-function stopPlayback(){playing=false;if(playTimer!==null)clearInterval(playTimer);playTimer=null;el('play-button').innerHTML=`${icon('play',15)} 再生`}
+function stopPlayback(){playing=false;if(playTimer!==null)clearInterval(playTimer);playTimer=null;el('play-button').innerHTML=`${icon('play',15)} Play`}
 function toggleSheet(tab:SheetTab){ws.sheet===tab?closeSheet(ws):openSheet(ws,tab);if(ws.sheet&&!ws.guide.done&&(ws.guide.step===3||ws.guide.step===0)){guideAdvance(ws);markGuideDone()}}
 function tryPlacement(kind:'fan'|'soaker'|'mist'){
- if(activeScenario(store.project).readOnly){toast('基準案は固定です。「編集案 A で試す」で切り替えます');return}
+ if(activeScenario(store.project).readOnly){toast('The baseline is fixed. Switch via "Try in Draft A"');return}
  if(ws.placement?.kind===kind){cancelPlacement(ws);return}
  startPlacement(ws,kind);closePanel(ws);updateGhost();
 }
@@ -147,8 +147,8 @@ store.subscribe((p,kind)=>{
  render();
 });
 function numberInput(input:HTMLInputElement){
- if(input.value.trim()==='')throw Error('値を入力してください');const value=Number(input.value);if(!Number.isFinite(value))throw Error('有限の数値を入力してください');
- if(input.min!==''&&value<Number(input.min)||input.max!==''&&value>Number(input.max))throw Error(`${input.min}〜${input.max}の範囲で入力してください`);return value*Number(input.dataset.factor??1);
+ if(input.value.trim()==='')throw Error('Enter a value');const value=Number(input.value);if(!Number.isFinite(value))throw Error('Enter a finite number');
+ if(input.min!==''&&value<Number(input.min)||input.max!==''&&value>Number(input.max))throw Error(`Enter a value between ${input.min} and ${input.max}`);return value*Number(input.dataset.factor??1);
 }
 document.addEventListener('input',event=>{
  const i=event.target as HTMLInputElement;
@@ -208,21 +208,21 @@ document.addEventListener('click',event=>{
  if(b.dataset.chart){chart=b.dataset.chart as ChartMetric;document.querySelectorAll<HTMLElement>('[data-chart]').forEach(x=>x.classList.toggle('active',x.dataset.chart===chart));renderTimeline(p,currentResult(),chart);return}
  if(b.dataset.close){el<HTMLDialogElement>(b.dataset.close).close();return}
  switch(b.dataset.action){
-  case 'save':if(pending||invalid||store.isDraft)throw Error('入力を確定してから保存してください');download('cooling-planner-v10.json',store.serialize());toast('配置・環境・モデルの仮定を保存しました');break;
+  case 'save':if(pending||invalid||store.isDraft)throw Error('Confirm the input before saving');download('cooling-planner-v10.json',store.serialize());toast('Saved layout, environment and model assumptions');break;
   case 'load':el<HTMLInputElement>('file-input').click();break;
   case 'paste-project':{
    document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());
-   openProjectImport(store,()=>{invalid=false;pending=false;el('error-banner').hidden=true;render();toast('MCP案を読み込み、この画面で再計算しています')});break;
+   openProjectImport(store,()=>{invalid=false;pending=false;el('error-banner').hidden=true;render();toast('Loaded the MCP scenario; recalculating in this view')});break;
   }
-  case 'export-results':{const r=currentResult();if(!r)throw Error('計算完了後に保存してください');if(r.dailyMilkStatus==='pending')throw Error('日乳量の計算完了を待ってください');download('cooling-planner-v9-results.json',{appVersion:p.appVersion,project:p,result:r});break}
+  case 'export-results':{const r=currentResult();if(!r)throw Error('Save after the calculation completes');if(r.dailyMilkStatus==='pending')throw Error('Wait for the daily-milk calculation to finish');download('cooling-planner-v9-results.json',{appVersion:p.appVersion,project:p,result:r});break}
   case 'undo':store.undo();break;case 'redo':store.redo();break;
-  case 'reset-active':store.resetActive();toast('編集案を基準の設定に戻しました');break;
-  case 'copy-scenario':store.copyActiveToOther();toast('屋根・機器を別の編集案へコピーしました');break;
-  case 'reset-milk':store.resetMilk();toast('乳量モデルの仮定を初期値に戻しました');break;
+  case 'reset-active':store.resetActive();toast('Reset the editable scenario to the baseline settings');break;
+  case 'copy-scenario':store.copyActiveToOther();toast('Copied roof & devices to the other editable scenario');break;
+  case 'reset-milk':store.resetMilk();toast('Reset milk-model assumptions to defaults');break;
   case 'select-first-fan':store.setView({selectedDeviceId:activeScenario(p).fans[0]?.id??null});if(store.project.view.selectedDeviceId){openPanel(ws,'device');render()}break;
   case 'add-fan':store.addFan();break;case 'add-soaker':store.addNozzle('soaker');break;case 'add-mist':store.addNozzle('mist');break;
   case 'place-fan':tryPlacement('fan');render();break;case 'place-soaker':tryPlacement('soaker');render();break;case 'place-mist':tryPlacement('mist');render();break;
-  case 'confirm-placement':{const pl=ws.placement;if(!pl)break;const pose=confirmCandidate(ws);if(!pose){toast('ここには配置できません')}else safe(()=>pl.kind==='fan'?store.addFan({x:pose.x,y:pose.y}):store.addNozzle(pl.kind,{x:pose.x,y:pose.y}));render();break}
+  case 'confirm-placement':{const pl=ws.placement;if(!pl)break;const pose=confirmCandidate(ws);if(!pose){toast('Cannot place here')}else safe(()=>pl.kind==='fan'?store.addFan({x:pose.x,y:pose.y}):store.addNozzle(pl.kind,{x:pose.x,y:pose.y}));render();break}
   case 'cancel-placement':cancelPlacement(ws);updateGhost();render();break;
   case 'panel-probe':openPanel(ws,'probe');render();break;
   case 'devices':openPanel(ws,'devices');render();break;
@@ -244,11 +244,11 @@ document.addEventListener('click',event=>{
   case 'settings':renderSettings(p);el<HTMLDialogElement>('settings-dialog').showModal();break;
   case 'weather-fill-env':{const e0=p.environment;store.updateDailyWeather({mode:'hourly',hours:Array.from({length:24},(_,h)=>({hour:h,temperatureC:e0.temperatureC,relativeHumidityPct:e0.relativeHumidityPct,solarRoofWm2:e0.solarRoofWm2}))});break}
   case 'references':renderReference(p);el<HTMLDialogElement>('reference-dialog').showModal();break;
-  case 'restore-local':{const text=localStorage.getItem(ROOT_KEY);if(!text)throw Error('この端末には保存がありません');store.importJSON(text);toast('端末内の保存を復元しました');break}
-  case 'play':if(playing)stopPlayback();else{if(p.view.timeSec>=3600)store.setView({timeSec:0});playing=true;el('play-button').innerHTML='Ⅱ 停止';playTimer=window.setInterval(()=>{const t=Math.min(3600,store.project.view.timeSec+speed*.1);store.setView({timeSec:t});if(t>=3600)stopPlayback()},100)}break;
+  case 'restore-local':{const text=localStorage.getItem(ROOT_KEY);if(!text)throw Error('No save found on this device');store.importJSON(text);toast('Restored the save stored on this device');break}
+  case 'play':if(playing)stopPlayback();else{if(p.view.timeSec>=3600)store.setView({timeSec:0});playing=true;el('play-button').innerHTML='Ⅱ Stop';playTimer=window.setInterval(()=>{const t=Math.min(3600,store.project.view.timeSec+speed*.1);store.setView({timeSec:t});if(t>=3600)stopPlayback()},100)}break;
  }
 })});
-el<HTMLInputElement>('file-input').addEventListener('change',async()=>{const i=el<HTMLInputElement>('file-input'),file=i.files?.[0];if(!file)return;try{if(file.size>2097152)throw Error('JSONは最大2MiBです');store.importJSON(await file.text());invalid=false;pending=false;el('error-banner').hidden=true;render();toast('読み込み、モデルを再計算しています')}catch(e){showError(e instanceof Error?e.message:String(e))}finally{i.value=''}});
+el<HTMLInputElement>('file-input').addEventListener('change',async()=>{const i=el<HTMLInputElement>('file-input'),file=i.files?.[0];if(!file)return;try{if(file.size>2097152)throw Error('JSON is limited to 2MiB');store.importJSON(await file.text());invalid=false;pending=false;el('error-banner').hidden=true;render();toast('Loaded; recalculating the model')}catch(e){showError(e instanceof Error?e.message:String(e))}finally{i.value=''}});
 document.addEventListener('keydown',e=>{
  if(e.key==='Escape'&&!document.querySelector('dialog[open]')){if(ws.placement){cancelPlacement(ws);updateGhost();render();return}store.cancel();pending=false;invalid=false;render();return}
  if(!(e.ctrlKey||e.metaKey)||e.altKey||(e.target as Element).closest('input,select,textarea,[contenteditable]'))return;
@@ -261,15 +261,15 @@ makeWorker();recalculate();render();
 function evaluateProject(project:Project,opts:{daily:boolean}):Promise<EvalJob>{
  return new Promise((resolve,reject)=>{
   const w=spawnWorker();
-  if(!w){reject(new Error('計算Workerを起動できません'));return}
-  const timer=window.setTimeout(()=>{w.terminate();reject(new Error('仮想評価の計算がタイムアウトしました'))},120000);
+  if(!w){reject(new Error('Could not start the calculation worker'));return}
+  const timer=window.setTimeout(()=>{w.terminate();reject(new Error('Hypothetical evaluation timed out'))},120000);
   const done=(fn:()=>void)=>{clearTimeout(timer);w.terminate();fn()};
   let thermal:SimulationResult|null=null;
   w.onmessage=(e:MessageEvent<Reply>)=>{const d=e.data;
    if(d.kind==='error')done(()=>reject(new Error(d.error)));
    else if(d.kind==='thermal-result'){const t=d.result;thermal=t;if(!opts.daily)done(()=>resolve({thermal:t,daily:null,dailyThermal:null,dailyMilkStatus:'complete'}))}
    else if(d.kind==='daily-result'&&thermal)done(()=>resolve({thermal:thermal!,daily:d.daily,dailyThermal:d.thermal,dailyMilkStatus:d.dailyMilkStatus}))};
-  w.onerror=()=>done(()=>reject(new Error('計算Workerエラー')));
+  w.onerror=()=>done(()=>reject(new Error('Calculation worker error')));
   w.postMessage({jobId:1,inputHash:inputHash(project),project});
  });
 }

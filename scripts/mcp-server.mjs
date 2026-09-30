@@ -43,7 +43,7 @@ httpServer.on('upgrade',(req,socket)=>{
  if(pathname!=='/bridge'||origin!==`http://${HOST}:${PORT}`){socket.destroy();return}
  wss.handleUpgrade(req,socket,Buffer.alloc(0),ws=>{
   if(browser&&browser.readyState===browser.OPEN){
-   ws.close(4409,'別のタブが接続中です。開いている1タブだけを使用してください。');
+   ws.close(4409,'Another tab is already connected. Use only the one open tab.');
    return;
   }
   browser=ws;
@@ -53,11 +53,11 @@ httpServer.on('upgrade',(req,socket)=>{
    const p=pending.get(msg?.id);
    if(!p)return; // late or unknown reply
    pending.delete(msg.id);clearTimeout(p.timer);
-   if(msg.ok)p.resolve(msg.data);else p.reject(new Error(msg.error??'ブラウザ側でエラーが発生しました'));
+   if(msg.ok)p.resolve(msg.data);else p.reject(new Error(msg.error??'an error occurred in the browser'));
   });
   ws.on('close',()=>{
    if(browser!==ws)return;browser=null;log('browser disconnected');
-   for(const[id,e]of pending){pending.delete(id);clearTimeout(e.timer);e.reject(new Error('ブラウザとの接続が切れました。画面を再読込してから get_state で状態を確認してください'))}
+   for(const[id,e]of pending){pending.delete(id);clearTimeout(e.timer);e.reject(new Error('Lost the browser connection. Reload the page, then check state with get_state'))}
   });
  });
 });
@@ -65,13 +65,13 @@ httpServer.on('upgrade',(req,socket)=>{
 function callBrowser(command,args,timeoutMs=10000){
  return new Promise((resolve,reject)=>{
   if(!browser||browser.readyState!==browser.OPEN){
-   reject(new Error(`ブラウザが接続されていません。${PAGE_URL} を1タブで開いてください`));return;
+   reject(new Error(`No browser is connected. Open ${PAGE_URL} in a single tab`));return;
   }
-  if(pending.size){reject(new Error('他の操作を実行中です。少し待って再試行してください'));return}
+  if(pending.size){reject(new Error('another operation is in progress. Wait a moment and retry'));return}
   const id=nextId++;
   const timer=setTimeout(()=>{
    pending.delete(id);
-   reject(new Error(`ブラウザから応答がありません（${Math.round(timeoutMs/1000)}秒）。変更の成否が不明です。get_stateで画面の状態を確認してください`));
+   reject(new Error(`No response from the browser (${Math.round(timeoutMs/1000)}s). Whether the change applied is unknown. Check the view state with get_state`));
   },timeoutMs);
   pending.set(id,{resolve,reject,timer});
   browser.send(JSON.stringify({id,command,args}));
@@ -83,14 +83,14 @@ const asText=(data,isError=false)=>({content:[{type:'text',text:typeof data==='s
 const relay=async(command,args,timeoutMs)=>{try{return asText(await callBrowser(command,args,timeoutMs))}catch(e){return asText(e instanceof Error?e.message:String(e),true)}};
 
 const DEVICE_PATCH=z.strictObject({
- x:z.number().optional().describe('牛舎の長さ方向 [m]'),
- y:z.number().optional().describe('牛舎の幅方向 [m]'),
- heightM:z.number().optional().describe('高さ [m]'),
+ x:z.number().optional().describe('along the barn length [m]'),
+ y:z.number().optional().describe('along the barn width [m]'),
+ heightM:z.number().optional().describe('height [m]'),
  yawDeg:z.number().optional(),pitchDownDeg:z.number().optional(),enabled:z.boolean().optional(),
  diameterM:z.number().optional(),outletSpeedMps:z.number().optional(),powerKw:z.number().optional(),
  hoursPerDay:z.number().optional(),dailyStartHour:z.number().optional(),
  flowLpm:z.number().optional(),halfAngleDeg:z.number().optional(),
-}).describe('設備の変更フィールド。ファンはdiameterM/outletSpeedMps/powerKw/hoursPerDay/dailyStartHour、ノズルはflowLpm/halfAngleDegのみ可。id/kind/anchorは変更不可。');
+}).describe('Device patch fields. Fans also accept diameterM/outletSpeedMps/powerKw/hoursPerDay/dailyStartHour; nozzles only flowLpm/halfAngleDeg. id/kind/anchor are immutable.');
 const ROOF_PATCH=z.strictObject({
  reflectance:z.number().optional(),insulationM:z.number().optional(),sprayEnabled:z.boolean().optional(),
  flowLpmM2:z.number().optional(),onSec:z.number().optional(),offSec:z.number().optional(),
@@ -105,29 +105,29 @@ const ENV_PATCH=z.strictObject({
  backgroundSpeedMps:z.number().optional(),ventilationM3sPerM2:z.number().optional(),solarRoofWm2:z.number().optional(),
 });
 const MODEL_PATCH=z.strictObject({
- surfaceTemperatureC:z.number().optional().describe('牛体表温度℃'),
+ surfaceTemperatureC:z.number().optional().describe('cow skin temperature ℃'),
  areaM2:z.number().optional(),wetAreaM2:z.number().optional(),patchLengthM:z.number().optional(),patchWidthM:z.number().optional(),
  baseWetFraction:z.number().optional(),emissivity:z.number().optional(),radiantOffsetC:z.number().optional(),
- kSpread:z.number().optional().describe('ファン噴流の拡散係数'),kDecay:z.number().optional().describe('ファン噴流の減衰係数'),
+ kSpread:z.number().optional().describe('fan-jet spread coefficient'),kDecay:z.number().optional().describe('fan-jet decay coefficient'),
  latentHeatJkg:z.number().optional(),airDensityKgM3:z.number().optional(),airCpJkgK:z.number().optional(),vaporGasConstant:z.number().optional(),
- hcIntercept:z.number().optional().describe('対流熱伝達率の切片 hc=a+b√v'),hcSlope:z.number().optional().describe('対流熱伝達率の傾き'),
+ hcIntercept:z.number().optional().describe('convective heat-transfer intercept hc=a+b√v'),hcSlope:z.number().optional().describe('convective heat-transfer slope'),
  roof:z.strictObject({
   backgroundSensibleW:z.number().optional(),bareResistance:z.number().optional(),conductivity:z.number().optional(),
   hOutConv:z.number().optional(),hOutRad:z.number().optional(),hInConv:z.number().optional(),hInRad:z.number().optional(),
   viewFactor:z.number().optional(),waterCapacityKgM2:z.number().optional(),
- }).optional().describe('屋根モデル係数'),
+ }).optional().describe('roof model coefficients'),
  profiles:z.record(z.string(),z.strictObject({
   outletMultiplier:z.number().optional(),hcMultiplier:z.number().optional(),mistEfficiency:z.number().optional(),maxFilmKg:z.number().optional(),
- })).optional().describe('プロファイルID(low/reference/high)→係数。感度仮定セットの調整'),
-}).describe('物理モデルの係数。仮定の感度試行に使う。モデル式そのものは変えられない');
+ })).optional().describe('profile ID (low/reference/high) -> coefficients. Adjusts the sensitivity assumption sets'),
+}).describe('Physical-model coefficients. Used for sensitivity trials of assumptions. The model formulas themselves cannot be changed');
 const MILK_PATCH=z.strictObject({
- potentialMilkKgPerCowDay:z.number().optional(),referenceCoolingWPerCow:z.number().optional().describe('放熱不足の基準放熱量Qref W'),
- responseKgPerCowDayPerW:z.number().optional().describe('不足1W当たりの乳量応答係数beta'),maxLossFraction:z.number().optional(),
+ potentialMilkKgPerCowDay:z.number().optional(),referenceCoolingWPerCow:z.number().optional().describe('reference heat-loss Qref [W] for the deficit'),
+ responseKgPerCowDayPerW:z.number().optional().describe('milk response coefficient beta per 1W of deficit'),maxLossFraction:z.number().optional(),
  lagWeights:z.tuple([z.number(),z.number(),z.number()]).optional(),
  occupancyFractions:z.strictObject({stall:z.number(),feeding:z.number(),waiting:z.number()}).optional(),
  responseSensitivityKgPerCowDayPerW:z.tuple([z.number(),z.number(),z.number()]).optional(),
  warmupDurationSec:z.number().optional(),evaluationDurationSec:z.number().optional(),timeStepSec:z.number().optional(),
-}).describe('乳量仮説モデル(milk-heat-deficit-v0.1)の係数');
+}).describe('Coefficients of the milk hypothesis model (milk-heat-deficit-v0.1)');
 const REFERENCES_PATCH=z.strictObject({
  baselineMilkKgPerDay:z.number().nullable().optional(),
  fertility:z.strictObject({
@@ -136,51 +136,51 @@ const REFERENCES_PATCH=z.strictObject({
  }).optional(),
 });
 const WEATHER_HOUR=z.strictObject({hour:z.number().int().min(0).max(23),temperatureC:z.number().min(20).max(40),relativeHumidityPct:z.number().min(0).max(100),solarRoofWm2:z.number().min(0).max(1200)});
-const DAILY_WEATHER_PATCH=z.strictObject({mode:z.enum(['constant','hourly']),hours:z.array(WEATHER_HOUR).optional()}).describe('代表日気象。mode:"hourly"のときhoursにhour=0〜23の24行を昇順で指定（hourlyは日シミュレーションのみ効く）。constantに戻すときhoursは省略可');
+const DAILY_WEATHER_PATCH=z.strictObject({mode:z.enum(['constant','hourly']),hours:z.array(WEATHER_HOUR).optional()}).describe('Representative-day weather. With mode:"hourly", supply 24 rows in hours with hour=0-23 ascending (hourly affects only the daily simulation). hours may be omitted when reverting to constant');
 
 function createServer(){
  const server=new McpServer({name:'cooling-planner',version:'0.10.0-preview.1',instructions:[
-  'ブラウザで開いているCooling Plannerの画面そのものを操作するツール群。状態の正本はブラウザ。',
-  `先に get_state で現状・ID・選択対象を確認する。ブラウザ未接続なら ${PAGE_URL} を1タブで開いてもらう。`,
-  '「この牛」は選択地点として解釈する。座標はx=牛舎長さ方向、y=幅方向、heightM=高さ。長さm、向きdeg。',
-  '編集は現在の案へ適用する。基準案は読取専用。update_environmentは全案に効く。',
- 'モデル係数はupdate_model(物理)/update_milk(乳量仮説)/update_references(参照設定)で変更する。仮定の感度試行はevaluateと組み合わせる。モデル式・バージョン識別子は変更できない。',
-  '変更前を残す依頼は copy_to_other（現在の編集案をもう一方の編集案へ上書きコピーし、その案へ切替）を使う。',
-  '数値説明は get_results の計算結果を使う。未計算・null・invalidをゼロと説明しない。',
-  'meanQrefWは地点の正味放熱量、deltaQrefWは基準案からの放熱差、meanDeficitWは秒積算した不足の60分平均。',
-  'resourcesはL/day・kWh/day、trialWaterL/trialKwhは60分試行分。日乳量の資源量はdailyMilk.resources。',
-  '日乳量は仮説モデル(milk-heat-deficit-v0.1)の参考値で、実牛舎での効果保証ではない。',
-  '「なぜ」の説明は風速・放射・放熱内訳・設備作用を根拠にする。断定が難しいときは仮説と伝え1条件だけ変えて比較する。',
- '仮説の比較（「こう変えたらどうなるか」「どの対策が効くか」）はedit→get_results→undoではなくevaluateを使う。画面の状態を変えず、案ごとにoperationsを渡して結果を並べる。',
- '結果を解釈・説明する前にdescribe_modelでモデルの計算構造・仮定・限界を確認する。縮約モデルの数値を実牛舎の保証値と言わない。',
+  'Tools that operate the Cooling Planner page open in a browser. The browser holds the authoritative state.',
+  `Call get_state first for the current state, IDs and selection. If no browser is connected, ask the user to open ${PAGE_URL} in a single tab.`,
+  '"This cow" is interpreted as the selected point. Coordinates: x along the barn length, y the width, heightM the height. Lengths in m, angles in deg.',
+  'Edits apply to the current scenario. The baseline is read-only. update_environment affects all scenarios.',
+ 'Model coefficients change via update_model (physics) / update_milk (milk hypothesis) / update_references (reference settings). Combine sensitivity trials with evaluate. Model formulas and version identifiers cannot be changed.',
+  'To keep the state before a change, use copy_to_other (copies the current editable scenario over the other editable scenario and switches to it).',
+  'Explain numbers using get_results. Never describe "not calculated", null or invalid as zero.',
+  'meanQrefW is a point\'s net heat loss; deltaQrefW is the heat-loss difference from baseline; meanDeficitW is the 60-min mean of per-second deficits.',
+  'resources are in L/day and kWh/day; trialWaterL/trialKwh cover the 60-min trial. Daily-milk resources are in dailyMilk.resources.',
+  'Daily milk is a reference value of the hypothesis model (milk-heat-deficit-v0.1), not a guaranteed real-farm effect.',
+  'Explain "why" via wind speed, radiation, the heat-loss breakdown and device action. When unsure, call it a hypothesis and compare one changed condition at a time.',
+ 'To compare hypotheses ("what if we changed X?", "which measure works?"), use evaluate instead of edit, get_results, undo. Pass operations per scenario and line up results without touching the view.',
+ 'Before interpreting results, call describe_model to check the model\'s structure, assumptions and limits. Never present reduced-order values as guaranteed real-farm values.',
  ].join('\n')});
 
  server.registerTool('get_state',{
-  description:'現在の画面の確定済み状態を返す。各案のroof/fans/waterSystems、共通environment、view、地点・区画のID一覧、選択対象、undoCount、計算状態、modelNotesを含む。計算結果の数値はget_resultsで取る。',
+  description:'Returns the committed state of the current view: each scenario\'s roof/fans/waterSystems, the shared environment, view, the point/area ID list, selection, undoCount, calculation state and modelNotes. Numeric results come from get_results.',
  },()=>relay('get_state'));
 
  const editSchema=z.discriminatedUnion('operation',[
-  z.strictObject({operation:z.literal('switch_scenario'),scenarioId:z.string().describe('切替先の案ID。基準案も閲覧用に選択可')}),
-  z.strictObject({operation:z.literal('copy_to_other')}).describe('現在の編集案をもう一方の編集案へ上書きコピーし、その案へ切り替える。対象は設備と屋根。共通気象は全案共有で以前の値は残らない'),
+  z.strictObject({operation:z.literal('switch_scenario'),scenarioId:z.string().describe('target scenario ID. The baseline may be selected for viewing')}),
+  z.strictObject({operation:z.literal('copy_to_other')}).describe('Copies the current editable scenario over the other editable scenario and switches to it. Covers devices and the roof. Shared weather applies to all scenarios; previous values are not kept'),
   z.strictObject({operation:z.literal('update_device'),deviceId:z.string(),patch:DEVICE_PATCH}),
   z.strictObject({operation:z.literal('update_roof'),patch:ROOF_PATCH}),
   z.strictObject({operation:z.literal('update_system'),systemId:z.string(),patch:SYSTEM_PATCH}),
   z.strictObject({operation:z.literal('update_environment'),patch:ENV_PATCH}),
-  z.strictObject({operation:z.literal('update_daily_weather'),patch:DAILY_WEATHER_PATCH}).describe('代表日の時刻別気象の設定・解除。全案共有'),
- z.strictObject({operation:z.literal('update_model'),patch:MODEL_PATCH}).describe('物理モデル係数の変更。共通気象と同様に全案へ効く'),
- z.strictObject({operation:z.literal('update_milk'),patch:MILK_PATCH}).describe('乳量仮説モデルの係数変更'),
- z.strictObject({operation:z.literal('update_references'),patch:REFERENCES_PATCH}).describe('参照設定(基準乳量・受胎参照)の変更'),
-  z.strictObject({operation:z.literal('add_device'),kind:z.enum(['fan','soaker','mist']),x:z.number().optional().describe('長さ方向の設置位置[m]'),y:z.number().optional().describe('幅方向の設置位置[m]。xとyは両方指定')}),
+  z.strictObject({operation:z.literal('update_daily_weather'),patch:DAILY_WEATHER_PATCH}).describe('Set or clear representative-day hourly weather. Shared by all scenarios'),
+ z.strictObject({operation:z.literal('update_model'),patch:MODEL_PATCH}).describe('Change physical-model coefficients. Like shared weather, applies to all scenarios'),
+ z.strictObject({operation:z.literal('update_milk'),patch:MILK_PATCH}).describe('Change milk-hypothesis-model coefficients'),
+ z.strictObject({operation:z.literal('update_references'),patch:REFERENCES_PATCH}).describe('Change reference settings (baseline milk, conception reference)'),
+  z.strictObject({operation:z.literal('add_device'),kind:z.enum(['fan','soaker','mist']),x:z.number().optional().describe('placement along the length [m]'),y:z.number().optional().describe('placement along the width [m]. x and y must be given together')}),
   z.strictObject({operation:z.literal('duplicate_device'),deviceId:z.string()}),
   z.strictObject({operation:z.literal('remove_device'),deviceId:z.string()}),
  ]);
  server.registerTool('edit',{
-  description:'現在の案または共通気象へ1操作を適用する（画面にも即時反映・自動再計算）。operationごとに必要な引数のみ。成功時は適用後データとinputHashを返す。計算の完了を意味しない。',
+  description:'Applies one operation to the current scenario or shared weather (reflected in the view immediately with auto-recalculation). Pass only the arguments each operation needs. On success returns the applied data and inputHash. Does not mean the calculation finished.',
   inputSchema:editSchema,
  },args=>relay('edit',args));
 
  server.registerTool('set_view',{
-  description:'表示のみ変更（物理計算・Undo対象外）。mode/metric/選択中の地点・設備・区画/表示フラグ/timeSecの部分更新。地点を選ぶと所属区画も選択される。timeSecは再生を止める。',
+  description:'View-only changes (no physics, not undoable). Partial update of mode/metric/selected point, device and area/display flags/timeSec. Selecting a point also selects its area. timeSec stops playback.',
   inputSchema:z.strictObject({
    mode:z.enum(['3d','2d']).optional(),
    metric:z.enum(['delta','deficit','speed','temperature']).optional(),
@@ -193,44 +193,44 @@ function createServer(){
  },args=>relay('set_view',args));
 
  server.registerTool('evaluate',{
-  description:'画面を変えずに仮説を評価する。editと同じoperationの配列を、現在の確定済み状態の複製へ順に適用して計算し、その結果を返す。画面の案・設備・Undo履歴・再計算には影響しない。対象案はscenarioIdで指定（省略時は現在の案）。返値のprojectまたは応答全体をJSONファイルで渡すと、画面の読込／MCP案のJSONを読込から復元・再計算できる。戻り値は平均・最大不足と基準より不足が減らず残る地点のcomparison、適用した案の区画別集計・resources・roof・（includeDaily指定時）dailyMilkとdailyThermal（評価日の地点・区画別平均不足）と、比較用の基準案集計。「この設備を置いたら？」「どの対策が効くか」といった試行はedit→undoではなくこのツールを使う。',
+  description:'Evaluates a hypothesis without changing the view. Applies the same operation array as edit, in order, to a clone of the committed state, computes it and returns the result. Does not affect the view\'s scenario, devices, Undo history or recalculation. Target scenario via scenarioId (default: current). Passing the returned project or the whole reply as a JSON file to Load / "Import MCP scenario JSON" restores and recalculates it. Returns the comparison of mean/max deficit and points whose deficit did not shrink vs baseline, per-area aggregates, resources and roof of the applied scenario, plus (with includeDaily) dailyMilk and dailyThermal (evaluation-day per-point/area mean deficit), and baseline aggregates for comparison. Use this tool, not edit then undo, for trials like "what if this device were here?" or "which measure helps?".',
   inputSchema:z.strictObject({
-   operations:z.array(editSchema).describe('複製へ順に適用する操作列（editと同じoperation/引数。空配列は現状そのままの計算）'),
-   scenarioId:z.string().optional().describe('操作を適用する案ID。省略時は現在の案。基準案は読取専用'),
-   includeDaily:z.boolean().optional().describe('trueで日乳量の仮説モデルまで計算（数十秒かかる。省略時は60分熱計算のみ）'),
+   operations:z.array(editSchema).describe('operation list applied in order to the clone (same operations/args as edit. An empty array computes the current state as-is)'),
+   scenarioId:z.string().optional().describe('scenario ID to apply operations to. Default: current scenario. The baseline is read-only'),
+   includeDaily:z.boolean().optional().describe('true also computes the daily-milk hypothesis model (takes tens of seconds. Default: 60-min thermal only)'),
   }),
  },args=>relay('evaluate',args,120000));
 
  server.registerTool('compare_candidates',{
-  description:'制約付きの候補比較。同じ開始projectへ1〜3案の操作列を別々に適用し、日結果（日平均不足・冷却水・電力・悪化地点数）と制約判定・順位を返す。候補操作はupdate_device（enabled/位置/向き/日運転）、update_system（onoff・日運転）、update_roofのみ。係数・気象・案切替・設備の追加削除は候補に使えない。順位はこの呼出し内だけ有効。画面は変わらない。',
+  description:'Constrained candidate comparison. Applies 1-3 candidate operation lists separately to the same starting project and returns daily results (daily mean deficit, cooling water, power, worsened point count), constraint verdicts and ranks. Candidate operations are only update_device (enabled/position/direction/daily schedule), update_system (onoff/daily schedule) and update_roof. Coefficients, weather, scenario switching and device add/remove are not allowed as candidates. Ranks hold only within the call. The view does not change.',
   inputSchema:z.strictObject({
-   scenarioId:z.string().optional().describe('候補を適用する編集案ID。省略時は現在の案。基準案は不可'),
-   candidates:z.array(z.strictObject({id:z.string().describe('候補ID（呼出し内で一意）'),operations:z.array(editSchema)})).min(1).max(3).describe('比較する候補。それぞれ開始projectの複製へ適用（累積しない）'),
+   scenarioId:z.string().optional().describe('editable scenario ID to apply candidates to. Default: current scenario. Baseline is not allowed'),
+   candidates:z.array(z.strictObject({id:z.string().describe('candidate ID (unique within the call)'),operations:z.array(editSchema)})).min(1).max(3).describe('candidates to compare. Each applies to a fresh clone of the start project (not cumulative)'),
    constraints:z.strictObject({
-    maxWaterLPerDay:z.number().optional().describe('冷却設備（ソーカー・ミスト・屋根散水）の日供給水上限L'),
-    maxElectricityKwhPerDay:z.number().optional().describe('ファン＋ポンプの日電力量上限kWh'),
-    priorityArea:z.string().optional().describe('改善を優先する区域ID（既定stalls。stall-A〜D/feeding/waiting/stalls/all）'),
-    protectAreas:z.array(z.string()).optional().describe('開始案より日平均不足を増やさない区域（既定は3区域すべて）'),
-    protectWorst:z.boolean().optional().describe('全地点の最大不足を開始案より増やさない（既定true）'),
+    maxWaterLPerDay:z.number().optional().describe('daily supply-water cap [L] for cooling devices (soaker, mist, roof sprinkling)'),
+    maxElectricityKwhPerDay:z.number().optional().describe('daily electricity cap [kWh] for fans + pumps'),
+    priorityArea:z.string().optional().describe('area ID to prioritise for improvement (default stalls. stall-A..D/feeding/waiting/stalls/all)'),
+    protectAreas:z.array(z.string()).optional().describe('areas that must not increase daily mean deficit vs the start (default: all 3 areas)'),
+    protectWorst:z.boolean().optional().describe('do not increase the all-points max deficit vs the start (default true)'),
    }).optional(),
-   ranking:z.enum(['deficit','water','worst']).optional().describe('順位規則：deficit=優先区域不足→最大不足→水→電力 / water=節水優先（優先区域が改善する候補に限定） / worst=最大不足優先'),
+   ranking:z.enum(['deficit','water','worst']).optional().describe('ranking rule: deficit = priority-area deficit, then max deficit, water, power / water = water-saving first (limited to candidates that improve the priority area) / worst = max-deficit first'),
   }),
  },args=>relay('compare_candidates',args,300000));
 
  server.registerTool('describe_model',{
-  description:'このアプリの計算モデルが「何を・どう仮定して・何を無視して」計算しているかを返す。計算構造(屋根/風/散水/ミスト/牛体収支/日集計)、入力・出力フィールドの意味、主な仮定定数、限界、検証状態を含む。get_results/evaluateの数値を解釈・説明する前に呼ぶ。',
+  description:'Returns what this app\'s model computes, what it assumes and what it ignores: the computation structure (roof/wind/spray/mist/cow balance/daily aggregate), input/output field meanings, key assumed constants, limits and validation status. Call before interpreting or explaining numbers from get_results/evaluate.',
  },()=>relay('describe_model'));
 
  server.registerTool('get_results',{
-  description:'現在入力に対応する計算結果。省略時は全案の区画別集計・resources・roof平均・dailyMilkと選択地点の詳細。status: ready=日乳量まで完了 / thermal_ready=熱のみ・dailyMilk pending / calculating / editing / error。時系列は返さない。再取得は1秒以上空けて。',
+  description:'Calculation results for the current input. By default returns per-area aggregates, resources, roof means and dailyMilk for all scenarios plus the selected point\'s detail. status: ready = daily milk done / thermal_ready = thermal only, dailyMilk pending / calculating / editing / error. No time series. Leave at least 1 s between calls.',
   inputSchema:z.strictObject({
-   scenarioId:z.string().optional().describe('指定時はその案のみ'),
-   probeId:z.string().optional().describe('指定時はその地点を詳細対象にする（省略時は選択地点）'),
+   scenarioId:z.string().optional().describe('when set, only that scenario'),
+   probeId:z.string().optional().describe('when set, this point is the detail target (default: selected point)'),
   }),
  },args=>relay('get_results',args));
 
  server.registerTool('undo',{
-  description:'最後の編集を1回戻す（画面のUndoと同じ履歴。案選択・viewは維持）。履歴がなければchanged:false。表示操作は戻せない。',
+  description:'Undoes the last edit once (same history as the view\'s Undo; scenario selection and view are kept). changed:false when there is no history. View operations cannot be undone.',
  },()=>relay('undo'));
 
  return server;
@@ -239,7 +239,7 @@ function createServer(){
 // ---- boot ----------------------------------------------------------------------
 httpServer.on('error',e=>{
  log(`HTTP/WS listener failed: ${e.message}`);
- log(`port ${PORT} is already in use — 別のmcp-serverプロセスが残っているか、手動で停止してください`);
+ log(`port ${PORT} is already in use - another mcp-server process may still be running; stop it manually`);
  process.exit(1);
 });
 httpServer.listen(PORT,HOST,()=>{

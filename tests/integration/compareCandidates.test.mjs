@@ -19,20 +19,20 @@ test('CC01: constraints reject over-budget water and protected-area worsening',(
  const k={maxWaterLPerDay:100,priorityArea:'stalls',protectAreas:['stalls','feeding'],protectWorst:true};
  const start=SUM(300,50);
  assert.equal(checkConstraints(SUM(200,99),start,k).length,0);
- assert.match(checkConstraints(SUM(200,101),start,k).join(' '),/冷却水/);
+ assert.match(checkConstraints(SUM(200,101),start,k).join(' '),/cooling water/);
  assert.match(checkConstraints({...SUM(200,50),areaMean:{stalls:400,feeding:200,all:300}},start,k).join(' '),/stalls/);
- assert.match(checkConstraints({...SUM(200,50),allMax:600},start,k).join(' '),/最大不足/);
+ assert.match(checkConstraints({...SUM(200,50),allMax:600},start,k).join(' '),/max deficit/);
  // unevaluable candidate is excluded, never treated as zero
- assert.match(checkConstraints({...SUM(0,0),valid:false,status:'calculation_error'},start,k).join(' '),/未評価/);
+ assert.match(checkConstraints({...SUM(0,0),valid:false,status:'calculation_error'},start,k).join(' '),/not evaluated/);
  // start not evaluable + protections requested → incomparable, excluded from ranking
  const badStart={...SUM(0,0),valid:false,areaMean:{},allMax:null};
- assert.match(checkConstraints(SUM(200,50),badStart,k).join(' '),/開始案/);
+ assert.match(checkConstraints(SUM(200,50),badStart,k).join(' '),/starting scenario/);
  // without protection requirements, resource limits still apply on their own
  const resOnly={...k,protectAreas:[],protectWorst:false};
  assert.equal(checkConstraints(SUM(200,50),badStart,resOnly).length,0);
- assert.match(checkConstraints(SUM(200,101),badStart,resOnly).join(' '),/冷却水/);
+ assert.match(checkConstraints(SUM(200,101),badStart,resOnly).join(' '),/cooling water/);
  // missing values on either side make a protected check incomparable
- assert.match(checkConstraints({...SUM(200,50),areaMean:{stalls:200,feeding:null}},start,k).join(' '),/feeding.*比較不可/);
+ assert.match(checkConstraints({...SUM(200,50),areaMean:{stalls:200,feeding:null}},start,k).join(' '),/feeding.*cannot be compared/);
 });
 
 test('CC02: ranking modes are deterministic and respect their key order',()=>{
@@ -64,7 +64,7 @@ test('CC03: compare_candidates runs candidates on separate clones, reports const
  // non-cumulative: both inputHashes derive from the same start (no leaked edits)
  assert.ok(r.candidates[0].inputHash!==r.candidates[1].inputHash);
  assert.deepEqual([...r.ranking.order].sort(),['early','late']);
- assert.match(r.ranking.note,/この呼出し/);
+ assert.match(r.ranking.note,/this call/);
 });
 
 test('CC04: forbidden operations and quota errors fail per candidate or upfront',async()=>{
@@ -76,13 +76,13 @@ test('CC04: forbidden operations and quota errors fail per candidate or upfront'
   {id:'perf',operations:[{operation:'update_device',deviceId:target.fans[0].id,patch:{powerKw:2}}]}, // performance field not a candidate knob
   {id:'ok',operations:[{operation:'update_device',deviceId:target.fans[0].id,patch:{dailyStartHour:10}}]},
  ]},quickEval);
- assert.equal(r.candidates[0].status,'invalid_input');assert.match(r.candidates[0].error,/使えない操作/);
- assert.equal(r.candidates[1].status,'invalid_input');assert.match(r.candidates[1].error,/許可されない/);
+ assert.equal(r.candidates[0].status,'invalid_input');assert.match(r.candidates[0].error,/not allowed in candidate comparison/);
+ assert.equal(r.candidates[1].status,'invalid_input');assert.match(r.candidates[1].error,/disallowed/);
  assert.equal(r.candidates[2].status,'complete');
  // >3 candidates rejected upfront
- await assert.rejects(()=>compareOnProject(p,{candidates:[{id:'a',operations:[]},{id:'b',operations:[]},{id:'c',operations:[]},{id:'d',operations:[]}]},quickEval),/3案まで/);
- await assert.rejects(()=>compareOnProject(p,{scenarioId:'baseline',candidates:[{id:'a',operations:[]}]},quickEval),/編集案/);
- await assert.rejects(()=>compareOnProject(p,{candidates:[{id:'a',operations:[]},{id:'a',operations:[]}]},quickEval),/重複/);
+ await assert.rejects(()=>compareOnProject(p,{candidates:[{id:'a',operations:[]},{id:'b',operations:[]},{id:'c',operations:[]},{id:'d',operations:[]}]},quickEval),/3 candidates/);
+ await assert.rejects(()=>compareOnProject(p,{scenarioId:'baseline',candidates:[{id:'a',operations:[]}]},quickEval),/editable scenario/);
+ await assert.rejects(()=>compareOnProject(p,{candidates:[{id:'a',operations:[]},{id:'a',operations:[]}]},quickEval),/duplicate/);
 });
 
 test('CC05: browser-facing compare_candidates command delegates with committed project',async()=>{
