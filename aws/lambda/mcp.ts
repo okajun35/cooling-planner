@@ -6,6 +6,7 @@
 import {McpServer,createMcpHandler} from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import {defaultProject,describe,evaluateProject} from './core.js';
+import {DOCS} from './docs.js';
 import {APP_VERSION} from '../../src/data/defaults.js';
 
 const TOKEN=process.env.MCP_BEARER_TOKEN??'';
@@ -89,6 +90,7 @@ function buildServer(){
   'operationsの語彙はローカル版と同一。座標はx=牛舎長さ方向、y=幅方向、heightM=高さ。長さm、向きdeg。基準案は読取専用、update_environmentは全案に効く。',
   '数値説明はevaluateの結果を使う。未計算・null・invalidをゼロと説明しない。meanQrefWは地点の正味放熱量、deltaQrefWは基準案からの放熱差、meanDeficitWは秒積算した不足の60分平均。',
   '結果を解釈・説明する前にdescribe_modelでモデルの計算構造・仮定・限界を確認する。縮約モデルの数値を実牛舎の保証値と言わない。',
+  'モデル理論・係数の根拠となる文書(熱収支仕様/乳量仮説/設計決定ログ)のMarkdown本文はget_docで取得する。describe_modelのdocs一覧とnameが対応する。',
   '日乳量は仮説モデル(milk-heat-deficit-v0.1)の参考値。includeDaily:trueで計算するが数十秒かかる。',
  ].join('\n')});
  server.registerTool('get_default_project',{
@@ -104,9 +106,13 @@ function buildServer(){
   }),
  },args=>call(()=>evaluateProject(args)));
  server.registerTool('describe_model',{
-  description:'この計算モデルが「何を・どう仮定して・何を無視して」計算しているかを返す。計算構造(屋根/風/散水/ミスト/牛体収支/日集計)、入出力の意味、主な仮定定数、限界、検証状態を含む。結果を解釈・説明する前に呼ぶ。',
+  description:'この計算モデルが「何を・どう仮定して・何を無視して」計算しているかを返す。計算構造(屋根/風/散水/ミスト/牛体収支/日集計)、入出力の意味、主な仮定定数、限界、検証状態を含む。結果を解釈・説明する前に呼ぶ。docs一覧の文書本文はget_docで取得。',
   inputSchema:z.strictObject({project:z.unknown().optional().describe('説明対象のproject。省略時は既定projectのモデル設定で説明')}),
  },args=>call(()=>describe(args.project)));
+ server.registerTool('get_doc',{
+  description:'モデル理論・係数の根拠となる文書のMarkdown本文を返す。describe_modelのdocs一覧に対応: thermal_model=熱・散水モデル仕様(MODEL.md)、milk_model=日乳量仮説モデル(MILK_HEAT_MODEL_V0_1.md)、decisions_v08/decisions_v06=設計決定ログ。「なぜこの式・係数か」を説明するときに使う。',
+  inputSchema:z.strictObject({name:z.enum(['thermal_model','milk_model','decisions_v08','decisions_v06']).describe('取得する文書名')}),
+ },({name})=>call(()=>DOCS[name]));
  return server;
 }
 

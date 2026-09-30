@@ -42,6 +42,7 @@ for(const name of['mcp','api']){
   entryPoints:[path.join(AWS_DIR,'lambda',`${name}.ts`)],
   outfile:path.join(DIST,`${name}.mjs`),
   bundle:true,platform:'node',format:'esm',target:'node22',
+  loader:{'.md':'text'},
   logLevel:'warning',
  });
  log('bundled',`aws/dist/${name}.mjs`);
