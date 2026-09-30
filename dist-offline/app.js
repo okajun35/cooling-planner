@@ -1574,6 +1574,11 @@ function parseProject(text) {
     catch {
         fail('JSON', '読めないJSONです。現在の案は保持します');
     }
+    // MCP evaluate and result exports carry a full Project under `project`.
+    // Only inputs are restored; supplied calculation results are never trusted.
+    safeTree(p);
+    if (p && typeof p === 'object' && !Array.isArray(p) && !Object.hasOwn(p, 'schemaVersion') && Object.hasOwn(p, 'project'))
+        p = p.project;
     validateProject(p);
     return p;
 }
@@ -12312,7 +12317,7 @@ function renderEvidence(p, r) {
     const { point: q } = selectedResults(p, r);
     (0, dom_js_1.setHTML)('evidence-body', `<div class="assumption-box"><strong>このアプリが計算すること</strong><p>設備配置 → 屋根・局所環境 → 代表牛の放熱を比較します。乳量と受胎は、それぞれ根拠がある条件だけを使う別の参照モデルです。</p></div><h3>出力を混ぜない</h3><table><tbody><tr><th>送風体感温度</th><td>T − 6√v。放射・水を℃へ上乗せしません。</td></tr><tr><th>放熱改善</th><td>対流＋放射＋蒸発−結露の、基準案からの差。体表35℃を固定した比較です。</td></tr><tr><th>乳量</th><td>日乳量は仮説モデル milk-heat-deficit-v0.1 の牛群平均です。掲載表の乳量は6条件のみ・対象外はnull・補間しません。</td></tr><tr><th>受胎</th><td>5期間のTHI区分OR × 仮の基準オッズ。60分結果の52日代表化は明示的な仮定です。</td></tr></tbody></table>
  <h3>現在の放熱内訳 <small>60分平均</small></h3><table><tbody>${q?.components ? Object.entries(q.components).map(([k, v]) => `<tr><th>${{ convectionW: '対流', radiationW: '放射', baseEvaporationW: '通常の有効蒸発', soakerEvaporationW: '牛体散水の蒸発', condensationW: '結露' }[k]}</th><td>${(0, dom_js_1.num)(v, 2)} W</td></tr>`).join('') : '<tr><td>計算待ち</td></tr>'}</tbody></table>
- <h3>仮定を変えた参考範囲</h3><p>低値・基準・高値の3係数セット。実際の上下限や95%信頼区間ではありません。</p><table><thead><tr><th>セット</th><th>出口風速倍率</th><th>熱伝達倍率</th><th>ミスト効率</th><th>保持水kg</th></tr></thead><tbody>${p.model.profiles.map(v => `<tr><td>${(0, dom_js_1.esc)(v.name)}</td><td>${v.outletMultiplier}</td><td>${v.hcMultiplier}</td><td>${v.mistEfficiency}</td><td>${v.maxFilmKg}</td></tr>`).join('')}</tbody></table><h3>根拠・仮定の記録</h3>${p.provenance.map(v => `<div class="source-card"><span class="tag">${(0, dom_js_1.esc)(v.classification)}</span><p>${(0, dom_js_1.esc)(v.note)}</p>${v.url ? `<a href="${(0, dom_js_1.esc)(v.url)}" target="_blank" rel="noopener noreferrer">参照元を開く ↗</a>` : ''}`).join('')}<h3>モデル・保存版</h3><p><code>${(0, dom_js_1.esc)(p.model.version)}</code> / schema ${p.schemaVersion}<br>熱v0.5、乳量表v0.6、受胎v0.7を統合。v0.9で日乳量仮説モデル <code>milk-heat-deficit-v0.1</code> を追加。モデルの対応範囲は拡張していません。</p>`);
+ <h3>仮定を変えた参考範囲</h3><p>低値・基準・高値の3係数セット。実際の上下限や95%信頼区間ではありません。</p><table><thead><tr><th>セット</th><th>出口風速倍率</th><th>熱伝達倍率</th><th>ミスト効率</th><th>保持水kg</th></tr></thead><tbody>${p.model.profiles.map(v => `<tr><td>${(0, dom_js_1.esc)(v.name)}</td><td>${v.outletMultiplier}</td><td>${v.hcMultiplier}</td><td>${v.mistEfficiency}</td><td>${v.maxFilmKg}</td></tr>`).join('')}</tbody></table><h3>根拠・仮定の記録</h3>${p.provenance.map(v => `<div class="source-card"><span class="tag">${(0, dom_js_1.esc)(v.classification)}</span><p>${(0, dom_js_1.esc)(v.note)}</p>${v.url ? `<a href="${(0, dom_js_1.esc)(v.url)}" target="_blank" rel="noopener noreferrer">参照元を開く ↗</a>` : ''}</div>`).join('')}<h3>モデル・保存版</h3><p><code>${(0, dom_js_1.esc)(p.model.version)}</code> / schema ${p.schemaVersion}<br>熱v0.5、乳量表v0.6、受胎v0.7を統合。v0.9で日乳量仮説モデル <code>milk-heat-deficit-v0.1</code> を追加。モデルの対応範囲は拡張していません。</p>`);
 }
 function renderHelp() {
     (0, dom_js_1.setHTML)('help-body', `<h3>基本の操作</h3><table><tbody>
