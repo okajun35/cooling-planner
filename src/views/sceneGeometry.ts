@@ -30,7 +30,7 @@ export function sceneGeometry(p:Project,result:SimulationResult|null):Batch{
   if(!p.view.analysis){box(x+.29,.16,y+.64,.62,.42,1.30,'#fcfcf7');box(x+.42,.58,y+1.05,.36,.025,.45,'#778b80');box(x+.35,.33,y+.35,.5,.34,.43,'#455d51')}
  }
  const robot=layout.zones.find(z=>z.kind==='robot')!;box(robot.x+.4,.05,robot.y+.4,2.2,1.5,1.9,'#62938c');box(robot.x+.8,1.56,robot.y+.55,1.4,.3,1.5,'#d8e4db');
- if(p.view.roof&&!p.view.analysis){const roofColor=scenario.roof.reflectance>.5?'#f6f8fc':'#b9c2d0';quad([0,8.7,W/2],[L,8.7,W/2],[L,4,W],[0,4,W],roofColor);if(scenario.roof.insulationM>0)segment([0,8.57,W/2],[L,8.57,W/2],'#e8ae54');for(let x=0;x<=L+.1;x+=L/6){segment([x,0,0],[x,4,0],'#9bafa4');segment([x,0,W],[x,4,W],'#9bafa4');segment([x,4,0],[x,8.7,W/2],'#acbeb1');segment([x,8.7,W/2],[x,4,W],'#acbeb1')}for(const [h,z]of [[4,0],[4,W],[8.7,W/2]])segment([0,h,z],[L,h,z],'#a3b8ab')}
+ if(p.view.roof&&!p.view.analysis){const roofColor=scenario.roof.reflectance>.5?'#f6f8fc':'#b9c2d0';quad([0,4,0],[L,4,0],[L,8.7,W/2],[0,8.7,W/2],roofColor);if(scenario.roof.insulationM>0)segment([0,8.57,W/2],[L,8.57,W/2],'#e8ae54');for(let x=0;x<=L+.1;x+=L/6){segment([x,0,0],[x,4,0],'#9bafa4');segment([x,0,W],[x,4,W],'#9bafa4');segment([x,4,0],[x,8.7,W/2],'#acbeb1');segment([x,8.7,W/2],[x,4,W],'#acbeb1')}for(const [h,z]of [[4,0],[4,W],[8.7,W/2]])segment([0,h,z],[L,h,z],'#a3b8ab')}
  // Area faces (v0.1): flat quads at floor level, one per representative probe.
  const selectedArea=p.view.selectedAreaId?buildAreas(layout).find(a=>a.id===p.view.selectedAreaId)??null:null;
  for(const f of buildFaces(layout)){

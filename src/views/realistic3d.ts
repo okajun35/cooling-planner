@@ -204,7 +204,7 @@ export class RealisticBackend implements RenderBackend{
   if(p.view.roof&&!p.view.analysis){
    const slope=Math.atan2(4.7,W/2),length=Math.hypot(4.7,W/2);
    m.roof.color.set(activeScenario(p).roof.reflectance>.5?0xe9e8df:0x88969e);
-   k.add(this.box,m.roof,[L/2,6.38,W/4],[L+.5,.055,length+.25],new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),slope));
+   k.add(this.box,m.roof,[L/2,6.38,W/4],[L+.5,.055,length+.25],new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-slope));
    for(let x=0;x<=L;x+=.32)this.bar(k,[x,4.05,0],[x,8.75,W/2],.018,m.steel);
   }
   const feed=l.zones.find(z=>z.kind==='feeding');

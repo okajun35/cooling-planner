@@ -37,13 +37,21 @@ const layout_js_1 = require("./ui/layout.js");
 const dom_js_1 = require("./ui/dom.js");
 const panels_js_1 = require("./ui/panels.js");
 const timeline_js_1 = require("./ui/timeline.js");
+const workspaceState_js_1 = require("./ui/workspaceState.js");
+const placement_js_1 = require("./template/placement.js");
 const commands_js_1 = require("./mcp/commands.js");
 const bridge_js_1 = require("./mcp/bridge.js");
 const store = new store_js_1.ProjectStore((0, defaults_js_1.createProject)()), gate = new protocol_js_1.ResultGate();
-let result = null, worker = null, scene = null, mode = '', calculating = false, lastCalculationMs = 0, startTime = 0, workerFailed = false, pending = false, invalid = false, workerError = null;
+let result = null, worker = null, scene = null, mode = '', calculating = false, lastCalculationMs = 0, startTime = 0, workerFailed = false, pending = false, invalid = false, workerError = null, suppressChange = false;
 let chart = 'qW', playing = false, playTimer = null, speed = 120, jobTimer = null;
-const ROOT_KEY = 'cooling-planner-project-v9';
-let previousView = JSON.stringify(store.project.view), previousFull = store.project;
+const ROOT_KEY = 'cooling-planner-project-v9', GUIDE_KEY = 'cooling-planner-guide-v1';
+const ws = (0, workspaceState_js_1.createWorkspace)();
+try {
+    if (localStorage.getItem(GUIDE_KEY) === 'done')
+        ws.guide.done = true;
+}
+catch { }
+let previousFull = store.project;
 (0, dom_js_1.el)('app').innerHTML = (0, layout_js_1.layout)();
 function safe(fn) {
     try {
@@ -57,6 +65,13 @@ function showError(message) { (0, dom_js_1.el)('error-message').textContent = me
 let toastTimer = 0;
 function toast(message) { clearTimeout(toastTimer); (0, dom_js_1.el)('toast').textContent = message; (0, dom_js_1.el)('toast').hidden = false; toastTimer = window.setTimeout(() => (0, dom_js_1.el)('toast').hidden = true, 3500); }
 const currentResult = () => result?.inputHash === gate.expectedHash ? result : null;
+const markGuideDone = () => {
+    if (ws.guide.done)
+        try {
+            localStorage.setItem(GUIDE_KEY, 'done');
+        }
+        catch { }
+};
 function status() {
     const milkPending = calculating && result !== null;
     const state = invalid ? 'invalid' : store.isDraft ? 'editing' : pending ? 'pending' : workerFailed ? 'error' : calculating ? 'calculating' : 'ready';
@@ -68,6 +83,20 @@ function status() {
     (0, dom_js_1.el)('redo-button').disabled = !store.redoCount;
     document.querySelectorAll('[data-action="save"],[data-action="export-results"]').forEach(b => b.disabled = pending || invalid || store.isDraft);
 }
+/** Project the placement candidate to screen space and show/hide the ghost marker. */
+function updateGhost() {
+    const g = (0, dom_js_1.el)('placement-ghost'), pl = ws.placement;
+    if (!pl || pl.x === null || pl.y === null || !scene?.screenPoint) {
+        g.hidden = true;
+        return;
+    }
+    const pt = scene.screenPoint([pl.x, pl.heightM, pl.y]);
+    g.hidden = !pt.visible;
+    g.style.left = `${pt.x}px`;
+    g.style.top = `${pt.y}px`;
+    g.dataset.valid = String(pl.valid);
+    (0, dom_js_1.el)('placement-ghost-label').textContent = pl.valid ? { fan: 'ファン', soaker: 'ソーカー', mist: 'ミスト' }[pl.kind] : '配置不可';
+}
 function syncScene() {
     const p = store.project;
     const requestedMode = p.view.mode === '3d' && p.view.realistic ? 'realistic' : p.view.mode;
@@ -75,11 +104,47 @@ function syncScene() {
         scene?.dispose();
         scene = null;
         mode = requestedMode;
-        const cb = { selectDevice: id => safe(() => store.setView({ selectedDeviceId: id })), selectProbe: id => safe(() => store.setView({ selectedProbeId: id })), begin: () => store.begin(), preview: (id, patch) => store.previewDevice(id, patch), commit: () => store.commit(), cancel: () => store.cancel(), camera: c => store.setView({ camera: c }), error: message => {
+        const cb = { selectDevice: id => safe(() => {
+                store.setView({ selectedDeviceId: id });
+                if (store.project.view.selectedDeviceId === id) {
+                    (0, workspaceState_js_1.openPanel)(ws, 'device');
+                    render();
+                }
+            }), selectProbe: id => safe(() => {
+                store.setView({ selectedProbeId: id });
+                if (store.project.view.selectedProbeId === id) {
+                    (0, workspaceState_js_1.openPanel)(ws, 'probe');
+                    render();
+                }
+            }), begin: () => store.begin(), preview: (id, patch) => store.previewDevice(id, patch), commit: () => store.commit(), cancel: () => store.cancel(), camera: c => store.setView({ camera: c }), error: message => {
                 showError(message);
                 if (store.project.view.mode === '3d') {
                     store.setView({ mode: '2d' });
                 }
+            },
+            placeMove: pos => {
+                if (!ws.placement)
+                    return;
+                if (pos)
+                    (0, workspaceState_js_1.moveCandidate)(ws, pos[0], pos[1], (0, placement_js_1.checkPlacement)(store.project, pos[0], pos[1]) === 'ok');
+                else
+                    (0, workspaceState_js_1.moveCandidate)(ws, null, null, false);
+                updateGhost();
+                (0, panels_js_1.renderChrome)(store.project, currentResult(), ws);
+            },
+            // Capture kind before confirming: a valid confirmCandidate clears ws.placement.
+            placeCommit: () => {
+                const kind = ws.placement?.kind;
+                if (!kind)
+                    return;
+                const pose = (0, workspaceState_js_1.confirmCandidate)(ws);
+                if (!pose) {
+                    toast('ここには配置できません');
+                    updateGhost();
+                    (0, panels_js_1.renderChrome)(store.project, currentResult(), ws);
+                    return;
+                }
+                safe(() => kind === 'fan' ? store.addFan({ x: pose.x, y: pose.y }) : store.addNozzle(kind, { x: pose.x, y: pose.y }));
             } };
         if (mode === '3d' || mode === 'realistic') {
             try {
@@ -95,32 +160,78 @@ function syncScene() {
         else
             scene = new svg2d_js_1.SVG2D((0, dom_js_1.el)('scene'), cb);
     }
+    scene.setPlacement?.(ws.placement ? { heightM: ws.placement.heightM } : null);
     scene.sync(p, currentResult());
+    updateGhost();
 }
 function render() {
-    (0, panels_js_1.renderControls)(store.project);
-    (0, panels_js_1.renderResults)(store.project, currentResult());
-    (0, panels_js_1.renderAreas)(store.project, currentResult());
-    (0, timeline_js_1.renderTimeline)(store.project, currentResult(), chart);
-    (0, timeline_js_1.updateTime)(store.project, currentResult());
-    for (const [id, fn] of [['settings-dialog', () => (0, panels_js_1.renderSettings)(store.project)], ['reference-dialog', () => (0, panels_js_1.renderReference)(store.project)], ['evidence-dialog', () => (0, panels_js_1.renderEvidence)(store.project, currentResult())]])
-        if ((0, dom_js_1.el)(id).open)
-            fn();
-    syncScene();
-    status();
+    const p = store.project, r = currentResult();
+    // An uncommitted edit lives only in the focused input (blur commits via 'change').
+    // Rebuilding the DOM on worker results would drop it, so carry value/focus over.
+    const ae = document.activeElement;
+    const keep = pending && ae instanceof HTMLInputElement && ae.type !== 'checkbox' && ae.type !== 'radio' && ae.id
+        ? { id: ae.id, value: ae.value, bad: ae.classList.contains('bad-input') } : null;
+    // innerHTML rebuilds blur+change the focused field mid-render (while still
+    // connected) — a teardown artifact that must not commit. Suppress it; real
+    // user change events cannot interleave inside a synchronous render.
+    const prevSuppress = suppressChange;
+    suppressChange = true;
+    try {
+        (0, panels_js_1.renderHeader)(p);
+        (0, panels_js_1.renderSummary)(p, r);
+        (0, panels_js_1.renderWeatherPanel)(p);
+        (0, panels_js_1.renderRoofPanel)(p);
+        (0, panels_js_1.renderDevicesPanel)(p);
+        (0, panels_js_1.renderDevicePanel)(p);
+        (0, panels_js_1.renderProbePanel)(p, r);
+        (0, panels_js_1.renderReferencePane)(p, r);
+        (0, panels_js_1.renderComparison)(p, r);
+        (0, panels_js_1.renderAreas)(p, r);
+        if (ws.sheet === 'timeline')
+            (0, timeline_js_1.renderTimeline)(p, r, chart);
+        (0, timeline_js_1.updateTime)(p, r);
+        (0, panels_js_1.renderChrome)(p, r, ws);
+        for (const [id, fn] of [['settings-dialog', () => (0, panels_js_1.renderSettings)(p)], ['reference-dialog', () => (0, panels_js_1.renderReference)(p)], ['evidence-dialog', () => (0, panels_js_1.renderEvidence)(p, r)], ['help-dialog', () => (0, panels_js_1.renderHelp)()]])
+            if ((0, dom_js_1.el)(id).open)
+                fn();
+        syncScene();
+        status();
+        if (keep) {
+            const n = document.getElementById(keep.id);
+            if (n instanceof HTMLInputElement) {
+                n.value = keep.value;
+                if (keep.bad)
+                    n.classList.add('bad-input');
+                n.focus({ preventScroll: true });
+            }
+        }
+    }
+    finally {
+        suppressChange = prevSuppress;
+    }
+}
+function spawnWorker() {
+    try {
+        if (window.__DCS_WORKER_SOURCE__) {
+            const url = URL.createObjectURL(new Blob([window.__DCS_WORKER_SOURCE__], { type: 'application/javascript' }));
+            const w = new Worker(url);
+            URL.revokeObjectURL(url);
+            return w;
+        }
+        return new Worker(new URL('./worker.js', document.baseURI));
+    }
+    catch {
+        return null;
+    }
 }
 function makeWorker() {
     worker?.terminate();
     worker = null;
     workerFailed = false;
     try {
-        if (window.__DCS_WORKER_SOURCE__) {
-            const url = URL.createObjectURL(new Blob([window.__DCS_WORKER_SOURCE__], { type: 'application/javascript' }));
-            worker = new Worker(url);
-            URL.revokeObjectURL(url);
-        }
-        else
-            worker = new Worker(new URL('./worker.js', document.baseURI));
+        worker = spawnWorker();
+        if (!worker)
+            throw Error('no worker');
         worker.onmessage = (e) => {
             if (!gate.accepts(e.data))
                 return;
@@ -144,12 +255,7 @@ function makeWorker() {
                 calculating = false;
                 lastCalculationMs = performance.now() - startTime;
             }
-            (0, panels_js_1.renderResults)(store.project, currentResult());
-            (0, panels_js_1.renderAreas)(store.project, currentResult());
-            (0, timeline_js_1.renderTimeline)(store.project, currentResult(), chart);
-            (0, timeline_js_1.updateTime)(store.project, currentResult());
-            syncScene();
-            status();
+            render();
         };
         worker.onerror = () => { calculating = false; workerFailed = true; workerError = '計算Workerを起動できません。単体HTML版、またはHTTPサーバーで開いてください。'; showError(workerError); status(); };
     }
@@ -190,11 +296,50 @@ function stopPlayback() {
     playTimer = null;
     (0, dom_js_1.el)('play-button').innerHTML = `${(0, dom_js_1.icon)('play', 15)} 再生`;
 }
+function toggleSheet(tab) {
+    ws.sheet === tab ? (0, workspaceState_js_1.closeSheet)(ws) : (0, workspaceState_js_1.openSheet)(ws, tab);
+    if (ws.sheet && !ws.guide.done && ws.guide.step === 2) {
+        (0, workspaceState_js_1.guideAdvance)(ws);
+        markGuideDone();
+    }
+}
+function tryPlacement(kind) {
+    if ((0, project_js_1.activeScenario)(store.project).readOnly) {
+        toast('基準案は固定です。「編集案 A で試す」で切り替えます');
+        return;
+    }
+    if (ws.placement?.kind === kind) {
+        (0, workspaceState_js_1.cancelPlacement)(ws);
+        return;
+    }
+    (0, workspaceState_js_1.startPlacement)(ws, kind);
+    (0, workspaceState_js_1.closePanel)(ws);
+    updateGhost();
+}
 store.subscribe((p, kind) => {
-    const timeOnly = kind === 'view' && p.view.timeSec !== previousFull.view.timeSec && JSON.stringify({ ...p.view, timeSec: 0 }) === JSON.stringify({ ...previousFull.view, timeSec: 0 });
-    const cameraOnly = kind === 'view' && JSON.stringify({ ...p.view, camera: null }) === JSON.stringify({ ...previousFull.view, camera: null }) && JSON.stringify(p.view.camera) !== JSON.stringify(previousFull.view.camera);
+    const prev = previousFull;
+    // A pending placement is cancelled by external project edits, drafts, or
+    // scenario/mode/selection changes — camera, time and display flags are safe.
+    if (ws.placement) {
+        const structuralView = p.activeScenarioId !== prev.activeScenarioId || p.view.mode !== prev.view.mode || p.view.realistic !== prev.view.realistic || p.view.selectedDeviceId !== prev.view.selectedDeviceId || p.view.selectedProbeId !== prev.view.selectedProbeId || p.view.selectedAreaId !== prev.view.selectedAreaId;
+        if (kind !== 'view' || structuralView)
+            (0, workspaceState_js_1.notifyExternalChange)(ws, kind);
+    }
+    if (p.view.selectedDeviceId && p.view.selectedDeviceId !== prev.view.selectedDeviceId)
+        (0, workspaceState_js_1.openPanel)(ws, 'device');
+    if (p.view.selectedProbeId && p.view.selectedProbeId !== prev.view.selectedProbeId)
+        (0, workspaceState_js_1.openPanel)(ws, 'probe');
+    if (!ws.guide.done) {
+        if (ws.guide.step === 0 && (p.view.selectedProbeId !== prev.view.selectedProbeId || p.view.metric !== prev.view.metric)) {
+            (0, workspaceState_js_1.guideAdvance)(ws);
+        }
+        else if (ws.guide.step === 1 && p.view.selectedDeviceId && p.view.selectedDeviceId !== prev.view.selectedDeviceId) {
+            (0, workspaceState_js_1.guideAdvance)(ws);
+        }
+    }
+    const timeOnly = kind === 'view' && p.view.timeSec !== prev.view.timeSec && JSON.stringify({ ...p.view, timeSec: 0 }) === JSON.stringify({ ...prev.view, timeSec: 0 });
+    const cameraOnly = kind === 'view' && JSON.stringify({ ...p.view, camera: null }) === JSON.stringify({ ...prev.view, camera: null }) && JSON.stringify(p.view.camera) !== JSON.stringify(prev.view.camera);
     previousFull = p;
-    previousView = JSON.stringify(p.view);
     if (kind === 'draft') {
         syncScene();
         status();
@@ -205,8 +350,10 @@ store.subscribe((p, kind) => {
         syncScene();
         return;
     }
-    if (cameraOnly)
+    if (cameraOnly) {
+        updateGhost();
         return;
+    }
     if (kind === 'project') {
         pending = false;
         invalid = false;
@@ -255,6 +402,10 @@ document.addEventListener('input', event => {
 document.addEventListener('change', event => {
     const i = event.target;
     if (i.id === 'file-input')
+        return;
+    // Rebuild teardown fires blur+change on the focused field mid-render — a
+    // rebuild artifact, not a user commit. Ignore it so pending edits stay pending.
+    if (suppressChange || !i.isConnected)
         return;
     try {
         if (i.id === 'probe-select') {
@@ -359,11 +510,17 @@ document.addEventListener('click', event => {
             return;
         }
         if (b.dataset.metric) {
-            store.setView({ metric: b.dataset.metric });
+            store.setView({ metric: b.dataset.metric, ...(p.view.realistic && !p.view.heatmap ? { heatmap: true } : {}) });
             return;
         }
         if (b.dataset.camera) {
             scene?.preset?.(b.dataset.camera);
+            return;
+        }
+        if (b.dataset.sheet) {
+            if (ws.sheet !== b.dataset.sheet)
+                (0, workspaceState_js_1.openSheet)(ws, b.dataset.sheet);
+            render();
             return;
         }
         if (b.dataset.chart) {
@@ -415,6 +572,10 @@ document.addEventListener('click', event => {
                 break;
             case 'select-first-fan':
                 store.setView({ selectedDeviceId: (0, project_js_1.activeScenario)(p).fans[0]?.id ?? null });
+                if (store.project.view.selectedDeviceId) {
+                    (0, workspaceState_js_1.openPanel)(ws, 'device');
+                    render();
+                }
                 break;
             case 'add-fan':
                 store.addFan();
@@ -424,6 +585,90 @@ document.addEventListener('click', event => {
                 break;
             case 'add-mist':
                 store.addNozzle('mist');
+                break;
+            case 'place-fan':
+                tryPlacement('fan');
+                render();
+                break;
+            case 'place-soaker':
+                tryPlacement('soaker');
+                render();
+                break;
+            case 'place-mist':
+                tryPlacement('mist');
+                render();
+                break;
+            case 'confirm-placement': {
+                const pl = ws.placement;
+                if (!pl)
+                    break;
+                const pose = (0, workspaceState_js_1.confirmCandidate)(ws);
+                if (!pose) {
+                    toast('ここには配置できません');
+                }
+                else
+                    safe(() => pl.kind === 'fan' ? store.addFan({ x: pose.x, y: pose.y }) : store.addNozzle(pl.kind, { x: pose.x, y: pose.y }));
+                render();
+                break;
+            }
+            case 'cancel-placement':
+                (0, workspaceState_js_1.cancelPlacement)(ws);
+                updateGhost();
+                render();
+                break;
+            case 'panel-probe':
+                (0, workspaceState_js_1.openPanel)(ws, 'probe');
+                render();
+                break;
+            case 'devices':
+                (0, workspaceState_js_1.openPanel)(ws, 'devices');
+                render();
+                break;
+            case 'panel-roof':
+                (0, workspaceState_js_1.openPanel)(ws, 'roof');
+                render();
+                break;
+            case 'weather':
+                (0, workspaceState_js_1.openPanel)(ws, 'weather');
+                render();
+                break;
+            case 'close-panel':
+                (0, workspaceState_js_1.closePanel)(ws);
+                render();
+                break;
+            case 'close-sheet':
+                (0, workspaceState_js_1.closeSheet)(ws);
+                render();
+                break;
+            case 'results':
+                toggleSheet('compare');
+                render();
+                break;
+            case 'cycle':
+                toggleSheet('timeline');
+                render();
+                break;
+            case 'try-editable':
+                store.switchScenario(store.project.scenarios.find(s => !s.readOnly)?.id ?? store.project.activeScenarioId);
+                break;
+            case 'guide-next':
+                (0, workspaceState_js_1.guideAdvance)(ws);
+                markGuideDone();
+                render();
+                break;
+            case 'guide-skip':
+                (0, workspaceState_js_1.guideSkip)(ws);
+                markGuideDone();
+                render();
+                break;
+            case 'guide-restart':
+                (0, dom_js_1.el)('help-dialog').close();
+                (0, workspaceState_js_1.guideRestart)(ws);
+                render();
+                break;
+            case 'help':
+                (0, panels_js_1.renderHelp)();
+                (0, dom_js_1.el)('help-dialog').showModal();
                 break;
             case 'duplicate':
                 if (id)
@@ -504,6 +749,12 @@ document.addEventListener('click', event => {
 });
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !document.querySelector('dialog[open]')) {
+        if (ws.placement) {
+            (0, workspaceState_js_1.cancelPlacement)(ws);
+            updateGhost();
+            render();
+            return;
+        }
         store.cancel();
         pending = false;
         invalid = false;
@@ -521,12 +772,47 @@ document.addEventListener('keydown', e => {
         store.redo();
     }
 });
-Object.defineProperty(window, '__DCS__', { value: { snapshot: () => structuredClone(store.project), result: () => structuredClone(currentResult()), hash: () => (0, simulation_js_1.inputHash)(store.committed), screenPoint: (x, h, y) => scene?.screenPoint?.([x, h, y]), metrics: () => ({ lastCalculationMs, renderer: scene?.rendererName, undoCount: store.undoCount, redoCount: store.redoCount, workerFailed, calculating, graphics: scene?.diagnostics?.() ?? {} }) }, writable: false });
+window.addEventListener('blur', () => {
+    if (ws.placement) {
+        (0, workspaceState_js_1.cancelPlacement)(ws);
+        updateGhost();
+        render();
+    }
+});
+Object.defineProperty(window, '__DCS__', { value: { snapshot: () => structuredClone(store.project), result: () => structuredClone(currentResult()), hash: () => (0, simulation_js_1.inputHash)(store.committed), screenPoint: (x, h, y) => scene?.screenPoint?.([x, h, y]), workspace: () => ({ panel: ws.panel, sheet: ws.sheet, placement: ws.placement ? { ...ws.placement } : null, guide: { ...ws.guide } }), metrics: () => ({ lastCalculationMs, renderer: scene?.rendererName, undoCount: store.undoCount, redoCount: store.redoCount, workerFailed, calculating, graphics: scene?.diagnostics?.() ?? {} }) }, writable: false });
 makeWorker();
 recalculate();
 render();
+/** Runs a one-off simulation on a cloned project via a dedicated worker; the live gate/result are untouched. */
+function evaluateProject(project, opts) {
+    return new Promise((resolve, reject) => {
+        const w = spawnWorker();
+        if (!w) {
+            reject(new Error('計算Workerを起動できません'));
+            return;
+        }
+        const timer = window.setTimeout(() => { w.terminate(); reject(new Error('仮想評価の計算がタイムアウトしました')); }, 120000);
+        const done = (fn) => { clearTimeout(timer); w.terminate(); fn(); };
+        let thermal = null;
+        w.onmessage = (e) => {
+            const d = e.data;
+            if (d.kind === 'error')
+                done(() => reject(new Error(d.error)));
+            else if (d.kind === 'thermal-result') {
+                const t = d.result;
+                thermal = t;
+                if (!opts.daily)
+                    done(() => resolve({ thermal: t, daily: null, dailyMilkStatus: 'complete' }));
+            }
+            else if (d.kind === 'daily-result' && thermal)
+                done(() => resolve({ thermal: thermal, daily: d.daily, dailyMilkStatus: d.dailyMilkStatus }));
+        };
+        w.onerror = () => done(() => reject(new Error('計算Workerエラー')));
+        w.postMessage({ jobId: 1, inputHash: (0, simulation_js_1.inputHash)(project), project });
+    });
+}
 if (location.protocol === 'http:' && new URLSearchParams(location.search).get('mcp') === '1') {
-    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback });
+    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject });
     (0, bridge_js_1.startMcpBridge)({ url: `ws://${location.host}/bridge`, commands, notify: toast });
 }
 
@@ -755,6 +1041,7 @@ exports.ProjectStore = void 0;
 const project_js_1 = require("../domain/project.js");
 const validation_js_1 = require("../domain/validation.js");
 const layout_js_1 = require("../template/layout.js");
+const placement_js_1 = require("../template/placement.js");
 const defaults_js_1 = require("../data/defaults.js");
 const freeze = (p) => {
     if (p && typeof p === 'object') {
@@ -850,6 +1137,22 @@ class ProjectStore {
     updateFertility(patch) { this.edit(p => Object.assign(p.references.fertility, patch)); }
     updateMilk(patch) { this.edit(p => Object.assign(p.milkSimulation, patch)); }
     resetMilk() { this.edit(p => { p.milkSimulation = (0, project_js_1.clone)((0, defaults_js_1.createProject)().milkSimulation); }); }
+    /** Patch physics-model constants; `roof` and `profiles` are merged, not replaced. */
+    updateModel(patch) {
+        this.edit(p => {
+            const { roof, profiles, ...flat } = patch;
+            Object.assign(p.model, flat);
+            if (roof)
+                Object.assign(p.model.roof, roof);
+            if (profiles)
+                for (const [id, sub] of Object.entries(profiles)) {
+                    const x = p.model.profiles.find(v => v.id === id);
+                    if (!x)
+                        throw Error(`プロファイルが見つかりません: ${id}`);
+                    Object.assign(x, sub);
+                }
+        });
+    }
     setAllFans(enabled) { this.edit(p => this.editable(p).fans.forEach(f => f.enabled = enabled)); }
     copyActiveToOther() { this.edit(p => { const source = this.editable(p), target = p.scenarios.find(s => !s.readOnly && s.id !== source.id); const next = (0, project_js_1.clone)(source); next.id = target.id; next.name = target.name; p.scenarios[p.scenarios.indexOf(target)] = next; p.activeScenarioId = target.id; this.repairSelection(p); }); }
     updatePrices(patch) { this.edit(p => Object.assign(p.prices, patch)); }
@@ -948,8 +1251,42 @@ class ProjectStore {
         });
         return newId;
     }
-    addFan() { let id = ''; this.edit(p => { const s = this.editable(p), f = (0, project_js_1.clone)((0, defaults_js_1.createProject)().scenarios[0].fans[0]); f.id = uuid(); id = f.id; f.label = `追加ファン ${s.fans.length + 1}`; f.x = p.template.lengthM / 2; f.y = 6; f.anchor = (0, layout_js_1.anchorPose)(f, p.template); s.fans.push(f); p.view.selectedDeviceId = f.id; }); return id; }
-    addNozzle(kind) { let id = ''; this.edit(p => { const s = this.editable(p), w = s.waterSystems.find(w => w.kind === kind), n = (0, project_js_1.clone)((0, defaults_js_1.createProject)().scenarios[0].waterSystems.find(w => w.kind === kind).nozzles[0]); n.id = uuid(); id = n.id; n.label = `${kind === 'soaker' ? 'ソーカー' : 'ミスト'} ${w.nozzles.length + 1}`; n.x = p.template.lengthM / 2; n.y = 5.75; n.anchor = (0, layout_js_1.anchorPose)(n, p.template); w.nozzles.push(n); p.view.selectedDeviceId = n.id; }); return id; }
+    addFan(pose) {
+        let id = '';
+        this.edit(p => {
+            const s = this.editable(p), f = (0, project_js_1.clone)((0, defaults_js_1.createProject)().scenarios[0].fans[0]);
+            f.id = uuid();
+            id = f.id;
+            f.label = `追加ファン ${s.fans.length + 1}`;
+            f.x = pose?.x ?? p.template.lengthM / 2;
+            f.y = pose?.y ?? 6;
+            const check = (0, placement_js_1.checkPlacement)(p, f.x, f.y);
+            if (pose && check !== 'ok')
+                throw Error(check === 'outside' ? '牛舎の外には配置できません' : 'この場所には配置できません');
+            f.anchor = (0, layout_js_1.anchorPose)(f, p.template);
+            s.fans.push(f);
+            p.view.selectedDeviceId = f.id;
+        });
+        return id;
+    }
+    addNozzle(kind, pose) {
+        let id = '';
+        this.edit(p => {
+            const s = this.editable(p), w = s.waterSystems.find(w => w.kind === kind), n = (0, project_js_1.clone)((0, defaults_js_1.createProject)().scenarios[0].waterSystems.find(w => w.kind === kind).nozzles[0]);
+            n.id = uuid();
+            id = n.id;
+            n.label = `${kind === 'soaker' ? 'ソーカー' : 'ミスト'} ${w.nozzles.length + 1}`;
+            n.x = pose?.x ?? p.template.lengthM / 2;
+            n.y = pose?.y ?? 5.75;
+            const check = (0, placement_js_1.checkPlacement)(p, n.x, n.y);
+            if (pose && check !== 'ok')
+                throw Error(check === 'outside' ? '牛舎の外には配置できません' : 'この場所には配置できません');
+            n.anchor = (0, layout_js_1.anchorPose)(n, p.template);
+            w.nozzles.push(n);
+            p.view.selectedDeviceId = n.id;
+        });
+        return id;
+    }
     removeDevice(id) {
         this.edit(p => {
             const s = this.editable(p);
@@ -1284,6 +1621,28 @@ function secondsToNextToggle(t, w, cyclic) {
         next = Math.min(next, t + (phase < w.onSec ? w.onSec : period) - phase);
     }
     return next - t;
+}
+
+},
+"template/placement.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PLACEMENT_HEIGHTS = void 0;
+exports.checkPlacement = checkPlacement;
+const layout_js_1 = require("./layout.js");
+/** Initial device heights used for the placement preview plane and the created device. */
+exports.PLACEMENT_HEIGHTS = { fan: 3, soaker: 2.5, mist: 2.5 };
+/**
+ * Click-placement validity shared by all view modes. Only existing constraints apply:
+ * inside the barn floor, outside solid zones. The physics model itself decides the
+ * rest — a fan parked in the feed lane stays legal here even if the sim dislikes it.
+ */
+function checkPlacement(p, x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > p.template.lengthM || y < 0 || y > p.template.widthM)
+        return 'outside';
+    if ((0, layout_js_1.buildLayout)(p.template).solids.some(b => x >= b.min[0] && x <= b.max[0] && y >= b.min[2] && y <= b.max[2]))
+        return 'blocked';
+    return 'ok';
 }
 
 },
@@ -2153,7 +2512,13 @@ class Viewport3D {
     abort = new AbortController();
     camera = { azimuth: -.28, elevation: .6, distance: 42, target: [18.2, 0, 11.75] };
     pointer = null;
+    placementH = null;
     get rendererName() { return this.backend.name; }
+    setPlacement(mode) {
+        this.placementH = mode?.heightM ?? null;
+        if (!mode)
+            this.cb.placeMove?.(null);
+    }
     diagnostics() { return this.backend.diagnostics?.() ?? {}; }
     constructor(container, cb, backendFactory, realistic = false) {
         this.container = container;
@@ -2212,6 +2577,14 @@ class Viewport3D {
         e.preventDefault();
         this.canvas.focus();
         const { x, y } = this.local(e), { w, h } = this.size(), m = (0, math3d_js_1.matrix)(this.camera, w / h);
+        // Ghost placement owns left-clicks while active: update candidate, mouse confirms.
+        if (this.placementH !== null && e.button === 0) {
+            const q = (0, math3d_js_1.planeAt)(x, y, w, h, this.camera, this.placementH);
+            this.cb.placeMove?.(q ? [q[0], q[2]] : null);
+            if (e.pointerType === 'mouse' || e.pointerType === 'pen')
+                this.cb.placeCommit?.();
+            return;
+        }
         const hits = this.batch.hits.map(hit => ({ ...hit, screen: (0, math3d_js_1.project)(hit.position, m, w, h) })).filter(hit => hit.screen.visible && Math.hypot(hit.screen.x - x, hit.screen.y - y) < (hit.kind === 'device' ? 16 : 10)).sort((a, b) => { const delta = Math.hypot(a.screen.x - x, a.screen.y - y) - Math.hypot(b.screen.x - x, b.screen.y - y); return Math.abs(delta) < 1 ? (b.priority ?? 0) - (a.priority ?? 0) || delta : delta; });
         const hit = e.button === 0 && !e.shiftKey ? hits[0] : null;
         if (hit?.kind === 'probe') {
@@ -2250,6 +2623,14 @@ class Viewport3D {
     };
     move = (e) => {
         const a = this.pointer;
+        if (!a && this.placementH !== null) {
+            if (!this.p)
+                return;
+            const { x, y } = this.local(e), { w, h } = this.size();
+            const q = (0, math3d_js_1.planeAt)(x, y, w, h, this.camera, this.placementH);
+            this.cb.placeMove?.(q ? [q[0], q[2]] : null);
+            return;
+        }
         if (!a || !this.p)
             return;
         const { x, y } = this.local(e), { w, h } = this.size();
@@ -2387,7 +2768,7 @@ function sceneGeometry(p, result) {
     box(robot.x + .8, 1.56, robot.y + .55, 1.4, .3, 1.5, '#d8e4db');
     if (p.view.roof && !p.view.analysis) {
         const roofColor = scenario.roof.reflectance > .5 ? '#f6f8fc' : '#b9c2d0';
-        quad([0, 8.7, W / 2], [L, 8.7, W / 2], [L, 4, W], [0, 4, W], roofColor);
+        quad([0, 4, 0], [L, 4, 0], [L, 8.7, W / 2], [0, 8.7, W / 2], roofColor);
         if (scenario.roof.insulationM > 0)
             segment([0, 8.57, W / 2], [L, 8.57, W / 2], '#e8ae54');
         for (let x = 0; x <= L + .1; x += L / 6) {
@@ -11033,7 +11414,7 @@ class RealisticBackend {
         if (p.view.roof && !p.view.analysis) {
             const slope = Math.atan2(4.7, W / 2), length = Math.hypot(4.7, W / 2);
             m.roof.color.set((0, project_js_1.activeScenario)(p).roof.reflectance > .5 ? 0xe9e8df : 0x88969e);
-            k.add(this.box, m.roof, [L / 2, 6.38, W / 4], [L + .5, .055, length + .25], new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), slope));
+            k.add(this.box, m.roof, [L / 2, 6.38, W / 4], [L + .5, .055, length + .25], new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -slope));
             for (let x = 0; x <= L; x += .32)
                 this.bar(k, [x, 4.05, 0], [x, 8.75, W / 2], .018, m.steel);
         }
@@ -11425,6 +11806,19 @@ class SVG2D {
     r = null;
     abort = new AbortController();
     drag = null;
+    placement = false;
+    setPlacement(mode) {
+        this.placement = !!mode;
+        if (!mode)
+            this.cb.placeMove?.(null);
+    }
+    screenPoint(v) {
+        const m = this.svg.getScreenCTM();
+        if (!m)
+            return { x: 0, y: 0, visible: false };
+        const q = new DOMPoint(v[0], v[2]).matrixTransform(m);
+        return { x: q.x, y: q.y, visible: true };
+    }
     constructor(container, cb) {
         this.cb = cb;
         this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -11494,6 +11888,14 @@ class SVG2D {
     down = (e) => {
         if (!this.p || e.button !== 0)
             return;
+        // Ghost placement: click sets the candidate; mouse/pen confirms immediately.
+        if (this.placement) {
+            const q = this.xy(e);
+            this.cb.placeMove?.([q.x, q.y]);
+            if (e.pointerType === 'mouse' || e.pointerType === 'pen')
+                this.cb.placeCommit?.();
+            return;
+        }
         const target = e.target, id = target.closest('[data-device]')?.getAttribute('data-device'), probe = target.closest('[data-probe]')?.getAttribute('data-probe');
         if (probe) {
             this.cb.selectProbe(probe);
@@ -11511,6 +11913,11 @@ class SVG2D {
     };
     move = (e) => {
         const d = this.drag;
+        if (!d && this.placement && this.p) {
+            const q = this.xy(e);
+            this.cb.placeMove?.([q.x, q.y]);
+            return;
+        }
         if (!d || !this.p)
             return;
         if (!d.started && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 3)
@@ -11555,28 +11962,90 @@ exports.layout = layout;
 const dom_js_1 = require("./dom.js");
 function layout() {
     return `
-<header class="app-header"><div class="brand"><span class="brand-mark">${(0, dom_js_1.icon)('barn', 27)}</span><div><strong>Cooling Planner</strong><span>モデル牛舎で、暑熱対策を試す</span></div><span class="version">v0.9</span></div><div class="header-actions"><span id="status" role="status" data-state="calculating">計算準備中</span><button data-action="evidence" class="quiet">${(0, dom_js_1.icon)('info', 16)}根拠と仮定</button><button data-action="load" class="quiet">読込</button><button data-action="save" class="primary">${(0, dom_js_1.icon)('save', 16)} 案を保存</button></div></header>
-<div id="error-banner" role="alert" hidden><span id="error-message"></span><button data-action="dismiss-error" aria-label="エラーを閉じる">×</button></div>
-<section class="environment-bar" aria-label="共通の気象条件"><div class="model-badge">${(0, dom_js_1.icon)('barn', 24)}<div><strong>フリーストール / 50床</strong><small id="dimensions-label">36.4 × 23.5 m · 70評価点</small></div></div><div id="environment-fields"></div><span class="weather-note">全案共通の外気条件<br>地点別は60分・日乳量は固定気象の24時間反復</span></section>
-<main class="workspace">
-<aside class="equipment-panel panel"><div class="panel-heading"><span class="eyebrow">01 / EQUIPMENT</span><h2>対策を選ぶ・配置する</h2></div><div id="equipment-controls"></div><div class="inspector"><h3>選択中の設備</h3><div id="device-selector"></div><div id="device-properties"></div></div></aside>
-<section class="simulation-area" aria-label="牛舎の操作">
- <div class="stage panel"><div class="stage-toolbar"><div id="scenario-tabs" class="segments"></div><div class="segments modes"><button data-mode="3d">標準3D</button><button data-render="realistic">リアル3D</button><button data-mode="2d">2D</button></div></div>
- <div class="stage-subhead"><div class="metric-tabs"><button data-metric="deficit">放熱不足</button><button data-metric="delta">放熱改善</button><button data-metric="speed">風速</button><button data-metric="temperature">気温</button></div><span>色は60分平均・全案共通目盛り</span></div>
- <div class="scene-wrap"><div id="scene"></div><div class="scene-top-left"><span class="scene-label">操作できるモデル牛舎</span><strong id="scene-selection">採食7</strong></div><div class="camera-buttons"><button data-camera="overview" title="全体を見る">全体</button><button data-camera="top">上面</button><button data-camera="side">側面</button></div><div class="scene-bottom-left"><span class="mouse-hint">設備をドラッグして移動<br>背景で回転 / ホイールで拡大</span></div><div id="scene-live" class="scene-live"></div><div id="realistic-note" class="realistic-note" hidden>風・水滴は作用の模式表現 · 時刻で運転状態を切替</div><div id="scene-busy" class="scene-busy" hidden>変更した条件で再計算中…</div></div>
- <div class="stage-footer"><div id="legend"></div><div class="scene-switches"><label><input id="show-roof" type="checkbox" data-view="roof">屋根断面</label><label><input id="show-flow" type="checkbox" data-view="flow">風</label><label><input id="show-particles" type="checkbox" data-view="particles">散水</label><label id="heatmap-switch" hidden><input id="show-heatmap" type="checkbox" data-view="heatmap">ヒートマップ</label><label><input id="show-analysis" type="checkbox" data-view="analysis">分析表示</label></div></div>
- <div class="edit-toolbar"><div><button data-action="undo" id="undo-button">↶ 戻す</button><button data-action="redo" id="redo-button">↷ やり直す</button></div><span id="edit-hint">選択 → 移動・高さ・向き → 結果を比較</span><button data-action="copy-scenario" id="copy-scenario">別案へコピー</button><button data-action="reset-active" id="reset-active">基準に戻す</button></div>
+<header class="topbar">
+ <div class="brand"><span class="brand-mark">${(0, dom_js_1.icon)('barn', 24)}</span><strong>Cooling Planner</strong><span class="version">v0.9</span></div>
+ <div id="scenario-tabs" class="segments" role="tablist" aria-label="案の切り替え"></div>
+ <button id="weather-chip" data-action="weather" type="button" title="共通の気象条件を開く"></button>
+ <span id="status" role="status" data-state="calculating">計算準備中</span>
+ <div class="header-actions">
+  <button data-action="evidence" class="quiet">${(0, dom_js_1.icon)('info', 15)} 根拠</button>
+  <button data-action="settings" class="quiet">設定・保存</button>
+  <button data-action="load" class="quiet">読込</button>
+  <button data-action="save" class="primary">${(0, dom_js_1.icon)('save', 15)} 保存</button>
  </div>
- <div class="timeline-panel panel"><div class="timeline-heading"><div><span class="eyebrow">02 / TIME</span><h2>散水と放熱の変化 <small>選択地点・0〜60分</small></h2></div><div class="chart-tabs"><button data-chart="qW" class="active">放熱量</button><button data-chart="temperatureC">気温</button><button data-chart="filmKg">保持水</button></div></div><div id="timeline-chart"></div><div class="transport"><button data-action="play" id="play-button">${(0, dom_js_1.icon)('play', 15)} 再生</button><input id="time-slider" type="range" min="0" max="3600" step="1" value="0" aria-label="表示時刻"><output id="time-display">00:00</output><select id="play-speed" aria-label="再生倍率"><option value="60">60倍</option><option value="120" selected>120倍</option><option value="300">300倍</option></select></div><p class="micro">カードと色は60分平均。再生は計算済みの時系列を表示します。乳量・受胎の時間予測ではありません。</p></div>
- <div class="comparison-panel panel"><div class="timeline-heading"><div><span class="eyebrow">03 / COMPARE</span><h2>同じ条件で、案を比較</h2></div><button data-action="export-results" class="quiet small">結果JSON</button></div><div id="comparison"></div></div>
- <div class="area-panel panel"><div class="timeline-heading"><div><span class="eyebrow">04 / AREAS</span><h2>エリア別の平均 <small>代表点の単純平均</small></h2></div></div><div id="area-summary"></div></div>
-</section>
-<aside class="results-panel panel"><div class="panel-heading"><span class="eyebrow">RESULT / 60 MIN AVERAGE</span><h2>この場所の変化</h2><label class="sr-only" for="probe-select">比較する地点</label><select id="probe-select"></select></div><div id="results"></div></aside>
+</header>
+<div id="error-banner" role="alert" hidden><span id="error-message"></span><button data-action="dismiss-error" aria-label="エラーを閉じる">×</button></div>
+<div class="summary-bar" aria-label="選択地点と案の要約">
+ <button class="sum-chip" data-action="panel-probe" id="sum-deficit" type="button"><small id="sum-deficit-label">放熱不足</small><b id="sum-deficit-value">—</b></button>
+ <div class="sum-chip"><small>水 · 案全体 / 日</small><b id="sum-water">—</b></div>
+ <div class="sum-chip"><small>電力 · 案全体 / 日</small><b id="sum-power">—</b></div>
+ <span class="summary-note">要約は選択地点の60分平均と、案全体の日集計</span>
+</div>
+<main class="stage">
+ <div id="scene"></div>
+ <div class="scene-top-left"><span class="scene-label">モデル牛舎</span><strong id="scene-selection"></strong></div>
+ <div class="metric-tabs" id="metric-tabs" role="group" aria-label="分布の指標"><button data-metric="deficit">放熱不足</button><button data-metric="delta">放熱改善</button><button data-metric="speed">風速</button><button data-metric="temperature">気温</button></div>
+ <div class="rail-left" role="group" aria-label="表示の切り替え">
+  <label class="rail-toggle" title="ファン風の模式表示"><input id="show-flow" type="checkbox" data-view="flow">${(0, dom_js_1.icon)('fan', 17)}<span>風</span></label>
+  <label class="rail-toggle" title="散水の模式表示"><input id="show-particles" type="checkbox" data-view="particles">${(0, dom_js_1.icon)('drop', 17)}<span>散水</span></label>
+  <label class="rail-toggle" title="片側の屋根を表示"><input id="show-roof" type="checkbox" data-view="roof">${(0, dom_js_1.icon)('roof', 17)}<span>屋根</span></label>
+  <label class="rail-toggle" title="牛等を隠して面だけ見る"><input id="show-analysis" type="checkbox" data-view="analysis">${(0, dom_js_1.icon)('grid', 17)}<span>分析</span></label>
+  <label class="rail-toggle" id="heatmap-switch" title="床へ計算結果を重ねる（リアル3Dのみ）" hidden><input id="show-heatmap" type="checkbox" data-view="heatmap">${(0, dom_js_1.icon)('sun', 17)}<span>分布</span></label>
+ </div>
+ <div class="segments modes" role="group" aria-label="表示モード"><button data-mode="3d">標準3D</button><button data-render="realistic">リアル3D</button><button data-mode="2d">2D</button></div>
+ <div id="legend"></div>
+ <div class="camera-buttons"><button data-camera="overview" title="全体を見る">全体</button><button data-camera="top">上面</button><button data-camera="side">側面</button></div>
+ <div id="scene-live" class="scene-live"></div>
+ <div id="realistic-note" class="realistic-note" hidden>風・水滴は作用の模式表現 · 時刻で運転状態を切替</div>
+ <div id="scene-busy" class="scene-busy" hidden>変更した条件で再計算中…</div>
+ <div id="placement-ghost" hidden aria-hidden="true"><span id="placement-ghost-label"></span></div>
+ <div id="placement-hint" hidden><span id="placement-text"></span><button data-action="confirm-placement" id="confirm-placement" class="primary" disabled>ここに置く</button><button data-action="cancel-placement">中止</button></div>
+ <aside id="selection-panel" data-panel="" hidden>
+  <div class="panel-head"><strong id="panel-title"></strong><button data-action="close-panel" aria-label="パネルを閉じる">×</button></div>
+  <div id="panel-device" class="panel-page" hidden><h3>選択中の設備</h3><div id="device-properties"></div><p class="micro"><button data-action="devices" class="text-button">← 設備一覧に戻る</button></p></div>
+  <div id="panel-devices" class="panel-page" hidden><h3>設備・系統</h3><div id="system-controls"></div><h3>設備を選ぶ</h3><div id="device-selector"></div><p class="micro">ドックのファン・ソーカー・ミストボタンで新しい設備を配置できます。</p><p class="micro"><button data-action="panel-roof" class="text-button">屋根対策を開く →</button></p></div>
+  <div id="panel-probe" class="panel-page" hidden><div class="panel-subhead"><label class="sr-only" for="probe-select">比較する地点</label><select id="probe-select"></select></div><div id="results"></div></div>
+  <div id="panel-roof" class="panel-page" hidden><h3>屋根対策 <small>牛舎全体に適用</small></h3><div id="roof-controls"></div></div>
+  <div id="panel-weather" class="panel-page" hidden><h3>気象条件 <small>全案共通</small></h3><div id="environment-fields"></div><p class="micro">地点別は60分計算。日乳量は同じ気象を24時間反復した代表日です。背景風速・空気交換は「設定・保存」にあります。</p><p class="micro" id="dimensions-label"></p></div>
+ </aside>
+ <section id="sheet" data-tab="" hidden>
+  <div class="sheet-tabs" role="tablist" aria-label="結果と比較">
+   <button data-sheet="compare">案比較</button><button data-sheet="areas">エリア</button><button data-sheet="timeline">時間変化</button><button data-sheet="reference">参考影響</button>
+   <span class="sheet-actions"><button data-action="export-results" class="quiet small">結果JSON</button><button data-action="close-sheet" aria-label="閉じる">×</button></span>
+  </div>
+  <div class="sheet-body">
+   <div id="sheet-compare" class="sheet-page" hidden><div id="comparison"></div></div>
+   <div id="sheet-areas" class="sheet-page" hidden><div id="area-summary"></div></div>
+   <div id="sheet-timeline" class="sheet-page" hidden>
+    <div class="timeline-heading"><strong>散水と放熱の変化 <small>選択地点・0〜60分</small></strong><div class="chart-tabs"><button data-chart="qW" class="active">放熱量</button><button data-chart="temperatureC">気温</button><button data-chart="filmKg">保持水</button></div></div>
+    <div id="timeline-chart"></div>
+    <div class="transport"><button data-action="play" id="play-button">${(0, dom_js_1.icon)('play', 15)} 再生</button><input id="time-slider" type="range" min="0" max="3600" step="1" value="0" aria-label="表示時刻"><output id="time-display">00:00</output><select id="play-speed" aria-label="再生倍率"><option value="60">60倍</option><option value="120" selected>120倍</option><option value="300">300倍</option></select></div>
+    <p class="micro">カードと色は60分平均。再生は計算済みの時系列を表示します。乳量・受胎の時間予測ではありません。</p>
+   </div>
+   <div id="sheet-reference" class="sheet-page" hidden><div id="reference-pane"></div></div>
+  </div>
+ </section>
+ <div id="guide-card" hidden><b id="guide-title"></b><p id="guide-text"></p><div class="guide-actions"><button data-action="guide-next" id="guide-next" class="primary small">次へ</button><button data-action="guide-skip" class="quiet small">スキップ</button></div></div>
 </main>
-<footer class="footer"><span>ブラウザ内で計算 · ログイン・外部送信なし</span><span>現地検証ではなく、根拠と仮定を使うモデル比較</span><button data-action="settings">共通設定・保存</button></footer>
+<footer class="dock">
+ <div class="dock-group" role="group" aria-label="設備を置く">
+  <button data-action="place-fan" id="place-fan" title="牛の周囲の風を強める">${(0, dom_js_1.icon)('fan', 18)}<span>ファン</span></button>
+  <button data-action="place-soaker" id="place-soaker" title="牛体を濡らし、蒸発による放熱を促す">${(0, dom_js_1.icon)('drop', 18)}<span>ソーカー</span></button>
+  <button data-action="place-mist" id="place-mist" title="蒸発で空気を冷やす。湿度も変わる">${(0, dom_js_1.icon)('mist', 18)}<span>ミスト</span></button>
+  <button data-action="panel-roof" id="roof-button" title="屋根から受ける熱の条件を変える">${(0, dom_js_1.icon)('roof', 18)}<span>屋根対策</span></button>
+  <button data-action="devices" id="devices-button" title="設備の一覧と系統のON/OFF">${(0, dom_js_1.icon)('grid', 18)}<span>設備一覧</span></button>
+ </div>
+ <div id="baseline-notice" hidden><span>基準案は固定です</span><button data-action="try-editable" class="small primary">編集案 A で試す</button></div>
+ <div class="dock-group"><button data-action="undo" id="undo-button" title="戻す">↶</button><button data-action="redo" id="redo-button" title="やり直す">↷</button></div>
+ <span class="dock-spacer"></span>
+ <button data-action="cycle" id="cycle-button" title="散水サイクル・0〜60分">${(0, dom_js_1.icon)('play', 14)} サイクルを見る</button>
+ <button data-action="results" id="results-button" class="primary">結果・比較</button>
+ <button data-action="help" id="help-button" aria-label="ヘルプ">？</button>
+</footer>
 <dialog id="evidence-dialog"><div class="dialog-head"><h2>モデルの根拠と仮定</h2><button data-close="evidence-dialog" aria-label="閉じる">×</button></div><div id="evidence-body"></div></dialog>
 <dialog id="settings-dialog"><div class="dialog-head"><h2>共通設定・保存</h2><button data-close="settings-dialog" aria-label="閉じる">×</button></div><div id="settings-body"></div></dialog>
 <dialog id="reference-dialog"><div class="dialog-head"><h2>乳量・受胎の参照条件</h2><button data-close="reference-dialog" aria-label="閉じる">×</button></div><div id="reference-body"></div></dialog>
+<dialog id="help-dialog"><div class="dialog-head"><h2>操作と結果の読み方</h2><button data-close="help-dialog" aria-label="閉じる">×</button></div><div id="help-body"></div></dialog>
 <input id="file-input" type="file" accept=".json,application/json" hidden><div id="toast" role="status" hidden></div>`;
 }
 
@@ -11637,13 +12106,21 @@ function setHTML(id, html) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.selectedResults = selectedResults;
-exports.renderControls = renderControls;
-exports.renderResults = renderResults;
+exports.renderHeader = renderHeader;
+exports.renderSummary = renderSummary;
+exports.renderWeatherPanel = renderWeatherPanel;
+exports.renderRoofPanel = renderRoofPanel;
+exports.renderDevicesPanel = renderDevicesPanel;
+exports.renderDevicePanel = renderDevicePanel;
+exports.renderProbePanel = renderProbePanel;
+exports.renderReferencePane = renderReferencePane;
 exports.renderComparison = renderComparison;
 exports.renderAreas = renderAreas;
 exports.renderSettings = renderSettings;
 exports.renderReference = renderReference;
 exports.renderEvidence = renderEvidence;
+exports.renderHelp = renderHelp;
+exports.renderChrome = renderChrome;
 const project_js_1 = require("../domain/project.js");
 const layout_js_1 = require("../template/layout.js");
 const physics_js_1 = require("../model/physics.js");
@@ -11655,52 +12132,79 @@ function selectedResults(p, r) {
     const scenario = r?.scenarios.find(s => s.id === p.activeScenarioId), base = r?.scenarios.find(s => s.id === p.baselineScenarioId);
     return { scenario, base, point: scenario?.points.find(q => q.probeId === p.view.selectedProbeId), baseline: base?.points.find(q => q.probeId === p.view.selectedProbeId) };
 }
-function renderControls(p) {
-    const s = (0, project_js_1.activeScenario)(p), disabled = s.readOnly, soak = s.waterSystems.find(w => w.kind === 'soaker'), mist = s.waterSystems.find(w => w.kind === 'mist');
-    (0, dom_js_1.setHTML)('environment-fields', `${(0, dom_js_1.field)('env-temperature', '外気温', p.environment.temperatureC, '℃', 'data-env="temperatureC"', 20, 40, .5)}${(0, dom_js_1.field)('env-humidity', '相対湿度', p.environment.relativeHumidityPct, '%', 'data-env="relativeHumidityPct"', 10, 100, 1)}${(0, dom_js_1.field)('env-solar', '屋根面日射', p.environment.solarRoofWm2, 'W/m²', 'data-env="solarRoofWm2"', 0, 1200, 50)}<div class="thi-badge"><small>外気THI</small><strong>${(0, dom_js_1.num)((0, physics_js_1.thi)(p.environment.temperatureC, p.environment.relativeHumidityPct))}</strong></div>`);
-    (0, dom_js_1.el)('dimensions-label').textContent = `${p.template.lengthM} × ${p.template.widthM} m · 70評価点`;
+/** Header: scenario tabs + shared-weather chip + fixed-baseline notice. */
+function renderHeader(p) {
+    const s = (0, project_js_1.activeScenario)(p), e = p.environment;
     (0, dom_js_1.setHTML)('scenario-tabs', p.scenarios.map(sc => `<button data-scenario="${sc.id}" class="${s.id === sc.id ? 'active' : ''}">${(0, dom_js_1.esc)(sc.name)}${sc.readOnly ? ' <span class="lock">固定</span>' : ''}</button>`).join(''));
-    (0, dom_js_1.setHTML)('equipment-controls', `<div class="equipment-section"><div class="section-label">屋根への対策 <span>全体に適用</span></div>
+    (0, dom_js_1.setHTML)('weather-chip', `${(0, dom_js_1.icon)('sun', 15)}<b>${(0, dom_js_1.num)(e.temperatureC, 0)}℃</b> / ${(0, dom_js_1.num)(e.relativeHumidityPct, 0)}%<small>THI ${(0, dom_js_1.num)((0, physics_js_1.thi)(e.temperatureC, e.relativeHumidityPct))} · 全案共通</small>`);
+    (0, dom_js_1.el)('baseline-notice').hidden = !s.readOnly;
+}
+/** Top summary strip: selected-point deficit (60min) + scenario daily water/power. */
+function renderSummary(p, r) {
+    const { scenario: s, point: q } = selectedResults(p, r);
+    const probe = (0, layout_js_1.buildLayout)(p.template).probes.find(x => x.id === p.view.selectedProbeId);
+    (0, dom_js_1.el)('sum-deficit-label').textContent = `${probe?.label ?? '—'} · 放熱不足（60分平均）`;
+    const dv = (0, dom_js_1.el)('sum-deficit-value');
+    if (!r)
+        dv.textContent = '計算中…';
+    else if (!q || q.status !== 'valid' || q.meanDeficitW === null)
+        dv.textContent = '未評価';
+    else
+        dv.innerHTML = `${(0, dom_js_1.num)(q.meanDeficitW, 0)}<small> W</small>`;
+    const dm = s?.dailyMilk, w = (0, dom_js_1.el)('sum-water'), k = (0, dom_js_1.el)('sum-power');
+    if (!r || r.dailyMilkStatus === 'pending') {
+        w.textContent = '計算中…';
+        k.textContent = '計算中…';
+    }
+    else if (dm?.status === 'available' && dm.resources) {
+        w.innerHTML = `${(0, dom_js_1.num)(dm.resources.waterLPerDay, 0)}<small> L/日</small>`;
+        k.innerHTML = `${(0, dom_js_1.num)(dm.resources.totalKwhPerDay, 1)}<small> kWh/日</small>`;
+    }
+    else {
+        w.textContent = '比較不可';
+        k.textContent = '比較不可';
+    }
+}
+/** Weather panel: primary env fields (shared across scenarios). */
+function renderWeatherPanel(p) {
+    (0, dom_js_1.setHTML)('environment-fields', `${(0, dom_js_1.field)('env-temperature', '外気温', p.environment.temperatureC, '℃', 'data-env="temperatureC"', 20, 40, .5)}${(0, dom_js_1.field)('env-humidity', '相対湿度', p.environment.relativeHumidityPct, '%', 'data-env="relativeHumidityPct"', 10, 100, 1)}${(0, dom_js_1.field)('env-solar', '屋根面日射', p.environment.solarRoofWm2, 'W/m²', 'data-env="solarRoofWm2"', 0, 1200, 50)}<div class="thi-badge"><small>外気THI</small><strong>${(0, dom_js_1.num)((0, physics_js_1.thi)(p.environment.temperatureC, p.environment.relativeHumidityPct))}</strong></div>`);
+    (0, dom_js_1.el)('dimensions-label').textContent = `フリーストール / 50床 · ${p.template.lengthM} × ${p.template.widthM} m · 70評価点`;
+}
+/** Roof panel: whole-barn measures (existing toggles/details). */
+function renderRoofPanel(p) {
+    const s = (0, project_js_1.activeScenario)(p), disabled = s.readOnly;
+    (0, dom_js_1.setHTML)('roof-controls', `
  ${(0, dom_js_1.toggle)('roof-coating', '遮熱塗装', `現在の日射反射率 ${(0, dom_js_1.num)(s.roof.reflectance * 100, 0)}%`, s.roof.reflectance > .5, 'data-roof-toggle="coating"', 'sun', disabled)}
  ${(0, dom_js_1.toggle)('roof-insulation', `断熱材 ${(0, dom_js_1.num)(s.roof.insulationM > 0 ? s.roof.insulationM * 1000 : 20, 0)}mm`, '熱抵抗を追加する', s.roof.insulationM > 0, 'data-roof-toggle="insulation"', 'layers', disabled)}
  ${(0, dom_js_1.toggle)('roof-spray', '屋根散水', `${(0, dom_js_1.num)(s.roof.onSec / 60, 1)}分ON / ${(0, dom_js_1.num)(s.roof.offSec / 60, 1)}分OFF`, s.roof.sprayEnabled, 'data-roof-toggle="sprayEnabled"', 'roof', disabled)}
- <details id="roof-details"><summary>屋根の詳細設定</summary><div class="field-grid">${(0, dom_js_1.field)('roof-reflectance', '日射反射率', s.roof.reflectance, '', 'data-roof="reflectance"', 0, 1, .05, disabled)}${(0, dom_js_1.field)('roof-insulation-m', '断熱材厚さ', s.roof.insulationM, 'm', 'data-roof="insulationM"', 0, .1, .01, disabled)}${(0, dom_js_1.field)('roof-flow', '散水量', s.roof.flowLpmM2, 'L/分/m²', 'data-roof="flowLpmM2"', 0, 1, .01, disabled)}${(0, dom_js_1.field)('roof-start', '運転開始', s.roof.dailyStartHour, '時', 'data-roof="dailyStartHour"', 0, 23.75, .25, disabled)}${(0, dom_js_1.field)('roof-hours', '運転時間', s.roof.hoursPerDay, 'h/日', 'data-roof="hoursPerDay"', 0, 24, 1, disabled)}${(0, dom_js_1.field)('roof-on', 'ON', s.roof.onSec / 60, '分', 'data-roof="onSec" data-factor="60"', 0, 1440, 1, disabled)}${(0, dom_js_1.field)('roof-off', 'OFF', s.roof.offSec / 60, '分', 'data-roof="offSec" data-factor="60"', 0, 1440, 1, disabled)}</div><p class="micro">日運転は「運転開始＋運転時間」で繰り返します。上の60分結果は機器ONからの経過です。</p></details></div>
- <div class="equipment-section"><div class="section-label">牛・空気への対策 <span>位置を編集</span></div>
+ <details id="roof-details"><summary>屋根の詳細設定</summary><div class="field-grid">${(0, dom_js_1.field)('roof-reflectance', '日射反射率', s.roof.reflectance, '', 'data-roof="reflectance"', 0, 1, .05, disabled)}${(0, dom_js_1.field)('roof-insulation-m', '断熱材厚さ', s.roof.insulationM, 'm', 'data-roof="insulationM"', 0, .1, .01, disabled)}${(0, dom_js_1.field)('roof-flow', '散水量', s.roof.flowLpmM2, 'L/分/m²', 'data-roof="flowLpmM2"', 0, 1, .01, disabled)}${(0, dom_js_1.field)('roof-start', '運転開始', s.roof.dailyStartHour, '時', 'data-roof="dailyStartHour"', 0, 23.75, .25, disabled)}${(0, dom_js_1.field)('roof-hours', '運転時間', s.roof.hoursPerDay, 'h/日', 'data-roof="hoursPerDay"', 0, 24, 1, disabled)}${(0, dom_js_1.field)('roof-on', 'ON', s.roof.onSec / 60, '分', 'data-roof="onSec" data-factor="60"', 0, 1440, 1, disabled)}${(0, dom_js_1.field)('roof-off', 'OFF', s.roof.offSec / 60, '分', 'data-roof="offSec" data-factor="60"', 0, 1440, 1, disabled)}</div><p class="micro">日運転は「運転開始＋運転時間」で繰り返します。上の60分結果は機器ONからの経過です。</p></details>
+ ${disabled ? '<p class="micro warn">基準案は固定です。下部の「編集案 A で試す」で編集案へ切り替えます。</p>' : ''}`);
+}
+/** Devices panel: per-system ON/OFF and the device picker. */
+function renderDevicesPanel(p) {
+    const s = (0, project_js_1.activeScenario)(p), disabled = s.readOnly, soak = s.waterSystems.find(w => w.kind === 'soaker'), mist = s.waterSystems.find(w => w.kind === 'mist');
+    (0, dom_js_1.setHTML)('system-controls', `
  ${(0, dom_js_1.toggle)('fans-enabled', '循環ファン', `${s.fans.filter(f => f.enabled).length} / ${s.fans.length} 台が有効`, s.fans.some(f => f.enabled), 'data-all-fans', 'fan', disabled)}
  ${(0, dom_js_1.toggle)('soaker-enabled', 'ソーカー', `${soak.nozzles.filter(n => n.enabled).length}個 · 牛体を濡らす`, soak.enabled, `data-system-enabled="${soak.id}"`, 'drop', disabled)}
- ${(0, dom_js_1.toggle)('mist-enabled', 'ミスト', `${mist.nozzles.filter(n => n.enabled).length}個 · 空気を冷やす`, mist.enabled, `data-system-enabled="${mist.id}"`, 'mist', disabled)}
- <div class="equipment-add"><button data-action="add-fan" ${disabled ? 'disabled' : ''}>＋ ファン</button><button data-action="add-soaker" ${disabled ? 'disabled' : ''}>＋ ソーカー</button><button data-action="add-mist" ${disabled ? 'disabled' : ''}>＋ ミスト</button></div><p class="micro">追加した設備は選択状態になります。3Dでドラッグ、または座標を入力。</p></div>`);
+ ${(0, dom_js_1.toggle)('mist-enabled', 'ミスト', `${mist.nozzles.filter(n => n.enabled).length}個 · 空気を冷やす`, mist.enabled, `data-system-enabled="${mist.id}"`, 'mist', disabled)}`);
     (0, dom_js_1.setHTML)('device-selector', `<label class="sr-only" for="device-select">編集する設備</label><select id="device-select"><option value="">設備を選択してください</option>${(0, project_js_1.devices)(s).map(d => `<option value="${(0, dom_js_1.esc)(d.id)}" ${p.view.selectedDeviceId === d.id ? 'selected' : ''}>${(0, dom_js_1.esc)(d.label)}</option>`).join('')}</select>`);
+}
+/** Device editor: shown when a device is selected. */
+function renderDevicePanel(p) {
+    const s = (0, project_js_1.activeScenario)(p), disabled = s.readOnly;
     const d = (0, project_js_1.devices)(s).find(d => d.id === p.view.selectedDeviceId);
     if (!d) {
-        (0, dom_js_1.setHTML)('device-properties', `<div class="empty-inspector">${(0, dom_js_1.icon)('fan', 30)}<p>牛舎のファンをクリック。<br>位置・向き・高さを変えて試します。</p><button data-action="select-first-fan" class="quiet">最初のファンを選択 →</button></div>`);
+        (0, dom_js_1.setHTML)('device-properties', `<div class="empty-inspector">${(0, dom_js_1.icon)('fan', 30)}<p>牛舎の設備をクリック。<br>位置・向き・高さを変えて試します。</p><button data-action="select-first-fan" class="quiet">最初のファンを選択 →</button></div>`);
+        return;
     }
-    else {
-        const fan = (0, project_js_1.isFan)(d), sys = s.waterSystems.find(w => w.nozzles.some(n => n.id === d.id));
-        (0, dom_js_1.setHTML)('device-properties', `<div class="selected-device"><strong>${(0, dom_js_1.esc)(d.label)}</strong><label><input type="checkbox" id="device-enabled" data-device-enabled ${d.enabled ? 'checked' : ''} ${disabled ? 'disabled' : ''}> 有効</label></div><div class="field-grid">
-  ${(0, dom_js_1.field)('device-x', '長手 X', d.x, 'm', 'data-device="x"', 0, p.template.lengthM, .1, disabled)}${(0, dom_js_1.field)('device-y', '幅 Y', d.y, 'm', 'data-device="y"', 0, p.template.widthM, .1, disabled)}
-  ${(0, dom_js_1.field)('device-height', '高さ', d.heightM, 'm', 'data-device="heightM"', fan ? d.diameterM / 2 : 1.8, 4, .1, disabled)}${(0, dom_js_1.field)('device-yaw', '向き', d.yawDeg, '°', 'data-device="yawDeg"', 0, 360, 5, disabled)}${(0, dom_js_1.field)('device-pitch', '下向き角', d.pitchDownDeg, '°', 'data-device="pitchDownDeg"', fan ? 0 : 30, 90, 5, disabled)}
-  ${fan ? (0, dom_js_1.field)('device-outlet', '出口風速', d.outletSpeedMps, 'm/s', 'data-device="outletSpeedMps"', 0, 30, .5, disabled) : (0, dom_js_1.field)('device-flow', 'ノズル流量', d.flowLpm, 'L/分', 'data-device="flowLpm"', 0, 20, .1, disabled)}
-  ${fan ? (0, dom_js_1.field)('device-hours', '運転時間', d.hoursPerDay, 'h/日', 'data-device="hoursPerDay"', 0, 24, 1, disabled) : (0, dom_js_1.field)('device-angle', '噴霧半角', d.halfAngleDeg, '°', 'data-device="halfAngleDeg"', 1, 85, 5, disabled)}
-  ${fan ? (0, dom_js_1.field)('device-start', '日運転の開始', d.dailyStartHour, '時', 'data-device="dailyStartHour"', 0, 23.75, .25, disabled) : ''}
-  </div>${sys ? `<div class="section-label">系統全体の周期</div><div class="field-grid">${(0, dom_js_1.field)('system-start', '運転開始', sys.dailyStartHour, '時', `data-system="dailyStartHour" data-system-id="${sys.id}"`, 0, 23.75, .25, disabled)}${(0, dom_js_1.field)('system-hours', '運転時間', sys.hoursPerDay, 'h/日', `data-system="hoursPerDay" data-system-id="${sys.id}"`, 0, 24, 1, disabled)}${(0, dom_js_1.field)('system-on', 'ON', sys.onSec / 60, '分', `data-system="onSec" data-system-id="${sys.id}" data-factor="60"`, 0, 1440, 1, disabled)}${(0, dom_js_1.field)('system-off', 'OFF', sys.offSec / 60, '分', `data-system="offSec" data-system-id="${sys.id}" data-factor="60"`, 0, 1440, 1, disabled)}</div>` : ''}<div class="device-actions"><button data-action="rotate" ${disabled ? 'disabled' : ''}>90° 回転</button><button data-action="duplicate" ${disabled ? 'disabled' : ''}>複製</button><button data-action="remove" class="danger" ${disabled ? 'disabled' : ''}>削除</button></div>`);
-    }
-    (0, dom_js_1.el)('probe-select').innerHTML = (0, layout_js_1.buildLayout)(p.template).probes.map(q => `<option value="${q.id}" ${q.id === p.view.selectedProbeId ? 'selected' : ''}>${(0, dom_js_1.esc)(q.label)} · 高さ ${q.heightM}m</option>`).join('');
-    (0, dom_js_1.el)('scene-selection').textContent = (0, layout_js_1.buildLayout)(p.template).probes.find(q => q.id === p.view.selectedProbeId)?.label ?? '';
-    (0, dom_js_1.el)('edit-hint').textContent = disabled ? '基準案は固定です。編集案 A / B に切り替えてください。' : '選択 → 移動・高さ・向き → 比較';
-    (0, dom_js_1.el)('reset-active').disabled = disabled;
-    (0, dom_js_1.el)('copy-scenario').disabled = disabled;
-    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === p.view.mode && !(p.view.mode === '3d' && p.view.realistic)));
-    document.querySelectorAll('[data-metric]').forEach(b => b.classList.toggle('active', b.dataset.metric === p.view.metric));
-    const realistic = p.view.mode === '3d' && p.view.realistic === true;
-    document.querySelector('[data-render=realistic]')?.classList.toggle('active', realistic);
-    (0, dom_js_1.el)('heatmap-switch').hidden = !realistic;
-    (0, dom_js_1.el)('realistic-note').hidden = !realistic;
-    (0, dom_js_1.el)('legend').hidden = realistic && !p.view.heatmap && !p.view.analysis;
-    for (const key of ['roof', 'flow', 'particles', 'analysis', 'heatmap'])
-        (0, dom_js_1.el)('show-' + key).checked = p.view[key] === true;
-    const m = p.view.metric;
-    (0, dom_js_1.setHTML)('legend', `<span>${m === 'delta' ? '−900 W' : m === 'speed' ? '0 m/s' : m === 'deficit' ? '0 W' : '25℃'}</span><i class="legend-gradient ${m}"></i><span>${m === 'delta' ? '+900 W' : m === 'speed' ? '3 m/s' : m === 'deficit' ? '1200 W以上' : '40℃'}</span><span class="legend-note">斜線=無効・通路等は評価対象外</span>`);
+    const fan = (0, project_js_1.isFan)(d), sys = s.waterSystems.find(w => w.nozzles.some(n => n.id === d.id));
+    (0, dom_js_1.setHTML)('device-properties', `<div class="selected-device"><strong>${(0, dom_js_1.esc)(d.label)}</strong><label><input type="checkbox" id="device-enabled" data-device-enabled ${d.enabled ? 'checked' : ''} ${disabled ? 'disabled' : ''}> 有効</label></div><div class="field-grid">
+ ${(0, dom_js_1.field)('device-x', '長手 X', d.x, 'm', 'data-device="x"', 0, p.template.lengthM, .1, disabled)}${(0, dom_js_1.field)('device-y', '幅 Y', d.y, 'm', 'data-device="y"', 0, p.template.widthM, .1, disabled)}
+ ${(0, dom_js_1.field)('device-height', '高さ', d.heightM, 'm', 'data-device="heightM"', fan ? d.diameterM / 2 : 1.8, 4, .1, disabled)}${(0, dom_js_1.field)('device-yaw', '向き', d.yawDeg, '°', 'data-device="yawDeg"', 0, 360, 5, disabled)}${(0, dom_js_1.field)('device-pitch', '下向き角', d.pitchDownDeg, '°', 'data-device="pitchDownDeg"', fan ? 0 : 30, 90, 5, disabled)}
+ ${fan ? (0, dom_js_1.field)('device-outlet', '出口風速', d.outletSpeedMps, 'm/s', 'data-device="outletSpeedMps"', 0, 30, .5, disabled) : (0, dom_js_1.field)('device-flow', 'ノズル流量', d.flowLpm, 'L/分', 'data-device="flowLpm"', 0, 20, .1, disabled)}
+ ${fan ? (0, dom_js_1.field)('device-hours', '運転時間', d.hoursPerDay, 'h/日', 'data-device="hoursPerDay"', 0, 24, 1, disabled) : (0, dom_js_1.field)('device-angle', '噴霧半角', d.halfAngleDeg, '°', 'data-device="halfAngleDeg"', 1, 85, 5, disabled)}
+ ${fan ? (0, dom_js_1.field)('device-start', '日運転の開始', d.dailyStartHour, '時', 'data-device="dailyStartHour"', 0, 23.75, .25, disabled) : ''}
+ </div>${sys ? `<div class="section-label">系統全体の周期</div><div class="field-grid">${(0, dom_js_1.field)('system-start', '運転開始', sys.dailyStartHour, '時', `data-system="dailyStartHour" data-system-id="${sys.id}"`, 0, 23.75, .25, disabled)}${(0, dom_js_1.field)('system-hours', '運転時間', sys.hoursPerDay, 'h/日', `data-system="hoursPerDay" data-system-id="${sys.id}"`, 0, 24, 1, disabled)}${(0, dom_js_1.field)('system-on', 'ON', sys.onSec / 60, '分', `data-system="onSec" data-system-id="${sys.id}" data-factor="60"`, 0, 1440, 1, disabled)}${(0, dom_js_1.field)('system-off', 'OFF', sys.offSec / 60, '分', `data-system="offSec" data-system-id="${sys.id}" data-factor="60"`, 0, 1440, 1, disabled)}</div>` : ''}<div class="device-actions"><button data-action="rotate" ${disabled ? 'disabled' : ''}>90° 回転</button><button data-action="duplicate" ${disabled ? 'disabled' : ''}>複製</button><button data-action="remove" class="danger" ${disabled ? 'disabled' : ''}>削除</button></div>${disabled ? '<p class="micro warn">基準案は閲覧のみです。</p>' : ''}`);
 }
 function kpi(label, value, unit, before, ic, description) {
     const diff = value != null && before != null ? value - before : null;
@@ -11738,16 +12242,16 @@ function milkCard(p, r, s) {
  </details>
  <button data-action="references" class="text-button">掲載表（資料）を見る →</button></div>`;
 }
-function renderResults(p, r) {
-    const { point: q, baseline: b, scenario: s, base } = selectedResults(p, r), fert = q?.fertility, delta = q?.deltaQrefW ?? null;
-    const fdelta = fert?.probability != null && b?.fertility.probability != null ? (fert.probability - b.fertility.probability) * 100 : null;
-    const res = s?.dailyMilk?.resources ?? null;
+/** Probe panel: selected evaluation point — name, 60-min means, baseline deltas, detail entry. */
+function renderProbePanel(p, r) {
+    const { point: q, baseline: b, scenario: s } = selectedResults(p, r), delta = q?.deltaQrefW ?? null;
     const probe = (0, layout_js_1.buildLayout)(p.template).probes.find(x => x.id === p.view.selectedProbeId);
     const fractions = (v) => v == null ? '—' : `${(0, dom_js_1.num)(v * 100, 0)}%`;
+    (0, dom_js_1.el)('probe-select').innerHTML = (0, layout_js_1.buildLayout)(p.template).probes.map(q => `<option value="${q.id}" ${q.id === p.view.selectedProbeId ? 'selected' : ''}>${(0, dom_js_1.esc)(q.label)} · 高さ ${q.heightM}m</option>`).join('');
     (0, dom_js_1.setHTML)('results', `<div class="hero-result"><span>${(0, dom_js_1.icon)('cow', 18)} 牛の放熱改善 <small>参考</small></span><div class="hero-value">${(0, dom_js_1.signed)(delta, 0)}<small>W</small></div><p>基準案と同じ代表牛の表面を比較</p><div class="range">仮定を変えた範囲 ${q?.parameterEnvelopeW ? `${(0, dom_js_1.signed)(q.parameterEnvelopeW[0], 0)} 〜 ${(0, dom_js_1.signed)(q.parameterEnvelopeW[1], 0)} W` : '—'}</div></div>
  ${kpi('放熱不足', q?.meanDeficitW, 'W', b?.meanDeficitW, 'temp', `Qref ${(0, dom_js_1.num)(p.milkSimulation.referenceCoolingWPerCow, 0)} W に対する秒積算の平均。0は不足なし`)}
  ${kpi('牛位置の気温', q?.meanAirTemperatureC, '℃', b?.meanAirTemperatureC, 'temp', `局所湿度 ${(0, dom_js_1.num)(q?.meanRelativeHumidityPct)}%`)}
- ${kpi('屋根裏の温度', s?.roof.meanUnderC, '℃', base?.roof.meanUnderC, 'roof', `平均放射温度 ${(0, dom_js_1.num)(q?.meanRadiantC)}℃`)}
+ ${kpi('屋根裏の温度', s?.roof.meanUnderC, '℃', s ? selectedResults(p, r).base?.roof.meanUnderC : null, 'roof', `平均放射温度 ${(0, dom_js_1.num)(q?.meanRadiantC)}℃`)}
  ${kpi('送風体感温度', q?.meanFeelsLikeC, '℃', b?.meanFeelsLikeC, 'fan', `全酪連掲載式 · 風速 ${(0, dom_js_1.num)(q?.meanSpeedMps, 2)}m/s`)}
  <details id="probe-detail" class="probe-detail"><summary>濡れ方・放熱内訳・設備の作用</summary><table class="micro-table"><tbody>
  <tr><th>評価高さ</th><td>${(0, dom_js_1.num)(probe?.heightM, 2)} m（${(0, dom_js_1.esc)(probe?.label ?? '')}）</td></tr>
@@ -11759,21 +12263,30 @@ function renderResults(p, r) {
  </tbody></table>
  ${q && (0, areaStats_js_1.deficitUnreached)(q) ? '<p class="micro warn">放熱不足が残り、局所設備の作用はありません（面の位置・向きを変えて試せます）。作用=届いた診断で、効果とは別です。</p>' : ''}
  <p class="micro">濡れ方の内訳は60分累積kg、保持水の平均はkgです。放熱改善0は「不足がない」とは別の意味です。</p></details>
+ <p class="micro"><button data-action="results" class="text-button">案比較・参考影響を開く →</button></p>
+ ${s?.warnings.length ? `<details id="warning-detail"><summary>計算の注意 ${s.warnings.length}件</summary>${s.warnings.map(w => `<p class="micro">${(0, dom_js_1.esc)(w)}</p>`).join('')}</details>` : ''}`);
+}
+/** Reference-impact tab: daily milk hypothesis, fertility scenario, daily resources. */
+function renderReferencePane(p, r) {
+    const { point: q, baseline: b, scenario: s } = selectedResults(p, r), fert = q?.fertility;
+    const fdelta = fert?.probability != null && b?.fertility.probability != null ? (fert.probability - b.fertility.probability) * 100 : null;
+    const res = s?.dailyMilk?.resources ?? null;
+    (0, dom_js_1.setHTML)('reference-pane', `
  ${milkCard(p, r, s)}
  <div class="reference-card"><div class="reference-heading">${(0, dom_js_1.icon)('heart', 17)}<h3>受胎率シナリオ</h3></div><div class="fertility-value">${(0, dom_js_1.num)(fert?.probability == null ? null : fert.probability * 100)}<small>%</small><span class="tag">${p.references.fertility.mode === 'manual' ? '独立した代表環境' : '地点の温湿度を適用'}</span></div><p>${p.references.fertility.mode === 'manual' ? `代表 ${p.references.fertility.temperatureC}℃ / ${p.references.fertility.relativeHumidityPct}%RH` : `基準案との差 ${(0, dom_js_1.signed)(fdelta, 2)}ポイント · ${fdelta === 0 ? '同じ参照区分' : '温湿度区分の比較'}`}<br>授精前21日〜後30日の代表条件を仮定。基準受胎率 ${(0, dom_js_1.num)(p.references.fertility.p0 * 100, 0)}%。日乳量とは別の時間モデルです。</p><button data-action="references" class="text-button">期間の仮定・入力を確認 →</button></div>
  <div class="resource-cards"><div>${(0, dom_js_1.icon)('drop', 18)}<span>水 <small>案全体 / 日</small></span><strong>${res === null ? '未計算' : (0, dom_js_1.num)(res.waterLPerDay, 0)}${res === null ? '' : '<small>L</small>'}</strong></div><div>${(0, dom_js_1.icon)('bolt', 18)}<span>電力 <small>案全体 / 日</small></span><strong>${res === null ? '未計算' : (0, dom_js_1.num)(res.totalKwhPerDay, 1)}${res === null ? '' : '<small>kWh</small>'}</strong></div></div>
  <p class="micro">上の気温・放熱カードは「機器ONから60分」の地点別平均。水・電力と乳量は評価日24時間の運転マスクから積算します。</p>
- <div class="result-note">放熱Wの乳量への変換は仮説モデル milk-heat-deficit-v0.1 のみ。牛の深部体温や実農場の効果を保証する値ではありません。</div>
- ${s?.warnings.length ? `<details id="warning-detail"><summary>計算の注意 ${s.warnings.length}件</summary>${s.warnings.map(w => `<p class="micro">${(0, dom_js_1.esc)(w)}</p>`).join('')}</details>` : ''}`);
-    renderComparison(p, r);
+ <div class="result-note">放熱Wの乳量への変換は仮説モデル milk-heat-deficit-v0.1 のみ。牛の深部体温や実農場の効果を保証する値ではありません。</div>`);
 }
 function renderComparison(p, r) {
     const qid = p.view.selectedProbeId;
-    (0, dom_js_1.setHTML)('comparison', `<div class="comparison-grid">${p.scenarios.map(sc => {
+    (0, dom_js_1.setHTML)('comparison', `<div class="comparison-toolbar"><button data-action="copy-scenario" id="copy-scenario">別案へコピー</button><button data-action="reset-active" id="reset-active">基準に戻す</button><span class="micro">コピー・戻すは現在の編集案に対して実行します</span></div><div class="comparison-grid">${p.scenarios.map(sc => {
         const s = r?.scenarios.find(v => v.id === sc.id), q = s?.points.find(v => v.probeId === qid), dres = s?.dailyMilk?.resources ?? null, cost = dres && p.prices.electricityYenKwh !== null && p.prices.waterYenM3 !== null ? dres.totalKwhPerDay * p.prices.electricityYenKwh + dres.waterLPerDay / 1000 * p.prices.waterYenM3 : null, dm = s?.dailyMilk;
         const milkLine = dm?.status === 'available' ? `日乳量 <b>${(0, dom_js_1.num)(dm.yieldKgPerCowDay)}</b> kg（${dm.deltaKgPerCowDay === null ? '—' : (0, dom_js_1.signed)(dm.deltaKgPerCowDay)}）` : dm ? `日乳量 <b>計算不可</b>` : '日乳量 <b>計算中…</b>';
         return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id === p.activeScenarioId ? 'active' : ''}"><h3>${(0, dom_js_1.esc)(sc.name)}</h3><div><strong>${(0, dom_js_1.signed)(q?.deltaQrefW, 0)}</strong><small>W 放熱改善</small></div><p>局所気温 <b>${(0, dom_js_1.num)(q?.meanAirTemperatureC)}℃</b><br>${milkLine}<br>日運転費 <b>${(0, dom_js_1.num)(cost, 0)}円</b></p><span class="micro">${sc.roof.reflectance > .5 ? '遮熱あり' : '遮熱なし'} / ${sc.roof.insulationM > 0 ? '断熱あり' : '断熱なし'}</span></button>`;
     }).join('')}</div><p class="micro">運転費は入力単価による試算。初期設備費・投資回収は計算しません。日乳量は仮説モデルの牛群平均です。</p>`);
+    (0, dom_js_1.el)('reset-active').disabled = (0, project_js_1.activeScenario)(p).readOnly;
+    (0, dom_js_1.el)('copy-scenario').disabled = (0, project_js_1.activeScenario)(p).readOnly;
 }
 function renderAreas(p, r) {
     const l = (0, layout_js_1.buildLayout)(p.template), s = r?.scenarios.find(x => x.id === p.activeScenarioId);
@@ -11791,14 +12304,83 @@ function renderSettings(p) { (0, dom_js_1.setHTML)('settings-body', `<h3>モデ�
 function renderReference(p) {
     const f = p.references.fertility, calc = (0, references_js_1.fertilityReference)({ ...f, mode: 'manual', exposureAssumed: true }, null, null);
     (0, dom_js_1.setHTML)('reference-body', `<h3>乳量：掲載表をそのまま参照</h3><p>この表の表示は、現在の牛舎計算とは別です。実際の局所条件が一致する場合だけ結果カードへ反映します。</p>${(0, dom_js_1.field)('baseline-milk', '適温時の基準乳量', p.references.baselineMilkKgPerDay, 'kg/頭/日', 'data-milk-baseline', 0, 100, .5)}<div class="table-scroll"><table><thead><tr><th>気温</th><th>風速</th><th>乳量比</th><th>参考kg/頭/日</th></tr></thead><tbody>${references_js_1.MILK_ROWS.map(row => `<tr><td>${row.temperatureC}℃</td><td>${row.speedMps} m/s</td><td>${row.ratioPct}%</td><td>${(0, dom_js_1.num)((0, references_js_1.milkReference)(row.temperatureC, 65, row.speedMps, p.references.baselineMilkKgPerDay).kgPerDay, 2)}</td></tr>`).join('')}</tbody></table></div><p class="micro">全酪連COWBELL No.178 p.8、日本飼養標準2017・柴田ら1984の抜粋。相対湿度60〜70%。時間変動、補間、外挿、最近傍への丸めなし。</p>
- <hr><h3>受胎：52日間の代表環境</h3><p>人工授精1回あたりの参考成功確率です。今この瞬間の受精確率ではありません。</p><div class="assumption-box"><label><input id="fertility-linked" type="checkbox" data-fertility-linked ${f.mode === 'simulation' ? 'checked' : ''}> 選択地点の60分平均温湿度を、授精21日前〜30日後の代表環境として採用する</label><p class="micro">この操作は期間全体の環境を測定・予報したことにはなりません。全5期間が同じ条件とする追加仮定です。</p></div>
+ <hr><h3>受胎：52日間の代表環境</h3><p>人工授精1回あたりの参考成功確率です。今この瞬間の受精確率ではありません。</p><div class="assumption-box"><label><input id="fertility-linked" type="checkbox" data-fertility-linked ${f.mode === 'simulation' ? 'checked' : ''}> 選択地点の60分平均温湿度を、授精21日前〜後30日の代表環境として採用する</label><p class="micro">この操作は期間全体の環境を測定・予報したことにはなりません。全5期間が同じ条件とする追加仮定です。</p></div>
  <div class="field-grid">${(0, dom_js_1.field)('fertility-baseline', '仮の基準受胎率', f.p0 * 100, '%', 'data-fertility="p0" data-factor="0.01"', .1, 99.9, 1)}${(0, dom_js_1.field)('fertility-t', '手動の代表気温', f.temperatureC, '℃', 'data-fertility="temperatureC"', -20, 50, .5, f.mode === 'simulation')}${(0, dom_js_1.field)('fertility-rh', '手動の代表湿度', f.relativeHumidityPct, '%', 'data-fertility="relativeHumidityPct"', 0, 100, 1, f.mode === 'simulation')}</div><p>手動条件の参考値：<strong>${(0, dom_js_1.num)((calc.probability ?? 0) * 100)}%</strong> / THI ${(0, dom_js_1.num)(calc.thi, 2)}</p><p class="micro">Baccouri et al. (2025) Table 2の5期間ORを使用。基準40%は仮定。屋外観測所THIを牛位置へ適用することも追加仮定です。同じTHI区分なら値は変わりません。放射・送風・牛体散水の直接効果は上乗せしません。</p>`);
 }
 function renderEvidence(p, r) {
     const { point: q } = selectedResults(p, r);
-    (0, dom_js_1.setHTML)('evidence-body', `<div class="assumption-box"><strong>このアプリが計算すること</strong><p>設備配置 → 屋根・局所環境 → 代表牛の放熱を比較します。乳量と受胎は、それぞれ根拠がある条件だけを使う別の参照モデルです。</p></div><h3>出力を混ぜない</h3><table><tbody><tr><th>送風体感温度</th><td>T − 6√v。放射・水を℃へ上乗せしません。</td></tr><tr><th>放熱改善</th><td>対流＋放射＋蒸発−結露の、基準案からの差。体表35℃を固定した比較です。</td></tr><tr><th>乳量</th><td>表の6条件のみ。対象外はnull。補間しません。</td></tr><tr><th>受胎</th><td>5期間のTHI区分OR × 仮の基準オッズ。60分結果の52日代表化は明示的な仮定です。</td></tr></tbody></table>
+    (0, dom_js_1.setHTML)('evidence-body', `<div class="assumption-box"><strong>このアプリが計算すること</strong><p>設備配置 → 屋根・局所環境 → 代表牛の放熱を比較します。乳量と受胎は、それぞれ根拠がある条件だけを使う別の参照モデルです。</p></div><h3>出力を混ぜない</h3><table><tbody><tr><th>送風体感温度</th><td>T − 6√v。放射・水を℃へ上乗せしません。</td></tr><tr><th>放熱改善</th><td>対流＋放射＋蒸発−結露の、基準案からの差。体表35℃を固定した比較です。</td></tr><tr><th>乳量</th><td>日乳量は仮説モデル milk-heat-deficit-v0.1 の牛群平均です。掲載表の乳量は6条件のみ・対象外はnull・補間しません。</td></tr><tr><th>受胎</th><td>5期間のTHI区分OR × 仮の基準オッズ。60分結果の52日代表化は明示的な仮定です。</td></tr></tbody></table>
  <h3>現在の放熱内訳 <small>60分平均</small></h3><table><tbody>${q?.components ? Object.entries(q.components).map(([k, v]) => `<tr><th>${{ convectionW: '対流', radiationW: '放射', baseEvaporationW: '通常の有効蒸発', soakerEvaporationW: '牛体散水の蒸発', condensationW: '結露' }[k]}</th><td>${(0, dom_js_1.num)(v, 2)} W</td></tr>`).join('') : '<tr><td>計算待ち</td></tr>'}</tbody></table>
- <h3>仮定を変えた参考範囲</h3><p>低値・基準・高値の3係数セット。実際の上下限や95%信頼区間ではありません。</p><table><thead><tr><th>セット</th><th>出口風速倍率</th><th>熱伝達倍率</th><th>ミスト効率</th><th>保持水kg</th></tr></thead><tbody>${p.model.profiles.map(v => `<tr><td>${(0, dom_js_1.esc)(v.name)}</td><td>${v.outletMultiplier}</td><td>${v.hcMultiplier}</td><td>${v.mistEfficiency}</td><td>${v.maxFilmKg}</td></tr>`).join('')}</tbody></table><h3>根拠・仮定の記録</h3>${p.provenance.map(v => `<div class="source-card"><span class="tag">${(0, dom_js_1.esc)(v.classification)}</span><p>${(0, dom_js_1.esc)(v.note)}</p>${v.url ? `<a href="${(0, dom_js_1.esc)(v.url)}" target="_blank" rel="noopener noreferrer">参照元を開く ↗</a>` : ''}</div>`).join('')}<h3>モデル・保存版</h3><p><code>${(0, dom_js_1.esc)(p.model.version)}</code> / schema ${p.schemaVersion}<br>熱v0.5、乳量表v0.6、受胎v0.7を統合。v0.9で日乳量仮説モデル <code>milk-heat-deficit-v0.1</code> を追加。モデルの対応範囲は拡張していません。</p>`);
+ <h3>仮定を変えた参考範囲</h3><p>低値・基準・高値の3係数セット。実際の上下限や95%信頼区間ではありません。</p><table><thead><tr><th>セット</th><th>出口風速倍率</th><th>熱伝達倍率</th><th>ミスト効率</th><th>保持水kg</th></tr></thead><tbody>${p.model.profiles.map(v => `<tr><td>${(0, dom_js_1.esc)(v.name)}</td><td>${v.outletMultiplier}</td><td>${v.hcMultiplier}</td><td>${v.mistEfficiency}</td><td>${v.maxFilmKg}</td></tr>`).join('')}</tbody></table><h3>根拠・仮定の記録</h3>${p.provenance.map(v => `<div class="source-card"><span class="tag">${(0, dom_js_1.esc)(v.classification)}</span><p>${(0, dom_js_1.esc)(v.note)}</p>${v.url ? `<a href="${(0, dom_js_1.esc)(v.url)}" target="_blank" rel="noopener noreferrer">参照元を開く ↗</a>` : ''}`).join('')}<h3>モデル・保存版</h3><p><code>${(0, dom_js_1.esc)(p.model.version)}</code> / schema ${p.schemaVersion}<br>熱v0.5、乳量表v0.6、受胎v0.7を統合。v0.9で日乳量仮説モデル <code>milk-heat-deficit-v0.1</code> を追加。モデルの対応範囲は拡張していません。</p>`);
+}
+function renderHelp() {
+    (0, dom_js_1.setHTML)('help-body', `<h3>基本の操作</h3><table><tbody>
+ <tr><th>設備を置く</th><td>下の「ファン」「ソーカー」「ミスト」を押し、牛舎の置きたい場所をクリックします。Escまたは「中止」でやめられます。</td></tr>
+ <tr><th>設備を動かす</th><td>設備をクリックして選び、ドラッグで移動。右のパネルで高さ・向き・風速を変更します。</td></tr>
+ <tr><th>視点</th><td>背景をドラッグで回転、ホイールで拡大。Shift＋ドラッグまたは右ドラッグで平行移動。「全体・上面・側面」で決まった視点に戻れます。</td></tr>
+ <tr><th>地点を見る</th><td>色付きの面をクリックすると代表地点を選び、60分平均の結果を表示します。面の色はその地点の値で、面全体の計算ではありません。</td></tr>
+ <tr><th>案を比べる</th><td>「結果・比較」で基準案と編集案を同じ気象条件で比較します。</td></tr></tbody></table>
+ <h3>表示の読み方</h3><table><tbody>
+ <tr><th>放熱不足</th><td>基準放熱量Qrefに対して不足した量の60分平均。0は不足なし。値が大きいほど暑い地点です。</td></tr>
+ <tr><th>放熱改善</th><td>基準案との放熱差。0は「基準と同じ」で、悪化は負になります。</td></tr>
+ <tr><th>水・電力</th><td>案全体の1日分。日乳量と同じ24時間運転マスクから積算します。</td></tr>
+ <tr><th>風・散水</th><td>ファン風と水滴は作用の模式表現です。CFDではありません。</td></tr>
+ <tr><th>乳量・受胎</th><td>日乳量は仮説モデル（demo_assumption）、受胎はTHI区分の参考シナリオです。実農場の予測値ではありません。</td></tr></tbody></table>
+ <p class="micro"><button data-action="guide-restart" class="text-button">初回ガイドをもう一度見る</button> · <button data-action="evidence" class="text-button">モデルの根拠と仮定 →</button></p>`);
+}
+const PANEL_TITLES = { device: '設備', probe: '地点の結果', devices: '設備・系統', roof: '屋根対策', weather: '気象条件' };
+const SHEET_TABS = ['compare', 'areas', 'timeline', 'reference'];
+/** Panel visibility, view-mode chrome, legend, dock enablement, ghost/hint/guide. */
+function renderChrome(p, r, w) {
+    const s = (0, project_js_1.activeScenario)(p), disabled = s.readOnly;
+    const panel = (0, dom_js_1.el)('selection-panel');
+    panel.dataset.panel = w.panel ?? '';
+    panel.hidden = w.panel === null;
+    (0, dom_js_1.el)('panel-title').textContent = PANEL_TITLES[w.panel ?? ''] ?? '';
+    for (const k of ['device', 'probe', 'devices', 'roof', 'weather'])
+        (0, dom_js_1.el)(`panel-${k}`).hidden = w.panel !== k;
+    const sheet = (0, dom_js_1.el)('sheet');
+    sheet.hidden = w.sheet === null;
+    sheet.dataset.tab = w.sheet ?? '';
+    for (const t of SHEET_TABS) {
+        (0, dom_js_1.el)(`sheet-${t}`).hidden = w.sheet !== t;
+        document.querySelector(`[data-sheet=${t}]`)?.classList.toggle('active', w.sheet === t);
+    }
+    (0, dom_js_1.el)('scene-selection').textContent = (0, layout_js_1.buildLayout)(p.template).probes.find(q => q.id === p.view.selectedProbeId)?.label ?? '';
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === p.view.mode && !(p.view.mode === '3d' && p.view.realistic)));
+    document.querySelectorAll('[data-metric]').forEach(b => b.classList.toggle('active', b.dataset.metric === p.view.metric));
+    const realistic = p.view.mode === '3d' && p.view.realistic === true;
+    document.querySelector('[data-render=realistic]')?.classList.toggle('active', realistic);
+    (0, dom_js_1.el)('heatmap-switch').hidden = !realistic;
+    (0, dom_js_1.el)('realistic-note').hidden = !realistic;
+    (0, dom_js_1.el)('legend').hidden = realistic && !p.view.heatmap && !p.view.analysis;
+    for (const key of ['roof', 'flow', 'particles', 'analysis', 'heatmap'])
+        (0, dom_js_1.el)('show-' + key).checked = p.view[key] === true;
+    const m = p.view.metric;
+    (0, dom_js_1.setHTML)('legend', `<span>${m === 'delta' ? '−900 W' : m === 'speed' ? '0 m/s' : m === 'deficit' ? '0 W' : '25℃'}</span><i class="legend-gradient ${m}"></i><span>${m === 'delta' ? '+900 W' : m === 'speed' ? '3 m/s' : m === 'deficit' ? '1200 W以上' : '40℃'}</span><span class="legend-note">斜線=無効・通路等は評価対象外</span>`);
+    for (const [id] of [['place-fan'], ['place-soaker'], ['place-mist']])
+        (0, dom_js_1.el)(id).disabled = disabled;
+    (0, dom_js_1.el)('roof-button').disabled = false;
+    // Ghost placement hint: shows kind, candidate state, and a disabled-system note.
+    const pl = w.placement, hint = (0, dom_js_1.el)('placement-hint');
+    hint.hidden = !pl;
+    if (pl) {
+        const s2 = (0, project_js_1.activeScenario)(p), sysOff = pl.kind !== 'fan' && !s2.waterSystems.find(x => x.kind === pl.kind).enabled;
+        const labels = { fan: 'ファン', soaker: 'ソーカー', mist: 'ミスト' };
+        (0, dom_js_1.el)('placement-text').textContent = `${labels[pl.kind]}：置きたい場所をクリック（Escで中止）${pl.valid ? ` · ${pl.x?.toFixed(1)}m, ${pl.y?.toFixed(1)}m` : ''}${pl.x !== null && !pl.valid ? ' · ここには配置できません' : ''}${sysOff ? ' · 系統が停止中です' : ''}`;
+        (0, dom_js_1.el)('confirm-placement').disabled = !pl.valid;
+    }
+    const g = (0, dom_js_1.el)('guide-card');
+    g.hidden = w.guide.done;
+    if (!w.guide.done) {
+        const steps = [
+            { t: '暑さの分布を見る', x: '床の色は放熱不足の60分平均です。面をクリックすると地点を選べます。' },
+            { t: 'ファンを選んで動かす', x: '下の「ファン」で追加、既存の設備はドラッグで移動します。' },
+            { t: '基準案と比べる', x: '「結果・比較」で同じ気象条件の基準案との差を確認します。' },
+        ][w.guide.step];
+        (0, dom_js_1.el)('guide-title').textContent = `${w.guide.step + 1}/3 ${steps.t}`;
+        (0, dom_js_1.el)('guide-text').textContent = steps.x;
+    }
 }
 
 },
@@ -11857,15 +12439,72 @@ function updateTime(p, r) {
 }
 
 },
+"ui/workspaceState.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GUIDE_STEPS = exports.createWorkspace = void 0;
+exports.startPlacement = startPlacement;
+exports.moveCandidate = moveCandidate;
+exports.cancelPlacement = cancelPlacement;
+exports.confirmCandidate = confirmCandidate;
+exports.notifyExternalChange = notifyExternalChange;
+exports.openPanel = openPanel;
+exports.closePanel = closePanel;
+exports.openSheet = openSheet;
+exports.closeSheet = closeSheet;
+exports.guideAdvance = guideAdvance;
+exports.guideSkip = guideSkip;
+exports.guideRestart = guideRestart;
+const placement_js_1 = require("../template/placement.js");
+const createWorkspace = () => ({ panel: null, sheet: null, placement: null, guide: { step: 0, done: false } });
+exports.createWorkspace = createWorkspace;
+function startPlacement(w, kind) { w.placement = { kind, heightM: placement_js_1.PLACEMENT_HEIGHTS[kind], x: null, y: null, valid: false }; }
+function moveCandidate(w, x, y, valid) {
+    if (w.placement) {
+        w.placement.x = x;
+        w.placement.y = y;
+        w.placement.valid = valid;
+    }
+}
+function cancelPlacement(w) { w.placement = null; }
+/** Returns the pose to commit, or null while the candidate is missing/invalid. */
+function confirmCandidate(w) {
+    const pl = w.placement;
+    if (!pl || pl.x === null || pl.y === null || !pl.valid)
+        return null;
+    w.placement = null;
+    return { kind: pl.kind, x: pl.x, y: pl.y };
+}
+/** A committed/external project change must drop any unconfirmed ghost (GUI05). */
+function notifyExternalChange(w, _kind) { w.placement = null; }
+function openPanel(w, kind) { w.panel = kind; }
+function closePanel(w) { w.panel = null; }
+function openSheet(w, tab) { w.sheet = tab; }
+function closeSheet(w) { w.sheet = null; }
+exports.GUIDE_STEPS = 3;
+function guideAdvance(w) {
+    if (!w.guide.done) {
+        w.guide.step++;
+        if (w.guide.step >= exports.GUIDE_STEPS)
+            w.guide.done = true;
+    }
+}
+function guideSkip(w) { w.guide.done = true; }
+function guideRestart(w) { w.guide = { step: 0, done: false }; }
+
+},
 "mcp/commands.js":function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createCommands = createCommands;
 const project_js_1 = require("../domain/project.js");
+const store_js_1 = require("../state/store.js");
 const layout_js_1 = require("../template/layout.js");
 const faces_js_1 = require("../template/faces.js");
 const areaStats_js_1 = require("../model/areaStats.js");
 const simulation_js_1 = require("../model/simulation.js");
+const dailySimulation_js_1 = require("../model/dailySimulation.js");
+const modelInfo_js_1 = require("../model/modelInfo.js");
 const CONFIRM_INPUT = '画面の入力を確定してください';
 /** Short guidance also embedded in the MCP server instructions and tool descriptions. */
 const MODEL_NOTES = [
@@ -11882,6 +12521,9 @@ const MODEL_NOTES = [
     '各面は代表地点の値。CFDや面内全域の計算ではない。',
     '日乳量は仮説モデルの参考値。係数は明示的な仮定で、実牛舎での効果保証ではない。',
     '「なぜ」の説明は風速・放射・放熱内訳・設備作用等を根拠にする。断定が難しいときは仮説と伝え、1条件だけ変えて比較する。',
+    '条件を変えた結果の比較にはedit→get_results→undoではなくevaluateを使う。画面の状態・Undo履歴を変えずに複数の仮説を試せる。',
+    'モデルの計算構造・仮定・限界はdescribe_modelで取得できる。結果を説明する前に呼んでおく。',
+    'モデル係数はupdate_model(物理)/update_milk(乳量仮説)/update_references(参照)で変更する。仮定の感度試行はevaluateと組み合わせ、係数を変えた結果は既定値とは別モデル入力として説明する。',
 ];
 const DEVICE_COMMON = ['x', 'y', 'heightM', 'yawDeg', 'pitchDownDeg', 'enabled'];
 const PATCH_FIELDS = {
@@ -11890,6 +12532,12 @@ const PATCH_FIELDS = {
     roof: new Set(['reflectance', 'insulationM', 'sprayEnabled', 'flowLpmM2', 'onSec', 'offSec', 'hoursPerDay', 'dailyStartHour', 'pumpPowerKw']),
     system: new Set(['enabled', 'onSec', 'offSec', 'hoursPerDay', 'dailyStartHour', 'pumpPowerKw']),
     environment: new Set(['temperatureC', 'relativeHumidityPct', 'pressurePa', 'backgroundSpeedMps', 'ventilationM3sPerM2', 'solarRoofWm2']),
+    model: new Set(['surfaceTemperatureC', 'areaM2', 'wetAreaM2', 'patchLengthM', 'patchWidthM', 'baseWetFraction', 'emissivity', 'radiantOffsetC', 'kSpread', 'kDecay', 'latentHeatJkg', 'airDensityKgM3', 'airCpJkgK', 'vaporGasConstant', 'hcIntercept', 'hcSlope', 'roof', 'profiles']),
+    modelRoof: new Set(['backgroundSensibleW', 'bareResistance', 'conductivity', 'hOutConv', 'hOutRad', 'hInConv', 'hInRad', 'viewFactor', 'waterCapacityKgM2']),
+    profile: new Set(['outletMultiplier', 'hcMultiplier', 'mistEfficiency', 'maxFilmKg']),
+    milk: new Set(['potentialMilkKgPerCowDay', 'referenceCoolingWPerCow', 'responseKgPerCowDayPerW', 'maxLossFraction', 'lagWeights', 'occupancyFractions', 'responseSensitivityKgPerCowDayPerW', 'warmupDurationSec', 'evaluationDurationSec', 'timeStepSec']),
+    references: new Set(['baselineMilkKgPerDay', 'fertility']),
+    fertility: new Set(['p0', 'mode', 'exposureAssumed', 'temperatureC', 'relativeHumidityPct']),
 };
 function ensureEditable(d) {
     const s = d.status();
@@ -11947,62 +12595,133 @@ function createCommands(d) {
             modelNotes: MODEL_NOTES,
         };
     }
-    function edit(args) {
-        ensureEditable(d);
-        const p = () => store.committed;
-        const finish = (applied) => ({ operation: args.operation, activeScenarioId: p().activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(p()), undoCount: store.undoCount, ...applied });
+    /** Applies one edit operation to the given store. Shared by `edit` (live store) and `evaluate` (throwaway clone). */
+    function applyOp(s, args) {
+        const p = () => s.committed;
         switch (args.operation) {
             case 'switch_scenario': {
                 if (!args.scenarioId)
                     throw Error('scenarioIdが必要です');
-                store.switchScenario(args.scenarioId);
-                return finish({ scenario: (0, project_js_1.activeScenario)(p()).id });
+                s.switchScenario(args.scenarioId);
+                return { scenario: (0, project_js_1.activeScenario)(p()).id };
             }
             case 'copy_to_other': {
-                store.copyActiveToOther();
-                return finish({ scenario: (0, project_js_1.activeScenario)(p()).id, name: (0, project_js_1.activeScenario)(p()).name });
+                s.copyActiveToOther();
+                return { scenario: (0, project_js_1.activeScenario)(p()).id, name: (0, project_js_1.activeScenario)(p()).name };
             }
             case 'update_device': {
                 const dev = deviceById(p(), args.deviceId);
                 const patch = checkPatch(args.patch, (0, project_js_1.isFan)(dev) ? PATCH_FIELDS.fan : PATCH_FIELDS.nozzle, (0, project_js_1.isFan)(dev) ? 'ファン' : 'ノズル');
-                store.updateDevice(dev.id, patch);
-                return finish({ deviceId: dev.id, applied: deviceById(p(), dev.id) });
+                s.updateDevice(dev.id, patch);
+                return { deviceId: dev.id, applied: deviceById(p(), dev.id) };
             }
             case 'update_roof': {
                 const patch = checkPatch(args.patch, PATCH_FIELDS.roof, '屋根');
-                store.updateRoof(patch);
-                return finish({ applied: (0, project_js_1.activeScenario)(p()).roof });
+                s.updateRoof(patch);
+                return { applied: (0, project_js_1.activeScenario)(p()).roof };
             }
             case 'update_system': {
                 if (!(0, project_js_1.activeScenario)(p()).waterSystems.some(w => w.id === args.systemId))
                     throw Error(`系統が見つかりません: ${args.systemId}`);
                 const patch = checkPatch(args.patch, PATCH_FIELDS.system, '水系統');
-                store.updateSystem(args.systemId, patch);
-                return finish({ systemId: args.systemId, applied: (0, project_js_1.activeScenario)(p()).waterSystems.find(w => w.id === args.systemId) });
+                s.updateSystem(args.systemId, patch);
+                return { systemId: args.systemId, applied: (0, project_js_1.activeScenario)(p()).waterSystems.find(w => w.id === args.systemId) };
             }
             case 'update_environment': {
                 const patch = checkPatch(args.patch, PATCH_FIELDS.environment, '共通気象');
-                store.updateEnvironment(patch);
-                return finish({ applied: p().environment });
+                s.updateEnvironment(patch);
+                return { applied: p().environment };
+            }
+            case 'update_model': {
+                const patch = checkPatch(args.patch, PATCH_FIELDS.model, 'モデル');
+                const roof = patch.roof;
+                if (roof) {
+                    const bad = Object.keys(roof).filter(k => !PATCH_FIELDS.modelRoof.has(k));
+                    if (bad.length)
+                        throw Error(`モデル屋根のpatchに許可されないフィールドがあります: ${bad.join(', ')}`);
+                }
+                const profiles = patch.profiles;
+                if (profiles)
+                    for (const [id, sub] of Object.entries(profiles)) {
+                        if (!p().model.profiles.some(x => x.id === id))
+                            throw Error(`プロファイルが見つかりません: ${id}`);
+                        const bad = Object.keys(sub).filter(k => !PATCH_FIELDS.profile.has(k));
+                        if (bad.length)
+                            throw Error(`プロファイル${id}のpatchに許可されないフィールドがあります: ${bad.join(', ')}`);
+                    }
+                s.updateModel(patch);
+                return { applied: p().model };
+            }
+            case 'update_milk': {
+                const patch = checkPatch(args.patch, PATCH_FIELDS.milk, '乳量モデル');
+                s.updateMilk(patch);
+                return { applied: p().milkSimulation };
+            }
+            case 'update_references': {
+                const patch = checkPatch(args.patch, PATCH_FIELDS.references, '参照');
+                const { fertility, ...flat } = patch;
+                const merged = { ...flat };
+                if (fertility) {
+                    const bad = Object.keys(fertility).filter(k => !PATCH_FIELDS.fertility.has(k));
+                    if (bad.length)
+                        throw Error(`受胎参照のpatchに許可されないフィールドがあります: ${bad.join(', ')}`);
+                    merged.fertility = { ...p().references.fertility, ...fertility };
+                }
+                s.updateReferences(merged);
+                return { applied: p().references };
             }
             case 'add_device': {
                 if (args.kind !== 'fan' && args.kind !== 'soaker' && args.kind !== 'mist')
                     throw Error(`不明な設備種別です: ${args.kind}`);
-                const id = args.kind === 'fan' ? store.addFan() : store.addNozzle(args.kind);
-                return finish({ deviceId: id, applied: deviceById(p(), id) });
+                if ((args.x != null) !== (args.y != null))
+                    throw Error('xとyは両方指定してください');
+                const pose = args.x != null ? { x: args.x, y: args.y } : undefined;
+                const id = args.kind === 'fan' ? s.addFan(pose) : s.addNozzle(args.kind, pose);
+                return { deviceId: id, applied: deviceById(p(), id) };
             }
             case 'duplicate_device': {
                 deviceById(p(), args.deviceId);
-                const id = store.duplicateDevice(args.deviceId);
-                return finish({ deviceId: id, applied: deviceById(p(), id) });
+                const id = s.duplicateDevice(args.deviceId);
+                return { deviceId: id, applied: deviceById(p(), id) };
             }
             case 'remove_device': {
                 deviceById(p(), args.deviceId);
-                store.removeDevice(args.deviceId);
-                return finish({ removedDeviceId: args.deviceId });
+                s.removeDevice(args.deviceId);
+                return { removedDeviceId: args.deviceId };
             }
             default: throw Error(`不明なoperationです: ${args.operation}`);
         }
+    }
+    function edit(args) {
+        ensureEditable(d);
+        const applied = applyOp(store, args);
+        return { operation: args.operation, activeScenarioId: store.committed.activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(store.committed), undoCount: store.undoCount, ...applied };
+    }
+    /** Applies ops to a cloned project, simulates it, and returns results. Never touches the live store. */
+    async function evaluate(args) {
+        if (!args || !Array.isArray(args.operations))
+            throw Error('operationsに操作の配列が必要です');
+        const tmp = new store_js_1.ProjectStore(structuredClone(store.committed));
+        if (args.scenarioId && args.scenarioId !== tmp.committed.activeScenarioId)
+            tmp.switchScenario(args.scenarioId);
+        const applied = args.operations.map(op => applyOp(tmp, op));
+        const job = await d.evaluate(tmp.committed, { daily: args.includeDaily === true });
+        if (job.daily)
+            (0, dailySimulation_js_1.mergeDaily)(job.thermal, job.daily, job.dailyMilkStatus);
+        const p = tmp.committed, areas = (0, faces_js_1.buildAreas)(layout(p));
+        const scenarioOf = (id) => {
+            const sr = job.thermal.scenarios.find(s => s.id === id);
+            if (!sr)
+                return null;
+            const meta = p.scenarios.find(s => s.id === id), { series: _, ...roof } = sr.roof;
+            return { id, name: meta.name, readOnly: meta.readOnly, warnings: sr.warnings, areas: areas.map(a => (0, areaStats_js_1.areaStats)(sr.points, a)), resources: sr.resources, trialWaterL: sr.trialWaterL, trialKwh: sr.trialKwh, roof, dailyMilk: job.daily ? sr.dailyMilk : undefined };
+        };
+        return {
+            scenarioId: p.activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(p), operations: applied,
+            result: scenarioOf(p.activeScenarioId), baseline: scenarioOf(p.baselineScenarioId),
+            dailyIncluded: !!job.daily,
+            note: '仮の複製へ操作を適用して計算した結果です。画面の案・設備・Undo履歴は変わっていません',
+        };
     }
     function setView(args) {
         const p = store.committed, l = layout(p), patch = {};
@@ -12044,6 +12763,7 @@ function createCommands(d) {
         store.setView(patch);
         return store.committed.view;
     }
+    function describe() { return { model: (0, modelInfo_js_1.describeModel)(store.committed), modelNotes: MODEL_NOTES }; }
     function getResults(args = {}) {
         const p = store.committed, l = layout(p);
         const probeId = args.probeId ?? p.view.selectedProbeId;
@@ -12080,7 +12800,95 @@ function createCommands(d) {
         store.undo();
         return { changed, activeScenarioId: store.committed.activeScenarioId, inputHash: (0, simulation_js_1.inputHash)(store.committed), undoCount: store.undoCount };
     }
-    return { get_state: getState, edit, set_view: setView, get_results: getResults, undo };
+    return { get_state: getState, edit, evaluate, set_view: setView, get_results: getResults, undo, describe_model: describe };
+}
+
+},
+"model/modelInfo.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.describeModel = describeModel;
+const layout_js_1 = require("../template/layout.js");
+const defaults_js_1 = require("../data/defaults.js");
+const milk_js_1 = require("./milk.js");
+/** Paths where the project's assumptions differ from the shipped defaults — i.e. a
+ *  sensitivity experiment, not the documented/reference coefficients. */
+const diffFields = (cur, def, prefix, skip = []) => Object.keys(def).filter(k => !skip.includes(k) && JSON.stringify(cur[k]) !== JSON.stringify(def[k]))
+    .map(k => `${prefix}.${k}=${JSON.stringify(cur[k])}（既定 ${JSON.stringify(def[k])}）`);
+/** Structured, LLM-facing description of what the simulation computes and assumes.
+ *  Values are read from the supplied project so they stay truthful after
+ *  update_model/update_milk edits or evaluate runs — modifiedFromDefaults marks
+ *  which coefficients are no longer the documented defaults.
+ *  Kept next to the model so the MCP `describe_model` tool and tests share one source.
+ *  Reference docs: reference/thermal/MODEL.md (v0.5 heat), docs/MILK_HEAT_MODEL_V0_1.md (daily milk). */
+function describeModel(p) {
+    const l = (0, layout_js_1.buildLayout)(p.template), m = p.model, roof = m.roof, ms = p.milkSimulation, occ = ms.occupancyFractions;
+    const stall = l.probes.filter(q => q.kind === 'stall').length;
+    const feed = l.probes.filter(q => q.kind === 'feeding').length;
+    const wait = l.probes.filter(q => q.kind === 'waiting').length;
+    const hours = (f) => `${Math.round(f * 240) / 10}h`;
+    const modifiedFromDefaults = [
+        ...diffFields(m, defaults_js_1.MODEL, 'model', ['version', 'roof', 'profiles']),
+        ...diffFields(roof, defaults_js_1.MODEL.roof, 'model.roof', ['version']),
+        ...m.profiles.flatMap(pr => { const d = defaults_js_1.MODEL.profiles.find(x => x.id === pr.id); return d ? diffFields(pr, d, `model.profiles.${pr.id}`, ['id', 'name']) : [`model.profiles.${pr.id}: 既定セットに存在しないプロファイル`]; }),
+        ...diffFields(ms, milk_js_1.DEFAULT_MILK_SIMULATION, 'milkSimulation', ['modelId', 'mode', 'weatherMode', 'operationPolicy', 'assumptionClass']),
+    ];
+    return {
+        modelVersion: p.model.version,
+        roofModel: p.model.roof.version,
+        milkModel: p.milkSimulation.modelId,
+        purpose: '設備配置・屋根条件・共通気象を変え、代表牛の正味放熱量・不足・資源消費を案（scenario）間で比較する縮約モデル。実牛舎の温度・乳量・受胎の確定予測やCFDではない',
+        timeBase: '60分試行を1秒刻みで積分。設備はONから開始、保持水は0から開始。日乳量は別途24時間の代表日集計（warmup→評価日）。timeSecの再生は表示のみで物理を変えない',
+        space: {
+            barn: `長さ${p.template.lengthM}m×幅${p.template.widthM}m、軒4.0m・棟8.7mの切妻`,
+            probes: `${l.probes.length}個の独立した代表地点（牛床${stall}・採食${feed}・待機${wait}）。各地点は「そこに1頭いる牛」の独立した比較で、同時存在の頭数負荷を牛舎収支へ合算・フィードバックしない`,
+        },
+        inputs: {
+            environment: '共通気象 temperatureC/relativeHumidityPct/pressurePa/backgroundSpeedMps/ventilationM3sPerM2/solarRoofWm2。update_environmentは全案に効く',
+            roof: 'reflectance日射反射率/insulationM断熱厚さ/sprayEnabled散水・flowLpmM2・onSec/offSec周期/hoursPerDay日運転・dailyStartHour開始時刻/pumpPowerKw',
+            fan: 'x,y,heightM位置・yawDeg,pitchDownDeg向き・diameterM/outletSpeedMps/powerKw・運転予定',
+            nozzle: 'kind=soaker(牛体に濡れる)/mist(空気蒸発)、flowLpm/halfAngleDeg・運転予定。所属はwaterSystems(kind別)の系統設定に従う',
+        },
+        computation: [
+            '屋根: 日射・反射・熱抵抗・内外対流/線形放射・散水の水分収支で外面/下面/舎内気温/輻射温度を秒積算',
+            `風: 背景風速+各ファンの噴流をレイキャスト(256/1024線)で重ね、拡散kSpread=${m.kSpread}・減衰kDecay=${m.kDecay}で地点風速へ。ファン運転予定の短時間運転は60分平均に反映`,
+            `ソーカー: 捕捉率で牛体保持水へ溜め、蒸発・結露・流出を台帳化(保持水上限はプロファイルのmaxFilmKg)`,
+            'ミスト: 供給量と蒸発作用は別指標。湿度飽和で蒸発・冷却は止まる',
+            `牛体収支: 対流(hc=${m.hcIntercept}+${m.hcSlope}×√v)+放射+基礎蒸発+ソーカー蒸発+結露(負)を秒ごとに計算し3600秒平均=meanQrefW`,
+            `空気: 顕熱・潜熱を1つの集中気塊として集約。換気量${p.environment.ventilationM3sPerM2}m³/s/m²×床面積、背景顕熱${roof.backgroundSensibleW}W`,
+            `日集計: 代表地点へ滞在時間の重み(牛床${hours(occ.stall)}/採食${hours(occ.feeding)}/その他${hours(occ.waiting)})を掛け、放熱不足を24時間積算して乳量仮説へ接続`,
+        ],
+        outputs: {
+            meanQrefW: '地点の正味放熱量[W]。components内訳=convectionW/radiationW/baseEvaporationW/soakerEvaporationW/condensationW',
+            deltaQrefW: '基準案の同地点との放熱差[W]。正=改善',
+            meanDeficitW: `秒ごとのmax(0, Qref−Q)を積算した60分平均[W]。Qref=${ms.referenceCoolingWPerCow}Wは仮定値`,
+            'action系': 'fanActionFraction/soakerArrivalFraction/mistEvaporationActionFraction=作用した時間割合、mistSupplyFraction=供給割合(蒸発とは別)',
+            meanFilmKg: '保持水の平均質量。film台帳=captured/condensed/evaporated/runoff/final/maxResidual',
+            resources: '系統別・合計のwaterLPerDay/fanKwhPerDay/pumpKwhPerDay/totalKwhPerDay。trialWaterL/trialKwhは60分試行分',
+            roof: 'meanOuterC/meanUnderC/meanAirC/meanRadiantCと散水収支suppliedL/evaporatedKg/runoffL',
+            dailyMilk: '仮説モデルの日乳量。Y=Y0−min(Y0×maxLossFraction, beta×不足積算E)。resourcesは日集計の水量・電力量',
+        },
+        keyAssumptions: {
+            referenceCoolingWPerCow: ms.referenceCoolingWPerCow,
+            cow: `体表${m.surfaceTemperatureC}℃固定・有効面積${m.areaM2}m²・濡れ面積${m.wetAreaM2}m²・基礎濡れ割合${m.baseWetFraction}・放射率${m.emissivity}・牛→屋根形態係数${roof.viewFactor}`,
+            roof: `熱抵抗${roof.bareResistance}m²K/W・熱伝導率${roof.conductivity}W/mK・外対流${roof.hOutConv}・外放射${roof.hOutRad}・内対流${roof.hInConv}・内放射${roof.hInRad}W/m²K・保水容量${roof.waterCapacityKgM2}kg/m²`,
+            air: `換気量${p.environment.ventilationM3sPerM2}m³/s/m²×床面積、背景顕熱${roof.backgroundSensibleW}W、壁・床の放射背景温度=外気`,
+            milk: `Y0=${ms.potentialMilkKgPerCowDay}kg, beta=${ms.responseKgPerCowDayPerW}kg/頭/日/W, 損失上限${Math.round(ms.maxLossFraction * 1000) / 10}%, 遅れ${ms.lagWeights.join('/')}, 滞在=牛床${hours(occ.stall)}/採食${hours(occ.feeding)}/その他${hours(occ.waiting)}, warmup${ms.warmupDurationSec / 3600}h+評価${ms.evaluationDurationSec / 3600}h・刻み${ms.timeStepSec}s — 回帰係数ではなくdemo_assumption`,
+            profiles: `感度の幅であって95%信頼区間ではない。現在値: ${m.profiles.map(pr => `${pr.id}(出口×${pr.outletMultiplier},hc×${pr.hcMultiplier},ミスト効率${pr.mistEfficiency},保持水上限${pr.maxFilmKg}kg)`).join(' / ')}`,
+        },
+        modifiedFromDefaults,
+        modifiedNote: 'modifiedFromDefaultsに列がある場合、その係数は文書化された既定値から変更された感度実験値(update_model/update_milk経由)。既定モデルへの検証・出典はその変更値へは適用されない',
+        limits: [
+            '代表地点の値であって面内全域やCFD解ではない。区画平均は地点の単純平均(滞在・頭数加重ではない)',
+            '牛体散水の水蒸気は舎内湿度へ戻さない仮定(結果warningsにも明記)',
+            '屋根の放射・日射・散水はモデル仮定の縮約。実測校正なし',
+            '日乳量・受胎は別の仮説/参照モデルで熱結果の延長ではない。W→THI→深部体温の換算はしない',
+            'null/invalid/未計算は0と別物。有効点が1つでも欠けると区画平均は未評価',
+            '完全に不足0は、設備の冷却能力が外気条件を超えられない場合は到達しない',
+        ],
+        validation: 'reference/thermal(v0.5 Python参照との数値一致テスト V08-PY*)、reference/fertility(v0.7)。モデル式・係数はこれらで固定',
+        docs: ['reference/thermal/MODEL.md', 'docs/MILK_HEAT_MODEL_V0_1.md', 'docs/cooling_planner_decisions_v0_6.md', 'docs/DECISIONS_v0_8.md'],
+    };
 }
 
 },
@@ -12122,7 +12930,7 @@ function startMcpBridge(opts) {
             return;
         }
         try {
-            reply(id, { ok: true, data: fn(args) });
+            Promise.resolve(fn(args)).then(data => reply(id, { ok: true, data })).catch(e => reply(id, { ok: false, error: e instanceof Error ? e.message : String(e) }));
         }
         catch (e) {
             reply(id, { ok: false, error: e instanceof Error ? e.message : String(e) });

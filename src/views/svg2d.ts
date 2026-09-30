@@ -1,4 +1,4 @@
-import type {Project,SimulationResult} from '../domain/project.js';
+import type {Project,SimulationResult,Vec3} from '../domain/project.js';
 import {activeScenario} from '../domain/project.js';
 import {buildLayout} from '../template/layout.js';
 import {buildFaces,buildAreas} from '../template/faces.js';
@@ -6,7 +6,9 @@ import {deficitUnreached} from '../model/areaStats.js';
 import type {SceneView,ViewCallbacks} from './common.js';
 import {escapeHtml as esc,zoneColor,metricColor,metricValue} from './common.js';
 export class SVG2D implements SceneView{
- readonly rendererName='SVG 2D';private svg:SVGSVGElement;private p:Project|null=null;private r:SimulationResult|null=null;private abort=new AbortController();private drag:{id:string;startX:number;startY:number;offsetX:number;offsetY:number;pointerId:number;started:boolean}|null=null;
+ readonly rendererName='SVG 2D';private svg:SVGSVGElement;private p:Project|null=null;private r:SimulationResult|null=null;private abort=new AbortController();private drag:{id:string;startX:number;startY:number;offsetX:number;offsetY:number;pointerId:number;started:boolean}|null=null;private placement=false;
+ setPlacement(mode:{heightM:number}|null){this.placement=!!mode;if(!mode)this.cb.placeMove?.(null)}
+ screenPoint(v:Vec3){const m=this.svg.getScreenCTM();if(!m)return{x:0,y:0,visible:false};const q=new DOMPoint(v[0],v[2]).matrixTransform(m);return{x:q.x,y:q.y,visible:true}}
  constructor(container:HTMLElement,private cb:ViewCallbacks){
   this.svg=document.createElementNS('http://www.w3.org/2000/svg','svg');this.svg.setAttribute('role','img');this.svg.setAttribute('aria-label','牛舎2D配置図。設備を選択してドラッグ');this.svg.classList.add('scene-svg');this.svg.dataset.testid='scene2d';container.append(this.svg);const opts={signal:this.abort.signal};this.svg.addEventListener('pointerdown',this.down,opts);this.svg.addEventListener('pointermove',this.move,opts);this.svg.addEventListener('pointerup',this.up,opts);this.svg.addEventListener('pointercancel',this.cancel,opts);this.svg.addEventListener('keydown',e=>{const id=(e.target as Element).closest('[data-device]')?.getAttribute('data-device'),probe=(e.target as Element).closest('[data-probe]')?.getAttribute('data-probe');if(e.key==='Enter'){if(id)this.cb.selectDevice(id);else if(probe)this.cb.selectProbe(probe)}},opts);window.addEventListener('keydown',e=>{if(e.key==='Escape')this.cancel()},opts);
  }
@@ -34,8 +36,13 @@ export class SVG2D implements SceneView{
   for(const w of s.waterSystems)for(const n of w.nozzles){const dy=w.kind==='mist'?.18:-.18,color=w.enabled&&n.enabled?(w.kind==='mist'?'#9980b5':'#458da8'):'#b8c6be';html+=`<g data-device="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.label)}"><circle cx="${n.x}" cy="${n.y+dy}" r=".22" fill="${color}" stroke="${p.view.selectedDeviceId===n.id?'#d38a32':'white'}" stroke-width=".09"/><circle cx="${n.x}" cy="${n.y+dy}" r=".3" fill="transparent"/></g>`}
   this.svg.innerHTML=html;
  }
- private down=(e:PointerEvent)=>{if(!this.p||e.button!==0)return;const target=e.target as Element,id=target.closest('[data-device]')?.getAttribute('data-device'),probe=target.closest('[data-probe]')?.getAttribute('data-probe');if(probe){this.cb.selectProbe(probe);return}if(!id)return;e.preventDefault();this.cb.selectDevice(id);if(activeScenario(this.p).readOnly)return;const d=[...activeScenario(this.p).fans,...activeScenario(this.p).waterSystems.flatMap(w=>w.nozzles)].find(d=>d.id===id)!,q=this.xy(e);this.drag={id,startX:e.clientX,startY:e.clientY,offsetX:d.x-q.x,offsetY:d.y-q.y,pointerId:e.pointerId,started:false};this.svg.setPointerCapture(e.pointerId)};
- private move=(e:PointerEvent)=>{const d=this.drag;if(!d||!this.p)return;if(!d.started&&Math.hypot(e.clientX-d.startX,e.clientY-d.startY)<3)return;try{if(!d.started)this.cb.begin();d.started=true;const q=this.xy(e);this.cb.preview(d.id,{x:Math.max(0,Math.min(this.p.template.lengthM,q.x+d.offsetX)),y:Math.max(0,Math.min(this.p.template.widthM,q.y+d.offsetY))})}catch(err){this.cb.error(String(err));this.cancel()}};
+ private down=(e:PointerEvent)=>{if(!this.p||e.button!==0)return;
+  // Ghost placement: click sets the candidate; mouse/pen confirms immediately.
+  if(this.placement){const q=this.xy(e);this.cb.placeMove?.([q.x,q.y]);if(e.pointerType==='mouse'||e.pointerType==='pen')this.cb.placeCommit?.();return}
+  const target=e.target as Element,id=target.closest('[data-device]')?.getAttribute('data-device'),probe=target.closest('[data-probe]')?.getAttribute('data-probe');if(probe){this.cb.selectProbe(probe);return}if(!id)return;e.preventDefault();this.cb.selectDevice(id);if(activeScenario(this.p).readOnly)return;const d=[...activeScenario(this.p).fans,...activeScenario(this.p).waterSystems.flatMap(w=>w.nozzles)].find(d=>d.id===id)!,q=this.xy(e);this.drag={id,startX:e.clientX,startY:e.clientY,offsetX:d.x-q.x,offsetY:d.y-q.y,pointerId:e.pointerId,started:false};this.svg.setPointerCapture(e.pointerId)};
+ private move=(e:PointerEvent)=>{const d=this.drag;
+  if(!d&&this.placement&&this.p){const q=this.xy(e);this.cb.placeMove?.([q.x,q.y]);return}
+  if(!d||!this.p)return;if(!d.started&&Math.hypot(e.clientX-d.startX,e.clientY-d.startY)<3)return;try{if(!d.started)this.cb.begin();d.started=true;const q=this.xy(e);this.cb.preview(d.id,{x:Math.max(0,Math.min(this.p.template.lengthM,q.x+d.offsetX)),y:Math.max(0,Math.min(this.p.template.widthM,q.y+d.offsetY))})}catch(err){this.cb.error(String(err));this.cancel()}};
  private up=()=>{const d=this.drag;this.drag=null;if(d?.started)this.cb.commit();if(d&&this.svg.hasPointerCapture(d.pointerId))this.svg.releasePointerCapture(d.pointerId)};
  private cancel=()=>{const d=this.drag;this.drag=null;if(d?.started)this.cb.cancel();if(d&&this.svg.hasPointerCapture(d.pointerId))this.svg.releasePointerCapture(d.pointerId)};
  dispose(){this.abort.abort();this.svg.remove()}

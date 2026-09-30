@@ -1,7 +1,7 @@
 """MCP PoC golden path: a real MCP stdio client drives the actual open page.
 
 Spawns scripts/mcp-server.mjs (static + /bridge + stdio MCP) and loads
-http://127.0.0.1:PORT/?mcp=1 in headless Chromium, then calls the 5 tools
+http://127.0.0.1:PORT/?mcp=1 in headless Chromium, then calls the tools
 over raw JSON-RPC and asserts the screen's own state (__DCS__) changed.
 """
 from pathlib import Path
@@ -42,6 +42,12 @@ class McpClient:
 def ready(page):
     page.wait_for_function("window.__DCS__ && window.__DCS__.result() && document.querySelector('#status').dataset.state==='ready' && window.__DCS__.hash()===window.__DCS__.result().inputHash",timeout=60000)
 def snap(page):return page.evaluate('window.__DCS__.snapshot()')
+def workspace(page):return page.evaluate('window.__DCS__.workspace()')
+def open_panel(page,which):
+    """Game-UI: the probe/device/roof controls live in a hidden right panel."""
+    if workspace(page)['panel']!=which:
+        btn={'probe':'#sum-deficit','devices':'#devices-button','roof':'#roof-button'}[which]
+        page.locator(btn).click()
 
 @pytest.fixture(scope='module')
 def client():
@@ -67,7 +73,12 @@ def test_mcp_01_handshake_tools_and_state_reflects_open_page(client,page):
     init=client.call('initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'pytest','version':'0'}})
     assert init['result']['serverInfo']['name']=='cooling-planner'
     tools=client.call('tools/list')['result']['tools']
-    assert {t['name'] for t in tools}=={'get_state','edit','set_view','get_results','undo'}
+    assert {t['name'] for t in tools}=={'get_state','edit','evaluate','set_view','get_results','undo','describe_model'}
+    err,mi=client.tool('describe_model')
+    assert not err
+    assert mi['model']['modelVersion']=='cooling-integrated-v0.9'
+    assert mi['model']['keyAssumptions']['referenceCoolingWPerCow']==630
+    assert len(mi['model']['limits'])>=4
     err,st=client.tool('get_state')
     assert not err
     p=snap(page)
@@ -75,6 +86,7 @@ def test_mcp_01_handshake_tools_and_state_reflects_open_page(client,page):
     assert st['inputHash']==page.evaluate('window.__DCS__.hash()')
     assert len(st['scenarios'])==3 and len(st['probes'])==70
     # a person changing the selection on screen is visible to the next tool call
+    open_panel(page,'probe')
     page.locator('#probe-select').select_option('stall-A-01')
     err,st2=client.tool('get_state')
     assert st2['view']['selectedProbeId']=='stall-A-01'
@@ -145,14 +157,47 @@ def test_mcp_06_second_tab_is_rejected_and_shows_message(client,page,browser):
     err,st=client.tool('get_state')
     assert not err and st['activeScenarioId']
 
-def test_mcp_07_normal_http_page_has_no_bridge(client,browser):
+def test_mcp_07_evaluate_is_non_destructive(client,page):
+    err,st=client.tool('get_state')
+    assert not err
+    live_hash=st['inputHash'];undo0=st['undoCount'];active=st['activeScenarioId']
+    err,r=client.tool('evaluate',{'scenarioId':active,'operations':[
+        {'operation':'update_roof','patch':{'reflectance':0.7,'insulationM':0.02,'sprayEnabled':True}},
+        {'operation':'add_device','kind':'fan','x':18.2,'y':15},
+    ]})
+    assert not err,r
+    assert r['inputHash']!=live_hash
+    assert r['scenarioId']==active and r['dailyIncluded'] is False
+    stall=[a for a in r['result']['areas'] if a['id']=='stalls'][0]
+    base=[a for a in r['baseline']['areas'] if a['id']=='stalls'][0]
+    assert stall['meanDeficitW']<base['meanDeficitW']
+    # live project, hash, undo history, and screen are untouched
+    err,st2=client.tool('get_state')
+    assert st2['inputHash']==live_hash and st2['undoCount']==undo0 and st2['activeScenarioId']==active
+    assert page.evaluate('window.__DCS__.metrics().undoCount')==undo0
+    assert page.evaluate('window.__DCS__.hash()')==live_hash
+    # an invalid op inside a hypothetical errors out and still mutates nothing
+    err,msg=client.tool('evaluate',{'operations':[{'operation':'add_device','kind':'fan','x':-5,'y':2}]})
+    assert err is True
+    err,st3=client.tool('get_state')
+    assert st3['inputHash']==live_hash
+    # model coefficients are adjustable on the hypothetical clone, never on the live project
+    err,r2=client.tool('evaluate',{'operations':[{'operation':'update_model','patch':{'kSpread':0.05,'profiles':{'reference':{'mistEfficiency':0.9}}}},{'operation':'update_milk','patch':{'referenceCoolingWPerCow':400}}]})
+    assert not err,r2
+    assert r2['inputHash']!=live_hash
+    err,st4=client.tool('get_state')
+    assert st4['inputHash']==live_hash
+
+def test_mcp_08_normal_http_page_has_no_bridge(client,browser):
     ctx=browser.new_context()
     pg=ctx.new_page()
     pg.goto(BASE+'/',wait_until='load')
     ready(pg)
     assert pg.evaluate("window.__DCS__.hash()").strip()!=''
     # same page without ?mcp=1 still edits locally
-    pg.locator('#roof-coating').check()
+    open_panel(pg,'roof')
+    if not pg.locator('#roof-coating').is_checked():
+        pg.locator('label:has(#roof-coating)').click()
     ready(pg)
     assert snap(pg)['scenarios'][1]['roof']['reflectance']==.7
     ctx.close()

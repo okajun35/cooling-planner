@@ -62,7 +62,7 @@ httpServer.on('upgrade',(req,socket)=>{
  });
 });
 
-function callBrowser(command,args){
+function callBrowser(command,args,timeoutMs=10000){
  return new Promise((resolve,reject)=>{
   if(!browser||browser.readyState!==browser.OPEN){
    reject(new Error(`ブラウザが接続されていません。${PAGE_URL} を1タブで開いてください`));return;
@@ -71,8 +71,8 @@ function callBrowser(command,args){
   const id=nextId++;
   const timer=setTimeout(()=>{
    pending.delete(id);
-   reject(new Error('ブラウザから応答がありません（10秒）。変更の成否が不明です。get_stateで画面の状態を確認してください'));
-  },10000);
+   reject(new Error(`ブラウザから応答がありません（${Math.round(timeoutMs/1000)}秒）。変更の成否が不明です。get_stateで画面の状態を確認してください`));
+  },timeoutMs);
   pending.set(id,{resolve,reject,timer});
   browser.send(JSON.stringify({id,command,args}));
  });
@@ -80,7 +80,7 @@ function callBrowser(command,args){
 
 // ---- MCP tools ----------------------------------------------------------------
 const asText=(data,isError=false)=>({content:[{type:'text',text:typeof data==='string'?data:JSON.stringify(data)}],...(isError?{isError:true}:{})});
-const relay=async(command,args)=>{try{return asText(await callBrowser(command,args))}catch(e){return asText(e instanceof Error?e.message:String(e),true)}};
+const relay=async(command,args,timeoutMs)=>{try{return asText(await callBrowser(command,args,timeoutMs))}catch(e){return asText(e instanceof Error?e.message:String(e),true)}};
 
 const DEVICE_PATCH=z.strictObject({
  x:z.number().optional().describe('牛舎の長さ方向 [m]'),
@@ -104,6 +104,37 @@ const ENV_PATCH=z.strictObject({
  temperatureC:z.number().optional(),relativeHumidityPct:z.number().optional(),pressurePa:z.number().optional(),
  backgroundSpeedMps:z.number().optional(),ventilationM3sPerM2:z.number().optional(),solarRoofWm2:z.number().optional(),
 });
+const MODEL_PATCH=z.strictObject({
+ surfaceTemperatureC:z.number().optional().describe('牛体表温度℃'),
+ areaM2:z.number().optional(),wetAreaM2:z.number().optional(),patchLengthM:z.number().optional(),patchWidthM:z.number().optional(),
+ baseWetFraction:z.number().optional(),emissivity:z.number().optional(),radiantOffsetC:z.number().optional(),
+ kSpread:z.number().optional().describe('ファン噴流の拡散係数'),kDecay:z.number().optional().describe('ファン噴流の減衰係数'),
+ latentHeatJkg:z.number().optional(),airDensityKgM3:z.number().optional(),airCpJkgK:z.number().optional(),vaporGasConstant:z.number().optional(),
+ hcIntercept:z.number().optional().describe('対流熱伝達率の切片 hc=a+b√v'),hcSlope:z.number().optional().describe('対流熱伝達率の傾き'),
+ roof:z.strictObject({
+  backgroundSensibleW:z.number().optional(),bareResistance:z.number().optional(),conductivity:z.number().optional(),
+  hOutConv:z.number().optional(),hOutRad:z.number().optional(),hInConv:z.number().optional(),hInRad:z.number().optional(),
+  viewFactor:z.number().optional(),waterCapacityKgM2:z.number().optional(),
+ }).optional().describe('屋根モデル係数'),
+ profiles:z.record(z.string(),z.strictObject({
+  outletMultiplier:z.number().optional(),hcMultiplier:z.number().optional(),mistEfficiency:z.number().optional(),maxFilmKg:z.number().optional(),
+ })).optional().describe('プロファイルID(low/reference/high)→係数。感度仮定セットの調整'),
+}).describe('物理モデルの係数。仮定の感度試行に使う。モデル式そのものは変えられない');
+const MILK_PATCH=z.strictObject({
+ potentialMilkKgPerCowDay:z.number().optional(),referenceCoolingWPerCow:z.number().optional().describe('放熱不足の基準放熱量Qref W'),
+ responseKgPerCowDayPerW:z.number().optional().describe('不足1W当たりの乳量応答係数beta'),maxLossFraction:z.number().optional(),
+ lagWeights:z.tuple([z.number(),z.number(),z.number()]).optional(),
+ occupancyFractions:z.strictObject({stall:z.number(),feeding:z.number(),waiting:z.number()}).optional(),
+ responseSensitivityKgPerCowDayPerW:z.tuple([z.number(),z.number(),z.number()]).optional(),
+ warmupDurationSec:z.number().optional(),evaluationDurationSec:z.number().optional(),timeStepSec:z.number().optional(),
+}).describe('乳量仮説モデル(milk-heat-deficit-v0.1)の係数');
+const REFERENCES_PATCH=z.strictObject({
+ baselineMilkKgPerDay:z.number().nullable().optional(),
+ fertility:z.strictObject({
+  p0:z.number().optional(),mode:z.enum(['manual','simulation']).optional(),exposureAssumed:z.boolean().optional(),
+  temperatureC:z.number().optional(),relativeHumidityPct:z.number().optional(),
+ }).optional(),
+});
 
 function createServer(){
  const server=new McpServer({name:'cooling-planner',version:'0.9.0-preview.1',instructions:[
@@ -111,12 +142,15 @@ function createServer(){
   `先に get_state で現状・ID・選択対象を確認する。ブラウザ未接続なら ${PAGE_URL} を1タブで開いてもらう。`,
   '「この牛」は選択地点として解釈する。座標はx=牛舎長さ方向、y=幅方向、heightM=高さ。長さm、向きdeg。',
   '編集は現在の案へ適用する。基準案は読取専用。update_environmentは全案に効く。',
+ 'モデル係数はupdate_model(物理)/update_milk(乳量仮説)/update_references(参照設定)で変更する。仮定の感度試行はevaluateと組み合わせる。モデル式・バージョン識別子は変更できない。',
   '変更前を残す依頼は copy_to_other（現在の編集案をもう一方の編集案へ上書きコピーし、その案へ切替）を使う。',
   '数値説明は get_results の計算結果を使う。未計算・null・invalidをゼロと説明しない。',
   'meanQrefWは地点の正味放熱量、deltaQrefWは基準案からの放熱差、meanDeficitWは秒積算した不足の60分平均。',
   'resourcesはL/day・kWh/day、trialWaterL/trialKwhは60分試行分。日乳量の資源量はdailyMilk.resources。',
   '日乳量は仮説モデル(milk-heat-deficit-v0.1)の参考値で、実牛舎での効果保証ではない。',
   '「なぜ」の説明は風速・放射・放熱内訳・設備作用を根拠にする。断定が難しいときは仮説と伝え1条件だけ変えて比較する。',
+ '仮説の比較（「こう変えたらどうなるか」「どの対策が効くか」）はedit→get_results→undoではなくevaluateを使う。画面の状態を変えず、案ごとにoperationsを渡して結果を並べる。',
+ '結果を解釈・説明する前にdescribe_modelでモデルの計算構造・仮定・限界を確認する。縮約モデルの数値を実牛舎の保証値と言わない。',
  ].join('\n')});
 
  server.registerTool('get_state',{
@@ -130,7 +164,10 @@ function createServer(){
   z.strictObject({operation:z.literal('update_roof'),patch:ROOF_PATCH}),
   z.strictObject({operation:z.literal('update_system'),systemId:z.string(),patch:SYSTEM_PATCH}),
   z.strictObject({operation:z.literal('update_environment'),patch:ENV_PATCH}),
-  z.strictObject({operation:z.literal('add_device'),kind:z.enum(['fan','soaker','mist'])}),
+ z.strictObject({operation:z.literal('update_model'),patch:MODEL_PATCH}).describe('物理モデル係数の変更。共通気象と同様に全案へ効く'),
+ z.strictObject({operation:z.literal('update_milk'),patch:MILK_PATCH}).describe('乳量仮説モデルの係数変更'),
+ z.strictObject({operation:z.literal('update_references'),patch:REFERENCES_PATCH}).describe('参照設定(基準乳量・受胎参照)の変更'),
+  z.strictObject({operation:z.literal('add_device'),kind:z.enum(['fan','soaker','mist']),x:z.number().optional().describe('長さ方向の設置位置[m]'),y:z.number().optional().describe('幅方向の設置位置[m]。xとyは両方指定')}),
   z.strictObject({operation:z.literal('duplicate_device'),deviceId:z.string()}),
   z.strictObject({operation:z.literal('remove_device'),deviceId:z.string()}),
  ]);
@@ -151,6 +188,19 @@ function createServer(){
    timeSec:z.number().min(0).max(3600).optional(),
   }),
  },args=>relay('set_view',args));
+
+ server.registerTool('evaluate',{
+  description:'画面を変えずに仮説を評価する。editと同じoperationの配列を、現在の確定済み状態の複製へ順に適用して計算し、その結果を返す。画面の案・設備・Undo履歴・再計算には影響しない。対象案はscenarioIdで指定（省略時は現在の案）。戻り値は適用した案の区画別集計・resources・roof・（includeDaily指定時）dailyMilkと、比較用の基準案集計。「この設備を置いたら？」「どの対策が効くか」といった試行はedit→undoではなくこのツールを使う。',
+  inputSchema:z.strictObject({
+   operations:z.array(editSchema).describe('複製へ順に適用する操作列（editと同じoperation/引数。空配列は現状そのままの計算）'),
+   scenarioId:z.string().optional().describe('操作を適用する案ID。省略時は現在の案。基準案は読取専用'),
+   includeDaily:z.boolean().optional().describe('trueで日乳量の仮説モデルまで計算（数十秒かかる。省略時は60分熱計算のみ）'),
+  }),
+ },args=>relay('evaluate',args,120000));
+
+ server.registerTool('describe_model',{
+  description:'このアプリの計算モデルが「何を・どう仮定して・何を無視して」計算しているかを返す。計算構造(屋根/風/散水/ミスト/牛体収支/日集計)、入力・出力フィールドの意味、主な仮定定数、限界、検証状態を含む。get_results/evaluateの数値を解釈・説明する前に呼ぶ。',
+ },()=>relay('describe_model'));
 
  server.registerTool('get_results',{
   description:'現在入力に対応する計算結果。省略時は全案の区画別集計・resources・roof平均・dailyMilkと選択地点の詳細。status: ready=日乳量まで完了 / thermal_ready=熱のみ・dailyMilk pending / calculating / editing / error。時系列は返さない。再取得は1秒以上空けて。',

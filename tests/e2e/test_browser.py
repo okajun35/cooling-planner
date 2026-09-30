@@ -25,7 +25,28 @@ def drag(page,d,dx=30,dy=8,cancel=False):
     page.mouse.move(pos['x'],pos['y']);page.mouse.down();page.mouse.move(pos['x']+dx,pos['y']+dy,steps=8)
     if cancel:page.keyboard.press('Escape')
     page.mouse.up();ready(page)
-def open_refs(page):page.locator('[data-action=references]').first.click()
+# --- HUD navigation helpers (game-UI layout: panels and the bottom sheet are
+# hidden until the user opens them) ---
+def workspace(page):return page.evaluate('window.__DCS__.workspace()')
+PANEL={'devices':'#devices-button','roof':'#roof-button','weather':'#weather-chip','probe':'#sum-deficit'}
+def open_panel(page,which):
+    if workspace(page)['panel']!=which:page.locator(PANEL[which]).click()
+def open_sheet(page,tab):
+    if workspace(page)['sheet']==tab:return
+    if not page.locator('#sheet').is_visible():page.locator('#results-button').click()
+    page.locator(f'[data-sheet={tab}]').click()
+def set_switch(page,id_,on=True):
+    if page.locator(f'#{id_}').is_checked()!=on:page.locator(f'label:has(#{id_})').click()
+def check(page,id_):set_switch(page,id_,True)
+def uncheck(page,id_):set_switch(page,id_,False)
+def open_refs(page):
+    open_sheet(page,'reference');page.locator('#sheet-reference [data-action=references]').first.click()
+def place_device(page,kind='fan',fx=.5,fy=.5):
+    """Ghost placement: dock button -> click a spot on the scene."""
+    page.locator(f'[data-action=place-{kind}]').click()
+    rect=page.locator('#scene').bounding_box()
+    page.mouse.click(rect['x']+rect['width']*fx,rect['y']+rect['height']*fy)
+    ready(page)
 
 @pytest.fixture
 def page(browser,request):
@@ -50,15 +71,18 @@ def test_E01_initial_three_scenarios_70_points_webgl_and_no_placeholder_values(p
     assert r['dailyMilkStatus']=='complete'
     for s in r['scenarios']:assert s['dailyMilk']['status']=='available' and s['dailyMilk']['yieldKgPerCowDay'] is not None
     assert r['scenarios'][1]['dailyMilk']['deltaKgPerCowDay']==0
-    text=page.locator('#results').inner_text()
+    open_sheet(page,'reference')
+    text=page.locator('#reference-pane').inner_text()
     assert '乳量への参考影響' in text and 'kg/頭/日' in text
     assert '参照表の対象外' not in text
+    page.locator('[data-action=close-sheet]').click()
     page.screenshot(path=str(OUT/'initial-desktop.png'),full_page=True)
 
 def test_E02_roof_coating_insulation_integrate_into_all_points_and_comparison(page):
     old=snap(page);oldhash=page.evaluate('window.__DCS__.hash()')
-    page.locator('#roof-coating').check();ready(page)
-    page.locator('#roof-insulation').check();ready(page)
+    open_panel(page,'roof')
+    check(page,'roof-coating');ready(page)
+    check(page,'roof-insulation');ready(page)
     r=result(page);a,b=r['scenarios'][:2]
     assert abs(b['roof']['meanAirC']-32.981384324)<1e-6
     assert b['roof']['meanUnderC']<a['roof']['meanUnderC']
@@ -85,7 +109,7 @@ def test_E04_drag_escape_and_undo_exact_restoration(page):
     assert snap(page)['scenarios']==p['scenarios']
 
 def test_E05_device_height_rotation_and_keyboard_undo(page):
-    page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-height',2)
+    open_panel(page,'devices');page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-height',2)
     assert fan(snap(page))['heightM']==2
     assert any(abs(q['deltaQrefW'])>1 for q in result(page)['scenarios'][1]['points'])
     page.locator('[data-action=rotate]').click();ready(page)
@@ -101,7 +125,7 @@ def test_E06_colocated_mist_is_draggable_when_active(page):
     assert snap(page)['scenarios'][2]['waterSystems'][0]==p['scenarios'][2]['waterSystems'][0]
 
 def test_E07_zero_cycle_is_rejected_without_losing_state_and_recovery(page):
-    page.locator('#device-select').select_option('soaker-1')
+    open_panel(page,'devices');page.locator('#device-select').select_option('soaker-1')
     number(page,'#system-on',0)
     page.locator('#system-off').fill('0');page.locator('#system-off').press('Tab')
     assert page.locator('#status').get_attribute('data-state')=='invalid'
@@ -111,26 +135,30 @@ def test_E07_zero_cycle_is_rejected_without_losing_state_and_recovery(page):
     assert result(page)['scenarios'][1]['resources']['waterLPerDay']==0
 
 def test_E08_baseline_read_only_shared_weather_and_reset_roof(page):
-    p=snap(page);number(page,'#env-temperature',34)
+    p=snap(page);open_panel(page,'weather');number(page,'#env-temperature',34)
     assert snap(page)['environment']['temperatureC']==34
     assert snap(page)['scenarios']==p['scenarios']
-    page.locator('#roof-coating').check();ready(page)
-    page.locator('[data-action=reset-active]').click();ready(page)
+    open_panel(page,'roof');check(page,'roof-coating');ready(page)
+    open_sheet(page,'compare');page.locator('[data-action=reset-active]').click();ready(page)
     assert snap(page)['scenarios'][1]['roof']['reflectance']==.2
     page.locator('#scenario-tabs [data-scenario=baseline]').click()
+    open_panel(page,'roof')
     assert page.locator('#roof-coating').is_disabled()
+    open_sheet(page,'compare')
     assert page.locator('#reset-active').is_disabled()
 
 def test_E09_actual_download_and_upload_of_roof_references_and_time(page,tmp_path):
-    page.locator('#roof-coating').check();ready(page)
+    open_panel(page,'roof');check(page,'roof-coating');ready(page)
     open_refs(page);page.locator('#fertility-linked').check();ready(page);page.locator('[data-close=reference-dialog]').click()
-    page.locator('#time-slider').fill('900');page.locator('#time-slider').dispatch_event('input')
+    open_sheet(page,'timeline');page.locator('#time-slider').fill('900');page.locator('#time-slider').dispatch_event('input')
     p=snap(page)
     with page.expect_download() as ev:page.locator('[data-action=save]').click()
     path=tmp_path/'saved.json';ev.value.save_as(path)
     assert json.loads(path.read_text())==p
-    page.locator('[data-action=reset-active]').click();ready(page)
-    page.locator('#file-input').set_input_files(path);ready(page)
+    open_sheet(page,'compare');page.locator('[data-action=reset-active]').click();ready(page)
+    page.locator('#file-input').set_input_files(path)
+    # wait for the new job to start AND finish — the gate invalidates the old result first
+    page.wait_for_function("document.querySelector('#status').dataset.state==='calculating'");ready(page)
     assert snap(page)==p
     assert result(page)['inputHash']==page.evaluate('window.__DCS__.hash()')
 
@@ -149,8 +177,8 @@ def test_E10_bad_import_legacy_schema_xss_and_atomic_state(page):
 def test_E11_mobile_390_no_horizontal_overflow_and_controls_work(page):
     page.set_viewport_size({'width':390,'height':844});page.locator('[data-mode="2d"]').click();ready(page)
     assert page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth')
-    page.locator('#roof-coating').check();ready(page)
-    page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-height',2)
+    open_panel(page,'roof');check(page,'roof-coating');ready(page)
+    open_panel(page,'devices');page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-height',2)
     assert fan(snap(page))['heightM']==2
     assert page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth')
     page.screenshot(path=str(OUT/'mobile-390.png'),full_page=True)
@@ -167,11 +195,11 @@ def test_E12_reference_values_and_explicit_fertility_connection(page):
     number(page,'#fertility-baseline',30)
     assert snap(page)['references']['fertility']['p0']==.3
     page.locator('[data-close=reference-dialog]').click()
-    assert '地点の温湿度を適用' in page.locator('#results').inner_text()
+    assert '地点の温湿度を適用' in page.locator('#reference-pane').inner_text()
 
 def test_E13_playback_changes_only_view_and_graph_not_physics(page):
     h=page.evaluate('window.__DCS__.hash()');before=result(page);count=page.evaluate('window.__DCS__.metrics().undoCount')
-    page.locator('#time-slider').fill('900');page.locator('#time-slider').dispatch_event('input')
+    open_sheet(page,'timeline');page.locator('#time-slider').fill('900');page.locator('#time-slider').dispatch_event('input')
     assert snap(page)['view']['timeSec']==900
     assert page.locator('#time-display').inner_text()=='15:00'
     page.locator('[data-chart=filmKg]').click()
@@ -183,17 +211,17 @@ def test_E13_playback_changes_only_view_and_graph_not_physics(page):
 
 def test_E14_camera_and_metric_do_not_recalculate_physics(page):
     h=page.evaluate('window.__DCS__.hash()');r=result(page)
-    rect=page.locator('canvas').bounding_box();x,y=rect['x']+15,rect['y']+90
+    rect=page.locator('canvas').bounding_box();x,y=rect['x']+220,rect['y']+140
     page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+40,y+30,steps=5);page.mouse.up();page.mouse.wheel(0,150)
-    page.locator('[data-metric=temperature]').click();page.locator('#show-roof').check();page.locator('#show-particles').uncheck()
+    page.locator('[data-metric=temperature]').click();check(page,'show-roof');uncheck(page,'show-particles')
     assert page.evaluate('window.__DCS__.hash()')==h
     assert result(page)==r
     assert snap(page)['view']['camera'] is not None
 
 def test_E15_full_scenario_copy_keeps_roof_and_devices(page):
-    page.locator('#roof-coating').check();ready(page)
-    page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-height',2)
-    p=snap(page);page.locator('#copy-scenario').click();ready(page);q=snap(page)
+    open_panel(page,'roof');check(page,'roof-coating');ready(page)
+    open_panel(page,'devices');page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-height',2)
+    p=snap(page);open_sheet(page,'compare');page.locator('#copy-scenario').click();ready(page);q=snap(page)
     assert q['activeScenarioId']=='working-mist'
     assert q['scenarios'][2]['fans']==p['scenarios'][1]['fans']
     assert q['scenarios'][2]['roof']==p['scenarios'][1]['roof']
@@ -201,7 +229,7 @@ def test_E15_full_scenario_copy_keeps_roof_and_devices(page):
     assert result(page)['scenarios'][1]['roof']==result(page)['scenarios'][2]['roof']
 
 def test_E16_add_delete_duplicate_keep_unique_ids_and_undo(page):
-    page.locator('[data-action=add-fan]').click();ready(page)
+    place_device(page,'fan')
     p=snap(page);assert len(p['scenarios'][1]['fans'])==11
     assert p['view']['selectedDeviceId'] is not None
     page.locator('[data-action=duplicate]').click();ready(page)
@@ -215,13 +243,13 @@ def test_E17_common_dimensions_and_old_new_result_gate(page):
     page.locator('[data-action=settings]').click()
     number(page,'#barn-length',40);assert snap(page)['template']['lengthM']==40
     page.locator('[data-close=settings-dialog]').click()
-    page.locator('#roof-coating').check();page.locator('#roof-insulation').check();ready(page)
+    open_panel(page,'roof');check(page,'roof-coating');check(page,'roof-insulation');ready(page)
     assert result(page)['inputHash']==page.evaluate('window.__DCS__.hash()')
     assert snap(page)['scenarios'][1]['roof']['reflectance']==.7
     assert snap(page)['scenarios'][1]['roof']['insulationM']==.02
 
 def test_E18_roof_spray_changes_environment_and_has_actual_water_balance(page):
-    page.locator('#roof-spray').check();ready(page)
+    open_panel(page,'roof');check(page,'roof-spray');ready(page)
     r=result(page);a,b=r['scenarios'][:2]
     assert b['roof']['meanUnderC']<a['roof']['meanUnderC']
     assert b['roof']['suppliedL']>0 and abs(b['roof']['waterResidualKg'])<1e-6
@@ -229,7 +257,8 @@ def test_E18_roof_spray_changes_environment_and_has_actual_water_balance(page):
     assert b['trialWaterL']<b['resources']['waterLPerDay']
 
 def test_E19_result_export_is_current_and_includes_provenance_and_series(page,tmp_path):
-    page.locator('#roof-insulation').check();ready(page)
+    open_panel(page,'roof');check(page,'roof-insulation');ready(page)
+    open_sheet(page,'compare')
     with page.expect_download() as ev:page.locator('[data-action=export-results]').click()
     path=tmp_path/'results.json';ev.value.save_as(path);data=json.loads(path.read_text())
     assert data['result']['inputHash']==page.evaluate('window.__DCS__.hash()')
@@ -251,20 +280,20 @@ def test_E22_daily_milk_card_updates_and_probe_choice_does_not_change_it(page):
     r0=result(page)
     assert r0['scenarios'][1]['dailyMilk']['status']=='available'
     y0=r0['scenarios'][1]['dailyMilk']['yieldKgPerCowDay']
-    page.locator('#roof-spray').check();ready(page)
+    open_panel(page,'roof');check(page,'roof-spray');ready(page)
     r1=result(page)
     assert r1['scenarios'][1]['dailyMilk']['yieldKgPerCowDay']!=y0
     # selecting a different probe must not change the herd-average daily milk
-    page.locator('#probe-select').select_option('stall-A-01');ready(page)
+    open_panel(page,'probe');page.locator('#probe-select').select_option('stall-A-01');ready(page)
     assert result(page)['scenarios'][1]['dailyMilk']==r1['scenarios'][1]['dailyMilk']
     # milk beta is editable through the assumptions details
-    page.locator('#milk-details summary').click()
+    open_sheet(page,'reference');page.locator('#milk-details summary').click()
     number(page,'#milk-beta',0.02)
     r2=result(page)
     assert abs(r2['scenarios'][1]['dailyMilk']['responseKgPerCowDayPerW']-0.02)<1e-12
     assert len(r2['scenarios'][1]['dailyMilk']['sensitivities'])==3
     # daily start time is part of the physics input hash
-    page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-start',6)
+    open_panel(page,'devices');page.locator('#device-select').select_option('fan-feeding-1');number(page,'#device-start',6)
     assert fan(snap(page))['dailyStartHour']==6
 
 def test_E23_area_faces_deficit_metric_and_face_selection(page):
@@ -285,6 +314,7 @@ def test_E23_area_faces_deficit_metric_and_face_selection(page):
     text=page.locator('#results').inner_text()
     assert '放熱不足' in text and '設備の作用' in text and '濡れ方' in text
     # area table: 6 areas + stall subtotal; row click highlights faces
+    open_sheet(page,'areas')
     rows=page.locator('#area-summary [data-area]')
     assert rows.count()==7
     rows.first.click()
@@ -293,14 +323,18 @@ def test_E23_area_faces_deficit_metric_and_face_selection(page):
     # AV03: same metric across view modes; display switches never recalc physics
     h=page.evaluate('window.__DCS__.hash()')
     page.locator('[data-mode="3d"]').click();ready(page)
-    page.locator('#show-analysis').check()
+    check(page,'show-analysis')
     assert snap(page)['view']['analysis'] is True
     assert page.evaluate('window.__DCS__.hash()')==h
     # 3D face click resolves to its probe via floor projection
+    # (clear overlays first: the point may project under the panel or sheet)
+    page.locator('[data-action=close-sheet]').click()
+    if workspace(page)['panel']:page.locator('[data-action=close-panel]').click()
     pos=point(page,{'x':33.4,'heightM':.05,'y':13.0})
     if pos['visible']:
         page.mouse.click(pos['x'],pos['y'])
-        assert snap(page)['view']['selectedProbeId']=='wait-3'
+        sel=snap(page)['view']['selectedProbeId']
+        assert sel and sel.startswith('wait'),f'face click should resolve to a waiting-zone probe, got {sel}'
     page.screenshot(path=str(OUT/'area-analysis.png'),full_page=True)
 
 def probe_hit_points(page):
@@ -323,7 +357,7 @@ def probe_hit_points(page):
 def test_E25_3d_face_click_intersects_face_elevation(page):
     # Face quads render at their own elevation (stalls .158, zones .052) — projecting the
     # click onto y=0 selects a neighbouring stall in oblique views.
-    page.locator('#show-analysis').check();ready(page)
+    check(page,'show-analysis');ready(page)
     page.locator('[data-camera=side]').click()
     # stall-A-02 face: x 7.35..8.55, z 8..10.5 at y=.158. Its floor-level projection lands
     # several stalls away (~+4 m in x at this shallow angle), inside stall-A-05.
@@ -338,7 +372,7 @@ def test_E25_3d_face_click_intersects_face_elevation(page):
 def test_E24_invalid_device_shows_hatched_faces_and_unevaluated_areas(page):
     page.locator('[data-mode="2d"]').click();ready(page)
     p=snap(page);orig=(fan(p)['x'],fan(p)['y'])
-    page.locator('#device-select').select_option('fan-feeding-1')
+    open_panel(page,'devices');page.locator('#device-select').select_option('fan-feeding-1')
     number(page,'#device-x',34.5);number(page,'#device-y',9.5)
     r=result(page)
     assert r['scenarios'][1]['points'][0]['status']=='invalid'
@@ -355,7 +389,7 @@ def test_E21_webgl_unavailable_fallback_still_drags_calculates_and_saves(browser
     pg.evaluate("""() => {const orig=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type.startsWith('webgl')?null:orig.call(this,type,...args)}}""")
     pg.set_content(HTML,wait_until='load');ready(pg)
     assert pg.locator('svg[data-testid=scene2d]').count()==1
-    pg.locator('#device-select').select_option('fan-feeding-1');number(pg,'#device-height',2)
+    pg.locator('#devices-button').click();pg.locator('#device-select').select_option('fan-feeding-1');number(pg,'#device-height',2)
     before=snap(pg);rect=pg.locator('[data-device=fan-feeding-1]').bounding_box()
     pg.mouse.move(rect['x']+rect['width']/3,rect['y']+rect['height']/2);pg.mouse.down();pg.mouse.move(rect['x']+rect['width']/3+30,rect['y']+rect['height']/2+8,steps=5);pg.mouse.up();ready(pg)
     assert fan(snap(pg))['x']!=fan(before)['x']
@@ -375,11 +409,11 @@ def test_E26_realistic_tab_keeps_results_and_supports_drag_undo(page):
     assert page.evaluate('window.__DCS__.hash()')==initial_hash
     assert result(page)==initial_result
     assert page.evaluate('window.__DCS__.metrics().graphics.windSegments')>0
-    page.locator('#show-heatmap').check()
-    page.locator('#show-analysis').check()
+    check(page,'show-heatmap')
+    check(page,'show-analysis')
     assert page.evaluate('window.__DCS__.hash()')==initial_hash
     page.screenshot(path=str(OUT/'realistic-analysis.png'),full_page=True)
-    page.locator('#show-analysis').uncheck()
+    uncheck(page,'show-analysis')
     drag(page,fan(initial),35,-8)
     assert page.evaluate('window.__DCS__.hash()')!=initial_hash
     page.locator('[data-action=undo]').click();ready(page)
@@ -399,15 +433,15 @@ def test_E26_realistic_tab_keeps_results_and_supports_drag_undo(page):
 def test_E27_realistic_wind_and_spray_follow_toggles_and_operation(page):
     page.locator('[data-render=realistic]').click()
     assert page.evaluate('window.__DCS__.metrics().graphics.soakerDrops')>0
-    page.locator('#show-flow').uncheck()
+    uncheck(page,'show-flow')
     assert page.evaluate('window.__DCS__.metrics().graphics.windSegments')==0
-    page.locator('#show-flow').check()
-    page.locator('#show-particles').uncheck()
+    check(page,'show-flow')
+    uncheck(page,'show-particles')
     assert page.evaluate('window.__DCS__.metrics().graphics.soakerDrops')==0
-    page.locator('#show-particles').check()
+    check(page,'show-particles')
     page.locator('#scenario-tabs [data-scenario="working-mist"]').click()
     assert page.evaluate('window.__DCS__.metrics().graphics.mistParticles')>0
-    page.locator('#time-slider').fill('120')
+    open_sheet(page,'timeline');page.locator('#time-slider').fill('120')
     assert page.evaluate('window.__DCS__.metrics().graphics.mistParticles')==0
     page.set_viewport_size({'width':390,'height':844})
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')

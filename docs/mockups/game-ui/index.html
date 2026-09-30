@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Game UI mock — Cooling Planner（画面モック・計算なし）</title>
+<style>
+:root{font-family:Inter,"Segoe UI","Noto Sans JP","Yu Gothic UI",Meiryo,sans-serif;font-size:13px;line-height:1.55;
+ --bg:#10151c;--panel:#1d2732;--panel2:#232f3d;--line:#33414f;--ink:#e8eef4;--muted:#93a3b5;
+ --accent:#2fbfae;--warn:#e08a3c;--danger:#d9654f;--radius:10px;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button:hover{border-color:var(--accent)}button.on{border-color:var(--accent);color:var(--accent);background:#1f3634}
+h1,h2,h3,p{margin:0}small{color:var(--muted)}
+.mono,.num{font-variant-numeric:tabular-nums}
+
+/* top */
+.topbar{display:flex;align-items:center;gap:10px;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px}.brand b{font-size:15px}
+.scen{display:flex;gap:4px;margin-left:14px}.scen button{border-radius:6px;padding:6px 12px}.scen button.on{background:#1f3a37}
+.lock{color:var(--muted);font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:4px}
+.weather{margin-left:auto;display:flex;gap:14px;align-items:center;color:var(--muted)}
+.weather b{color:var(--ink)}.weather .chip{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 10px;display:flex;gap:8px;align-items:center}
+.status{font-size:11px;padding:4px 10px;border-radius:20px;background:#12332f;color:#5fd9c8;border:1px solid #24554e}
+
+/* summary strip */
+.summary{display:flex;gap:10px;padding:6px 12px;background:#172029;border-bottom:1px solid var(--line);align-items:stretch}
+.sum{flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 14px;min-width:170px}
+.sum small{font-size:10px}.sum b{font-size:19px;font-variant-numeric:tabular-nums}.sum b em{font-size:11px;font-style:normal;color:var(--muted);margin-left:2px}
+.sum.deficit b{color:var(--warn)}
+
+/* stage */
+.stage{flex:1;position:relative;overflow:hidden;background:linear-gradient(#22303c,#1a2430)}
+.barn{position:absolute;inset:18px 340px 74px 86px;border:1px dashed #3d4f60;border-radius:6px;
+ background:#243447;display:flex;align-items:center;justify-content:center;color:#7e93a7;font-size:14px;text-align:center}
+.rail{position:absolute;left:10px;top:14px;display:flex;flex-direction:column;gap:6px}
+.rail button{width:58px;flex-direction:column;gap:2px;padding:7px 4px;font-size:10px}
+.rail button svg,.dock button svg{width:19px;height:19px}
+.modes{position:absolute;right:350px;top:14px;display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px}
+.modes button{border:0;background:transparent;padding:6px 10px;font-size:11px}.modes button.on{background:var(--panel2)}
+.cameras{position:absolute;right:16px;bottom:86px;display:flex;flex-direction:column;gap:4px}
+.cameras button{font-size:11px;padding:6px 10px}
+.legend{position:absolute;left:96px;bottom:86px;background:#10151ccc;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:10px;display:flex;align-items:center;gap:8px}
+.legend i{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#e9eef1,#de6320)}
+
+/* selection panel (right) */
+.sel{position:absolute;right:10px;top:14px;bottom:86px;width:322px;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
+.sel header{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.sel header b{font-size:14px}.sel .body{padding:12px 14px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.kv{display:flex;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.kv small{display:block}.kv b{font-size:16px;font-variant-numeric:tabular-nums}
+.field{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.field input{width:86px;background:#141c25;border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px;text-align:right;font-variant-numeric:tabular-nums}
+.row{display:flex;gap:6px}.row button{flex:1;justify-content:center}
+.tgl{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+.sw{width:34px;height:19px;border-radius:10px;background:#3a4959;position:relative}
+.sw.on{background:var(--accent)}.sw::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#dfe7ee}
+.sw.on::after{left:17px}
+
+/* bottom dock */
+.dock{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
+.dock .sep{width:1px;height:30px;background:var(--line);margin:0 4px}
+.dock .place{display:flex;gap:6px}
+.dock .place button{flex-direction:column;font-size:11px;padding:7px 14px}
+.dock .hint{color:var(--muted);font-size:10px;margin-left:8px}
+.dock .spacer{flex:1}
+.play{background:#12332f;border-color:#24554e;color:#5fd9c8}
+
+/* compare sheet */
+.sheet{position:absolute;left:86px;right:16px;bottom:74px;top:38%;background:var(--panel);border:1px solid var(--line);border-radius:12px 12px 0 0;display:none;flex-direction:column;overflow:hidden;box-shadow:0 -12px 60px #0009}
+.sheet.open{display:flex}
+.sheet .tabs{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.sheet .tabs button{border:0;background:transparent;padding:7px 14px}.sheet .tabs button.on{background:var(--panel2);border-radius:6px}
+.sheet .body{flex:1;padding:14px;overflow:auto;display:flex;gap:12px}
+.card{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card h3{font-size:13px;margin-bottom:8px}.card .big{font-size:26px;font-variant-numeric:tabular-nums}
+.card.active{border-color:var(--accent)}
+.compare-table{width:100%;border-collapse:collapse;font-size:11px}
+.compare-table th,.compare-table td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:#12332f;border:1px solid #24554e;color:#5fd9c8;padding:8px 16px;border-radius:20px;font-size:11px}
+.mark{position:fixed;top:4px;right:8px;color:#e08a3c;font-size:10px}
+</style>
+</head>
+<body>
+<div class="mark">画面モック：数値・色は仮です</div>
+<header class="topbar">
+  <div class="brand"><b>Cooling Planner</b><small>v0.9</small></div>
+  <div class="scen"><button>基準<span class="lock">固定</span></button><button class="on">編集案 A</button><button>編集案 B</button></div>
+  <div class="weather"><span class="chip">☀ <b>32℃</b> / 70% <small>THI 84.3 · 全案共通</small></span></div>
+  <span class="status">計算完了 · 1.2秒</span>
+  <button>読込</button><button class="on">案を保存</button>
+</header>
+<div class="summary">
+  <div class="sum deficit"><small>採食7 · 放熱不足（60分平均）</small><b>396<em>W</em></b></div>
+  <div class="sum"><small>水 · 案全体 / 日</small><b>1,842<em>L/日</em></b></div>
+  <div class="sum"><small>電力 · 案全体 / 日</small><b>21.4<em>kWh/日</em></b></div>
+</div>
+<main class="stage">
+  <div class="barn">牛舎 3D / 2D 表示領域<br><small>（モック：実際のシーン描画はここに入る）</small></div>
+  <div class="rail">
+    <button title="風">🌀<br>風</button><button title="散水">💧<br>散水</button>
+    <button title="分布" class="on">▦<br>分布</button><button title="屋根">⌂<br>屋根</button>
+  </div>
+  <div class="modes"><button class="on">標準3D</button><button>リアル3D</button><button>2D</button></div>
+  <div class="legend">0 W <i></i> 1200 W以上 <small>斜線=無効</small></div>
+  <div class="cameras"><button>全体</button><button>上面</button><button>側面</button></div>
+
+  <!-- 選択パネル：地点の例。設備選択時は設備設定に切り替わる -->
+  <aside class="sel" id="sel">
+    <header><b id="sel-title">採食 7</b><small>地点 · 60分平均</small></header>
+    <div class="body" id="sel-body"></div>
+  </aside>
+
+  <section class="sheet" id="sheet">
+    <div class="tabs"><button class="on">案比較</button><button>エリア</button><button>時間変化</button><button>参考影響</button><span style="flex:1"></span><button id="close-sheet">× 閉じる</button></div>
+    <div class="body">
+      <div class="card"><h3>基準案</h3><div class="big">0 W</div><p><small>放熱改善の比較元</small></p></div>
+      <div class="card active"><h3>編集案 A</h3><div class="big">+384 W</div><p><small>局所気温 33.0℃ · 日乳量 38.9 kg（+0.4）· 日運転費 1,210円</small></p></div>
+      <div class="card"><h3>編集案 B</h3><div class="big">−41 W</div><p><small>ミスト稼働 · 基準との差</small></p></div>
+      <table class="compare-table"><tr><th>エリア</th><th>不足</th><th>改善</th><th>未到達</th></tr><tr><td>牛床 A</td><td>812 W</td><td>+300</td><td>4</td></tr><tr><td>採食帯</td><td>390 W</td><td>+384</td><td>0</td></tr></table>
+    </div>
+  </section>
+</main>
+<footer class="dock">
+  <div class="place">
+    <button id="b-fan">🌀<br>ファン</button><button id="b-soak">💧<br>ソーカー</button><button id="b-mist">☁<br>ミスト</button><button id="b-roof">⌂<br>屋根対策</button>
+  </div>
+  <span class="hint">選んで牛舎をクリック → 配置</span>
+  <div class="sep"></div>
+  <button>↶ 戻す</button><button>↷ やり直す</button>
+  <div class="spacer"></div>
+  <button class="play">▶ サイクルを見る</button>
+  <button id="b-compare">結果・比較</button>
+  <button>？</button>
+</footer>
+<div class="toast" id="toast" hidden>モックです</div>
+<script>
+const selBody=document.getElementById('sel-body'),selTitle=document.getElementById('sel-title');
+const states={
+ default:{title:'採食 7',sub:'地点 · 60分平均',html:`
+  <div class="kv"><div><small>放熱不足</small><b>396.3 W</b></div><small>基準 396.3 → ±0.0</small></div>
+  <div class="kv"><div><small>牛位置の気温</small><b>36.5 ℃</b></div><small>局所湿度 54.6%</small></div>
+  <div class="kv"><div><small>送風体感温度</small><b>29.7 ℃</b></div><small>風速 0.42 m/s</small></div>
+  <p><small>濡れ方・放熱内訳・設備の作用は詳細を開いて確認。日乳量・受胎は「参考影響」タブ。</small></p>`},
+ device:{title:'採食帯 ファン 1',sub:'設備',html:`
+  <div class="tgl"><span>有効</span><span class="sw on"></span></div>
+  <div class="field"><small>向き</small><input value="0" readonly>°</div>
+  <div class="field"><small>高さ</small><input value="3.0" readonly>m</div>
+  <div class="field"><small>出口風速</small><input value="5.0" readonly>m/s</div>
+  <div class="field"><small>長手 X / 幅 Y</small><input value="5.0 / 5.75" readonly>m</div>
+  <div class="row"><button>90° 回転</button><button>複製</button><button style="color:var(--danger)">削除</button></div>`},
+};
+function setState(k){selTitle.textContent=states[k].title;selBody.innerHTML=states[k].html;
+ document.getElementById('sheet').classList.toggle('open',k==='compare')}
+setState(new URLSearchParams(location.search).get('state')||'default');
+document.getElementById('b-compare').onclick=()=>document.getElementById('sheet').classList.toggle('open');
+document.getElementById('close-sheet').onclick=()=>document.getElementById('sheet').classList.remove('open');
+document.getElementById('b-fan').onclick=()=>setState('device');
+</script>
+</body>
+</html>

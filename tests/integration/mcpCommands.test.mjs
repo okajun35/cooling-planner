@@ -7,6 +7,7 @@ const deps=(store,over={})=>({
  currentResult:()=>over.result??null,
  status:()=>({pendingInput:false,invalidInput:false,calculating:false,workerError:null,...over.status}),
  stopPlayback:over.stop??(()=>{}),
+ evaluate:over.evaluate??(async project=>({thermal:simulate(project),daily:null,dailyMilkStatus:'complete'})),
 });
 const active=s=>s.committed.scenarios.find(x=>x.id===s.committed.activeScenarioId);
 
@@ -194,4 +195,109 @@ test('undo shares the same history as UI edits',()=>{
  const u=c.undo();
  assert.equal(u.changed,true);
  assert.equal(active(s).roof.reflectance,.2);
+});
+
+test('evaluate applies ops to a clone, returns results, and never touches the live store',async()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ const liveHash=inputHash(s.committed),undo0=s.undoCount,activeId=s.committed.activeScenarioId;
+ const r=await c.evaluate({operations:[
+  {operation:'update_roof',patch:{reflectance:.7,insulationM:.02}},
+  {operation:'add_device',kind:'fan',x:18.2,y:15},
+ ]});
+ assert.equal(r.scenarioId,activeId);
+ assert.notEqual(r.inputHash,liveHash);
+ assert.equal(r.operations.length,2);
+ const stall=r.result.areas.find(a=>a.id==='stalls'),base=r.baseline.areas.find(a=>a.id==='stalls');
+ assert.ok(stall.meanDeficitW<base.meanDeficitW);
+ assert.equal(inputHash(s.committed),liveHash);
+ assert.equal(s.undoCount,undo0);
+ assert.equal(s.committed.activeScenarioId,activeId);
+ assert.equal(active(s).roof.reflectance,.2);
+ assert.equal(active(s).fans.length,10);
+});
+
+test('evaluate propagates op errors and invalid placement without mutating',async()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ const liveHash=inputHash(s.committed);
+ await assert.rejects(()=>c.evaluate({operations:[{operation:'add_device',kind:'fan',x:-5,y:2}]}),/配置/);
+ await assert.rejects(()=>c.evaluate({operations:[{operation:'update_device',deviceId:'nope',patch:{x:1}}]}),/設備/);
+ assert.equal(inputHash(s.committed),liveHash);
+ assert.equal(s.undoCount,0);
+});
+
+test('evaluate on the baseline scenario keeps read-only protection',async()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ await assert.rejects(()=>c.evaluate({scenarioId:'baseline',operations:[{operation:'update_roof',patch:{reflectance:.9}}]}),/基準案/);
+ assert.equal(s.committed.scenarios.find(x=>x.id==='baseline').roof.reflectance,.2);
+});
+
+test('evaluate with empty operations reproduces the committed input',async()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ const r=await c.evaluate({operations:[]});
+ assert.equal(r.inputHash,inputHash(s.committed));
+});
+
+test('update_model patches physics coefficients, nested roof and profiles, validated and undoable',()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ const h0=inputHash(s.committed);
+ const r=c.edit({operation:'update_model',patch:{kSpread:.2,roof:{viewFactor:.5},profiles:{reference:{mistEfficiency:.8}}}});
+ assert.notEqual(r.inputHash,h0);
+ assert.equal(s.committed.model.kSpread,.2);
+ assert.equal(s.committed.model.roof.viewFactor,.5);
+ assert.equal(s.committed.model.profiles.find(x=>x.id==='reference').mistEfficiency,.8);
+ assert.throws(()=>c.edit({operation:'update_model',patch:{emissivity:2}}));
+ assert.throws(()=>c.edit({operation:'update_model',patch:{roof:{viewFactor:2}}}));
+ assert.throws(()=>c.edit({operation:'update_model',patch:{profiles:{nope:{mistEfficiency:.5}}}}),/プロファイル/);
+ assert.throws(()=>c.edit({operation:'update_model',patch:{version:'other'}}));
+ const u=c.undo();assert.equal(u.changed,true);
+ assert.equal(s.committed.model.kSpread,.1);
+});
+
+test('update_milk and update_references patch assumption coefficients',()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ c.edit({operation:'update_milk',patch:{referenceCoolingWPerCow:500,lagWeights:[.3,.4,.3]}});
+ assert.equal(s.committed.milkSimulation.referenceCoolingWPerCow,500);
+ assert.throws(()=>c.edit({operation:'update_milk',patch:{referenceCoolingWPerCow:-10}}));
+ c.edit({operation:'update_references',patch:{baselineMilkKgPerDay:38,fertility:{p0:.5}}});
+ assert.equal(s.committed.references.baselineMilkKgPerDay,38);
+ assert.equal(s.committed.references.fertility.p0,.5);
+ assert.equal(s.committed.references.fertility.mode,'manual');
+});
+
+test('evaluate accepts model-coefficient ops on the clone only',async()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ const r=await c.evaluate({operations:[{operation:'update_milk',patch:{referenceCoolingWPerCow:400}}]});
+ assert.equal(r.operations[0].applied.referenceCoolingWPerCow,400);
+ const stall=r.result.areas.find(a=>a.id==='stalls');
+ assert.ok(stall.meanDeficitW<700,`expected lower deficit at Qref=400, got ${stall.meanDeficitW}`);
+ assert.equal(s.committed.milkSimulation.referenceCoolingWPerCow,630);
+});
+
+test('describe_model returns versioned structure with assumptions and limits',()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ const m=c.describe_model();
+ assert.equal(m.model.modelVersion,'cooling-integrated-v0.9');
+ assert.equal(m.model.keyAssumptions.referenceCoolingWPerCow,630);
+ assert.ok(m.model.computation.length>=5);
+ assert.ok(m.model.limits.length>=4);
+ assert.ok(m.modelNotes.length>=10);
+ assert.match(m.model.space.probes,/70/);
+ assert.deepEqual(m.model.modifiedFromDefaults,[]);
+});
+
+test('describe_model reports current coefficients after update_model/update_milk',()=>{
+ const s=new ProjectStore(),c=createCommands(deps(s));
+ c.edit({operation:'update_model',patch:{surfaceTemperatureC:36,roof:{viewFactor:.5},profiles:{reference:{mistEfficiency:.9}}}});
+ c.edit({operation:'update_milk',patch:{referenceCoolingWPerCow:500,responseKgPerCowDayPerW:.02}});
+ const m=c.describe_model();
+ assert.equal(m.model.keyAssumptions.referenceCoolingWPerCow,500);
+ assert.match(m.model.keyAssumptions.cow,/36℃/);
+ assert.match(m.model.keyAssumptions.cow,/0\.5/);
+ assert.match(m.model.keyAssumptions.milk,/beta=0\.02/);
+ assert.match(m.model.keyAssumptions.profiles,/ミスト効率0\.9/);
+ assert.match(m.model.outputs.meanDeficitW,/500W/);
+ assert.ok(m.model.modifiedFromDefaults.some(x=>x.startsWith('model.surfaceTemperatureC')));
+ assert.ok(m.model.modifiedFromDefaults.some(x=>x.startsWith('model.roof.viewFactor')));
+ assert.ok(m.model.modifiedFromDefaults.some(x=>x.startsWith('model.profiles.reference.mistEfficiency')));
+ assert.ok(m.model.modifiedFromDefaults.some(x=>x.startsWith('milkSimulation.referenceCoolingWPerCow')));
 });

@@ -20,7 +20,7 @@ export function startMcpBridge(opts:BridgeOptions){
   if(typeof id!=='number'||typeof command!=='string')return;
   const fn=(opts.commands as unknown as Record<string,(a?:unknown)=>unknown>)[command];
   if(!fn){reply(id,{ok:false,error:`不明な操作です: ${command}`});return}
-  try{reply(id,{ok:true,data:fn(args)})}catch(e){reply(id,{ok:false,error:e instanceof Error?e.message:String(e)})}
+  try{Promise.resolve(fn(args)).then(data=>reply(id,{ok:true,data})).catch(e=>reply(id,{ok:false,error:e instanceof Error?e.message:String(e)}))}catch(e){reply(id,{ok:false,error:e instanceof Error?e.message:String(e)})}
  };
  ws.onclose=ev=>{opts.notify(ev.reason?`MCP接続が閉じられました: ${ev.reason}`:'MCP接続が閉じられました。ページを再読込すると再接続します')};
 }
