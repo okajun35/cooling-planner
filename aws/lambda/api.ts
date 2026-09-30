@@ -21,6 +21,7 @@ export async function lambdaHandler(event:FunctionUrlEvent){
  const auth=event.headers?.authorization??event.headers?.Authorization??'';
  if(TOKEN&&auth!==`Bearer ${TOKEN}`)return json(401,{error:'unauthorized'});
  const method=event.requestContext.http.method,path=event.rawPath;
+ console.log(JSON.stringify({method,path})); // evidence log for CloudWatch
  if(method==='GET'&&path==='/health')return json(200,{ok:true,version:APP_VERSION});
  if(method==='GET'&&path==='/model')return json(200,describe());
  if(method!=='POST'||path!=='/simulate')return json(404,{error:'not found'});

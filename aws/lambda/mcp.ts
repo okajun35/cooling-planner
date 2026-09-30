@@ -126,6 +126,9 @@ export async function lambdaHandler(event:FunctionUrlEvent){
  const headers=new Headers(event.headers??{});
  const url=`https://${event.requestContext.domainName}${event.rawPath}${event.rawQueryString?`?${event.rawQueryString}`:''}`;
  const method=event.requestContext.http.method;
+ // Evidence log: which MCP method/tool a remote agent invoked (CloudWatch).
+ try{const p=event.body?JSON.parse(event.isBase64Encoded?Buffer.from(event.body,'base64').toString():event.body):null;
+  console.log(JSON.stringify({rpc:p?.method,tool:p?.params?.name}))}catch{}
  const req=new Request(url,{method,headers,body:method==='GET'||method==='HEAD'?undefined:event.body?Buffer.from(event.body,event.isBase64Encoded?'base64':'utf8'):undefined});
  const res=await mcp.fetch(req);
  return{statusCode:res.status,headers:Object.fromEntries(res.headers.entries()),body:Buffer.from(await res.arrayBuffer()).toString('base64'),isBase64Encoded:true};
