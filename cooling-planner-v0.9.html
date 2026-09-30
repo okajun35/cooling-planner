@@ -12336,10 +12336,12 @@ function renderReferencePane(p, r) {
     const { point: q, baseline: b, scenario: s } = selectedResults(p, r), fert = q?.fertility;
     const fdelta = fert?.probability != null && b?.fertility.probability != null ? (fert.probability - b.fertility.probability) * 100 : null;
     const res = s?.dailyMilk?.resources ?? null;
+    const cost = res && p.prices.electricityYenKwh !== null && p.prices.waterYenM3 !== null ? res.totalKwhPerDay * p.prices.electricityYenKwh + res.waterLPerDay / 1000 * p.prices.waterYenM3 : null;
     (0, dom_js_1.setHTML)('reference-pane', `
  ${milkCard(p, r, s)}
  <div class="reference-card"><div class="reference-heading">${(0, dom_js_1.icon)('heart', 17)}<h3>受胎率シナリオ</h3></div><div class="fertility-value">${(0, dom_js_1.num)(fert?.probability == null ? null : fert.probability * 100)}<small>%</small><span class="tag">${p.references.fertility.mode === 'manual' ? '独立した代表環境' : '地点の温湿度を適用'}</span></div><p>${p.references.fertility.mode === 'manual' ? `代表 ${p.references.fertility.temperatureC}℃ / ${p.references.fertility.relativeHumidityPct}%RH` : `基準案との差 ${(0, dom_js_1.signed)(fdelta, 2)}ポイント · ${fdelta === 0 ? '同じ参照区分' : '温湿度区分の比較'}`}<br>授精前21日〜後30日の代表条件を仮定。基準受胎率 ${(0, dom_js_1.num)(p.references.fertility.p0 * 100, 0)}%。日乳量とは別の時間モデルです。</p><button data-action="references" class="text-button">期間の仮定・入力を確認 →</button></div>
  <div class="resource-cards"><div>${(0, dom_js_1.icon)('drop', 18)}<span>水 <small>案全体 / 日</small></span><strong>${res === null ? '未計算' : (0, dom_js_1.num)(res.waterLPerDay, 0)}${res === null ? '' : '<small>L</small>'}</strong></div><div>${(0, dom_js_1.icon)('bolt', 18)}<span>電力 <small>案全体 / 日</small></span><strong>${res === null ? '未計算' : (0, dom_js_1.num)(res.totalKwhPerDay, 1)}${res === null ? '' : '<small>kWh</small>'}</strong></div></div>
+ <p class="micro">日運転費 ${cost == null ? '未評価（計算・単価を確認）' : (0, dom_js_1.num)(cost, 0) + ' 円/日'}。入力単価による参考試算で、初期設備費・投資回収は含みません。</p>
  <p class="micro">上の気温・放熱カードは「機器ONから60分」の地点別平均。水・電力と乳量は評価日24時間の運転マスクから積算します。</p>
  <div class="result-note">放熱Wの乳量への変換は仮説モデル milk-heat-deficit-v0.1 のみ。牛の深部体温や実農場の効果を保証する値ではありません。</div>`);
 }
@@ -12462,12 +12464,12 @@ function comparisonContent(p, r) {
             const a = areas.find(a => a.id === id), st = s ? (0, comparisonStats_js_1.comparisonStats)(s.points, base?.points ?? [], a) : null;
             return `<tr><th>${(0, dom_js_1.esc)(a.label.replace('（小計）', ''))}</th><td>${watts(st?.meanDeficitW)}</td><td>${watts(st?.maxDeficitW)}</td></tr>`;
         }).join('');
-        return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id === p.activeScenarioId ? 'active' : ''}" data-comparison="${sc.id}"><h3>${(0, dom_js_1.esc)(sc.name)}</h3>
+        return `<article class="comparison-card ${sc.id === p.activeScenarioId ? 'active' : ''}" data-comparison="${sc.id}"><h3><button data-scenario="${sc.id}">${(0, dom_js_1.esc)(sc.name)}${sc.id === p.activeScenarioId ? '（選択中）' : 'で表示'}</button></h3>
    <div><strong>${stats?.meanDeficitW == null ? '未評価' : (0, dom_js_1.num)(stats.meanDeficitW, 0)}</strong><small> W 平均放熱不足</small></div>
-   <p>基準から不足低減 <b>${reduction(stats?.deficitReductionW)}</b><br>最大の不足 <b>${watts(stats?.maxDeficitW)}</b><br>不足が残る地点 <b>${stats?.meanDeficitW == null ? '未評価' : `${stats.deficitCount}/${stats.probeCount}`}</b><br>不足が減らず残る <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> 地点 / 不足増加 <b>${count(stats?.worsenedDeficitCount)}</b> 地点</p>
+   <p>基準から不足低減 <b>${reduction(stats?.deficitReductionW)}</b><br>最大の不足 <b>${watts(stats?.maxDeficitW)}</b><br>不足が残る地点 <b>${stats?.meanDeficitW == null ? '未評価' : `${stats.deficitCount}/${stats.probeCount}`}</b><br>局所作用なし <b>${stats?.meanDeficitW == null ? '未評価' : stats.deficitNoActionCount}</b> 地点<br>不足が減らず残る <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> 地点 / 不足増加 <b>${count(stats?.worsenedDeficitCount)}</b> 地点</p>
    <table class="micro-table"><thead><tr><th>場所</th><th>平均不足</th><th>最大不足</th></tr></thead><tbody>${areaLines}</tbody></table>
    <p>水 <b>${res ? (0, dom_js_1.num)(res.waterLPerDay, 0) + ' L/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.waterLPerDay - baseRes.waterLPerDay, 0)}）` : ''}<br>電力 <b>${res ? (0, dom_js_1.num)(res.totalKwhPerDay, 1) + ' kWh/日' : '未計算'}</b>${res && baseRes ? `（差 ${(0, dom_js_1.signed)(res.totalKwhPerDay - baseRes.totalKwhPerDay, 1)}）` : ''}</p>
-   <span class="micro">${sc.roof.reflectance > .5 ? '遮熱あり' : '遮熱なし'} / ${sc.roof.insulationM > 0 ? '断熱あり' : '断熱なし'}</span></button>`;
+   <span class="micro">${sc.roof.reflectance > .5 ? '遮熱あり' : '遮熱なし'} / ${sc.roof.insulationM > 0 ? '断熱あり' : '断熱なし'}</span></article>`;
     }).join('');
     const active = r?.scenarios.find(s => s.id === p.activeScenarioId);
     const st = active ? (0, comparisonStats_js_1.comparisonStats)(active.points, base?.points ?? [], { id: 'all', label: '全地点', probeIds: l.probes.map(q => q.id) }) : null;
@@ -13109,7 +13111,6 @@ function startMcpBridge(opts) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.openProjectImport = openProjectImport;
-const validation_js_1 = require("../domain/validation.js");
 /** Kept outside layout.ts so layout work can proceed independently. The textarea
  * is not rebuilt on worker messages, preserving pasted input while calculating. */
 function openProjectImport(store, onImported) {
@@ -13122,10 +13123,7 @@ function openProjectImport(store, onImported) {
         const apply = dialog.querySelector('#project-import-apply'), text = dialog.querySelector('#project-import-text'), error = dialog.querySelector('#project-import-error');
         apply.addEventListener('click', () => {
             try {
-                const project = (0, validation_js_1.parseProject)(text.value);
-                // Normalize an envelope back to a plain saved Project. This also discards
-                // claimed result values, hashes and explanatory text from the other client.
-                store.importJSON(JSON.stringify(project));
+                store.importJSON(text.value);
                 dialog.close();
                 onImported();
             }

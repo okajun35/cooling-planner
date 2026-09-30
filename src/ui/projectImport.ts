@@ -1,4 +1,3 @@
-import {parseProject} from '../domain/validation.js';
 import type {ProjectStore} from '../state/store.js';
 
 /** Kept outside layout.ts so layout work can proceed independently. The textarea
@@ -12,10 +11,7 @@ export function openProjectImport(store:ProjectStore,onImported:()=>void){
   const apply=dialog.querySelector<HTMLButtonElement>('#project-import-apply')!,text=dialog.querySelector<HTMLTextAreaElement>('#project-import-text')!,error=dialog.querySelector<HTMLElement>('#project-import-error')!;
   apply.addEventListener('click',()=>{
    try{
-    const project=parseProject(text.value);
-    // Normalize an envelope back to a plain saved Project. This also discards
-    // claimed result values, hashes and explanatory text from the other client.
-    store.importJSON(JSON.stringify(project));
+    store.importJSON(text.value);
     dialog!.close();onImported();
    }catch(e){error.textContent=e instanceof Error?e.message:String(e);error.hidden=false}
   });

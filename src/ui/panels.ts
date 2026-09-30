@@ -4,8 +4,7 @@ import {buildLayout} from '../template/layout.js';
 import {thi} from '../model/physics.js';
 import {MILK_ROWS,milkReference,fertilityReference,FERTILITY_OR} from '../model/references.js';
 import {esc,num,signed,icon,field,toggle,setHTML,el} from './dom.js';
-import {buildAreas} from '../template/faces.js';
-import {areaStats,deficitUnreached} from '../model/areaStats.js';
+import {deficitUnreached} from '../model/areaStats.js';
 import type {Workspace} from './workspaceState.js';
 import {comparisonContent,areaContent,heatExplanation} from './comparison.js';
 
@@ -145,10 +144,12 @@ export function renderReferencePane(p:Project,r:SimulationResult|null){
  const {point:q,baseline:b,scenario:s}=selectedResults(p,r),fert=q?.fertility;
  const fdelta=fert?.probability!=null&&b?.fertility.probability!=null?(fert.probability-b.fertility.probability)*100:null;
  const res=s?.dailyMilk?.resources??null;
+ const cost=res&&p.prices.electricityYenKwh!==null&&p.prices.waterYenM3!==null?res.totalKwhPerDay*p.prices.electricityYenKwh+res.waterLPerDay/1000*p.prices.waterYenM3:null;
  setHTML('reference-pane',`
  ${milkCard(p,r,s)}
  <div class="reference-card"><div class="reference-heading">${icon('heart',17)}<h3>受胎率シナリオ</h3></div><div class="fertility-value">${num(fert?.probability==null?null:fert.probability*100)}<small>%</small><span class="tag">${p.references.fertility.mode==='manual'?'独立した代表環境':'地点の温湿度を適用'}</span></div><p>${p.references.fertility.mode==='manual'?`代表 ${p.references.fertility.temperatureC}℃ / ${p.references.fertility.relativeHumidityPct}%RH`: `基準案との差 ${signed(fdelta,2)}ポイント · ${fdelta===0?'同じ参照区分':'温湿度区分の比較'}`}<br>授精前21日〜後30日の代表条件を仮定。基準受胎率 ${num(p.references.fertility.p0*100,0)}%。日乳量とは別の時間モデルです。</p><button data-action="references" class="text-button">期間の仮定・入力を確認 →</button></div>
  <div class="resource-cards"><div>${icon('drop',18)}<span>水 <small>案全体 / 日</small></span><strong>${res===null?'未計算':num(res.waterLPerDay,0)}${res===null?'':'<small>L</small>'}</strong></div><div>${icon('bolt',18)}<span>電力 <small>案全体 / 日</small></span><strong>${res===null?'未計算':num(res.totalKwhPerDay,1)}${res===null?'':'<small>kWh</small>'}</strong></div></div>
+ <p class="micro">日運転費 ${cost==null?'未評価（計算・単価を確認）':num(cost,0)+' 円/日'}。入力単価による参考試算で、初期設備費・投資回収は含みません。</p>
  <p class="micro">上の気温・放熱カードは「機器ONから60分」の地点別平均。水・電力と乳量は評価日24時間の運転マスクから積算します。</p>
  <div class="result-note">放熱Wの乳量への変換は仮説モデル milk-heat-deficit-v0.1 のみ。牛の深部体温や実農場の効果を保証する値ではありません。</div>`);
 }

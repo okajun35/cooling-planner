@@ -18,12 +18,12 @@ export function comparisonContent(p:Project,r:SimulationResult|null){
    const a=areas.find(a=>a.id===id)!,st=s?comparisonStats(s.points,base?.points??[],a):null;
    return `<tr><th>${esc(a.label.replace('（小計）',''))}</th><td>${watts(st?.meanDeficitW)}</td><td>${watts(st?.maxDeficitW)}</td></tr>`;
   }).join('');
-  return `<button data-scenario="${sc.id}" class="comparison-card ${sc.id===p.activeScenarioId?'active':''}" data-comparison="${sc.id}"><h3>${esc(sc.name)}</h3>
+  return `<article class="comparison-card ${sc.id===p.activeScenarioId?'active':''}" data-comparison="${sc.id}"><h3><button data-scenario="${sc.id}">${esc(sc.name)}${sc.id===p.activeScenarioId?'（選択中）':'で表示'}</button></h3>
    <div><strong>${stats?.meanDeficitW==null?'未評価':num(stats.meanDeficitW,0)}</strong><small> W 平均放熱不足</small></div>
-   <p>基準から不足低減 <b>${reduction(stats?.deficitReductionW)}</b><br>最大の不足 <b>${watts(stats?.maxDeficitW)}</b><br>不足が残る地点 <b>${stats?.meanDeficitW==null?'未評価':`${stats.deficitCount}/${stats.probeCount}`}</b><br>不足が減らず残る <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> 地点 / 不足増加 <b>${count(stats?.worsenedDeficitCount)}</b> 地点</p>
+   <p>基準から不足低減 <b>${reduction(stats?.deficitReductionW)}</b><br>最大の不足 <b>${watts(stats?.maxDeficitW)}</b><br>不足が残る地点 <b>${stats?.meanDeficitW==null?'未評価':`${stats.deficitCount}/${stats.probeCount}`}</b><br>局所作用なし <b>${stats?.meanDeficitW==null?'未評価':stats.deficitNoActionCount}</b> 地点<br>不足が減らず残る <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> 地点 / 不足増加 <b>${count(stats?.worsenedDeficitCount)}</b> 地点</p>
    <table class="micro-table"><thead><tr><th>場所</th><th>平均不足</th><th>最大不足</th></tr></thead><tbody>${areaLines}</tbody></table>
    <p>水 <b>${res?num(res.waterLPerDay,0)+' L/日':'未計算'}</b>${res&&baseRes?`（差 ${signed(res.waterLPerDay-baseRes.waterLPerDay,0)}）`:''}<br>電力 <b>${res?num(res.totalKwhPerDay,1)+' kWh/日':'未計算'}</b>${res&&baseRes?`（差 ${signed(res.totalKwhPerDay-baseRes.totalKwhPerDay,1)}）`:''}</p>
-   <span class="micro">${sc.roof.reflectance>.5?'遮熱あり':'遮熱なし'} / ${sc.roof.insulationM>0?'断熱あり':'断熱なし'}</span></button>`;
+   <span class="micro">${sc.roof.reflectance>.5?'遮熱あり':'遮熱なし'} / ${sc.roof.insulationM>0?'断熱あり':'断熱なし'}</span></article>`;
  }).join('');
  const active=r?.scenarios.find(s=>s.id===p.activeScenarioId);
  const st=active?comparisonStats(active.points,base?.points??[],{id:'all',label:'全地点',probeIds:l.probes.map(q=>q.id)}):null;
