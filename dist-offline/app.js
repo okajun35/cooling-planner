@@ -12180,7 +12180,7 @@ const dom_js_1 = require("./dom.js");
 function layout() {
     return `
 <header class="topbar">
- <div class="brand"><span class="brand-mark">${(0, dom_js_1.icon)('barn', 24)}</span><strong>Cooling Planner</strong><span class="version">v0.9</span></div>
+ <div class="brand"><span class="brand-mark">${(0, dom_js_1.icon)('barn', 24)}</span><span class="brand-text"><strong>Cooling Planner</strong><small class="tagline">Compare cooling options for dairy barns—balancing cow cooling, water, and energy.</small></span><span class="version">v0.9</span></div>
  <div id="scenario-tabs" class="segments" role="tablist" aria-label="Switch scenario"></div>
  <button id="weather-chip" data-action="weather" type="button" title="Open shared weather conditions"></button>
  <span id="status" role="status" data-state="calculating">Preparing</span>
@@ -12196,7 +12196,7 @@ function layout() {
 <div class="summary-bar" aria-label="Selected point and scenario summary">
  <button class="sum-chip" data-action="panel-probe" id="sum-deficit" type="button"><small id="sum-deficit-label">Cooling deficit</small><b id="sum-deficit-value">—</b></button>
  <div class="sum-chip"><small>Water · whole scenario / day</small><b id="sum-water">—</b></div>
- <div class="sum-chip"><small>Power · whole scenario / day</small><b id="sum-power">—</b></div>
+ <div class="sum-chip"><small>Energy use · whole scenario / day</small><b id="sum-power">—</b></div>
  <span class="summary-note">Summary: 60-min mean at the selected point, plus whole-scenario daily totals</span>
 </div>
 <main class="stage">
@@ -12498,9 +12498,9 @@ function renderReferencePane(p, r) {
     (0, dom_js_1.setHTML)('reference-pane', `
  ${milkCard(p, r, s)}
  <div class="reference-card"><div class="reference-heading">${(0, dom_js_1.icon)('heart', 17)}<h3>Conception-rate scenario</h3></div><div class="fertility-value">${(0, dom_js_1.num)(fert?.probability == null ? null : fert.probability * 100)}<small>%</small><span class="tag">${p.references.fertility.mode === 'manual' ? 'independent representative environment' : 'point weather applied'}</span></div><p>${p.references.fertility.mode === 'manual' ? `reference ${p.references.fertility.temperatureC}℃ / ${p.references.fertility.relativeHumidityPct}%RH` : `difference from baseline ${(0, dom_js_1.signed)(fdelta, 2)} pts · ${fdelta === 0 ? 'same reference band' : 'comparison of weather bands'}`}<br>Assumes representative conditions from 21 days before to 30 days after insemination. Baseline conception ${(0, dom_js_1.num)(p.references.fertility.p0 * 100, 0)}%. A different time model from daily milk.</p><button data-action="references" class="text-button">Review period assumptions &amp; inputs →</button></div>
- <div class="resource-cards"><div>${(0, dom_js_1.icon)('drop', 18)}<span>Water <small>whole scenario / day</small></span><strong>${res === null ? 'Not calculated' : (0, dom_js_1.num)(res.waterLPerDay, 0)}${res === null ? '' : '<small>L</small>'}</strong></div><div>${(0, dom_js_1.icon)('bolt', 18)}<span>Power <small>whole scenario / day</small></span><strong>${res === null ? 'Not calculated' : (0, dom_js_1.num)(res.totalKwhPerDay, 1)}${res === null ? '' : '<small>kWh</small>'}</strong></div></div>
+ <div class="resource-cards"><div>${(0, dom_js_1.icon)('drop', 18)}<span>Water <small>whole scenario / day</small></span><strong>${res === null ? 'Not calculated' : (0, dom_js_1.num)(res.waterLPerDay, 0)}${res === null ? '' : '<small>L</small>'}</strong></div><div>${(0, dom_js_1.icon)('bolt', 18)}<span>Energy use <small>whole scenario / day</small></span><strong>${res === null ? 'Not calculated' : (0, dom_js_1.num)(res.totalKwhPerDay, 1)}${res === null ? '' : '<small>kWh</small>'}</strong></div></div>
  <p class="micro">Daily running cost: ${cost == null ? 'not evaluated (check calculation and unit prices)' : (0, dom_js_1.num)(cost, 0) + ' yen/day'}. A rough estimate from the entered unit prices; excludes installation cost and payback.</p>
- <p class="micro">The temperature and heat-loss cards above are per-point 60-min means after the device turns ON. Water, power and milk integrate the 24-hour operation mask of the evaluation day.</p>
+ <p class="micro">The temperature and heat-loss cards above are per-point 60-min means after the device turns ON. Water, energy use and milk integrate the 24-hour operation mask of the evaluation day.</p>
  <div class="result-note">Conversion of heat loss (W) into milk yield uses only the hypothesis model milk-heat-deficit-v0.1. It is not a guaranteed value for cow core temperature or real-farm outcomes.</div>`);
 }
 function renderComparison(p, r) {
@@ -12538,11 +12538,11 @@ function renderHelp() {
  <h3>How to read the display</h3><table><tbody>
  <tr><th>Cooling deficit</th><td>60-min mean of the shortfall against reference heat loss Qref. 0 means no deficit; larger values are hotter points.</td></tr>
  <tr><th>Heat-loss improvement</th><td>Heat-loss difference from baseline. 0 means "same as baseline"; negative is worse.</td></tr>
- <tr><th>Water &amp; power</th><td>Daily totals for the whole scenario, integrated from the same 24-hour operation mask as daily milk.</td></tr>
+ <tr><th>Water &amp; energy use</th><td>Daily totals for the whole scenario, integrated from the same 24-hour operation mask as daily milk.</td></tr>
  <tr><th>Wind &amp; spray</th><td>Fan airflow and droplets are schematic representations of device action. This is not CFD.</td></tr>
  <tr><th>Milk &amp; conception</th><td>Daily milk is a hypothesis model (demo_assumption); conception is a reference scenario by THI band. Neither predicts a real farm.</td></tr></tbody></table>
  <h3>Using it from an AI agent (MCP)</h3><table><tbody>
- <tr><th>Remote MCP</th><td>This model can be called by external agents via MCP (Model Context Protocol).<br><code>https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/</code><br>Tools: get_default_project / evaluate / describe_model / get_doc.</td></tr>
+ <tr><th>Remote MCP</th><td>This model can be called by external agents via MCP (Model Context Protocol).<br><code>https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/</code><br>Tools: get_default_project / evaluate / compare_candidates / describe_model / get_doc.<br>compare_candidates: constrained comparison of 1–3 candidate operation sets — daily results, constraint verdicts and ranking.</td></tr>
  <tr><th>Public demo token</th><td><code>demo-581fKusGqNgk7YrycFNw6M_5</code> (public, free to use. Disabled individually if abused)</td></tr>
  <tr><th>Connection example</th><td><code>{"type":"http","url":"&lt;URL above&gt;","headers":{"Authorization":"Bearer demo-581fKusGqNgk7YrycFNw6M_5"}}</code></td></tr>
  <tr><th>Local MCP</th><td>Running <code>npm run mcp</code> in the repository enables the PoC where an AI directly operates the open page.</td></tr></tbody></table>
@@ -12555,7 +12555,7 @@ function renderChrome(p, r, w) {
     const s = (0, project_js_1.activeScenario)(p), disabled = s.readOnly;
     const panel = (0, dom_js_1.el)('selection-panel');
     panel.dataset.panel = w.panel ?? '';
-    panel.hidden = w.panel === null;
+    panel.hidden = w.panel === null || !w.guide.done;
     (0, dom_js_1.el)('panel-title').textContent = PANEL_TITLES[w.panel ?? ''] ?? '';
     for (const k of ['device', 'probe', 'devices', 'roof', 'weather'])
         (0, dom_js_1.el)(`panel-${k}`).hidden = w.panel !== k;
@@ -12632,7 +12632,7 @@ function comparisonContent(p, r) {
    <div><strong>${stats?.meanDeficitW == null ? 'N/A' : (0, dom_js_1.num)(stats.meanDeficitW, 0)}</strong><small> W mean cooling deficit</small></div>
    <p>Deficit reduction vs baseline <b>${reduction(stats?.deficitReductionW)}</b><br>Worst deficit <b>${watts(stats?.maxDeficitW)}</b><br>Points with remaining deficit <b>${stats?.meanDeficitW == null ? 'N/A' : `${stats.deficitCount}/${stats.probeCount}`}</b><br>No local action <b>${stats?.meanDeficitW == null ? 'N/A' : stats.deficitNoActionCount}</b> points<br>Deficit not reduced <b>${count(stats?.unchangedOrWorseDeficitCount)}</b> points / deficit increased <b>${count(stats?.worsenedDeficitCount)}</b> points</p>
    <table class="micro-table"><thead><tr><th>Area</th><th>Mean deficit</th><th>Max deficit</th></tr></thead><tbody>${areaLines}</tbody></table>
-   <p>Water <b>${res ? (0, dom_js_1.num)(res.waterLPerDay, 0) + ' L/day' : 'Not calculated'}</b>${res && baseRes ? ` (Δ ${(0, dom_js_1.signed)(res.waterLPerDay - baseRes.waterLPerDay, 0)})` : ''}<br>Power <b>${res ? (0, dom_js_1.num)(res.totalKwhPerDay, 1) + ' kWh/day' : 'Not calculated'}</b>${res && baseRes ? ` (Δ ${(0, dom_js_1.signed)(res.totalKwhPerDay - baseRes.totalKwhPerDay, 1)})` : ''}<br>Daily point-mean deficit <b>${watts(s?.dailyThermal?.all?.meanDeficitW)}</b>${s?.dailyThermal ? ` (max ${watts(s.dailyThermal.all?.maxDeficitW)} · ${s.dailyThermal.weatherMode === 'hourly' ? 'hourly' : 'fixed'} weather)` : ''}</p>
+   <p>Water <b>${res ? (0, dom_js_1.num)(res.waterLPerDay, 0) + ' L/day' : 'Not calculated'}</b>${res && baseRes ? ` (Δ ${(0, dom_js_1.signed)(res.waterLPerDay - baseRes.waterLPerDay, 0)})` : ''}<br>Energy use <b>${res ? (0, dom_js_1.num)(res.totalKwhPerDay, 1) + ' kWh/day' : 'Not calculated'}</b>${res && baseRes ? ` (Δ ${(0, dom_js_1.signed)(res.totalKwhPerDay - baseRes.totalKwhPerDay, 1)})` : ''}<br>Daily point-mean deficit <b>${watts(s?.dailyThermal?.all?.meanDeficitW)}</b>${s?.dailyThermal ? ` (max ${watts(s.dailyThermal.all?.maxDeficitW)} · ${s.dailyThermal.weatherMode === 'hourly' ? 'hourly' : 'fixed'} weather)` : ''}</p>
    <span class="micro">${sc.roof.reflectance > .5 ? 'Reflective coating' : 'No coating'} / ${sc.roof.insulationM > 0 ? 'Insulated' : 'No insulation'}</span></article>`;
     }).join('');
     const active = r?.scenarios.find(s => s.id === p.activeScenarioId);
@@ -12640,9 +12640,9 @@ function comparisonContent(p, r) {
     const worst = st?.topRemaining.map(q => `<li><button class="text-button" data-inspect-probe="${(0, dom_js_1.esc)(q.probeId)}">${(0, dom_js_1.esc)(l.probes.find(p => p.id === q.probeId)?.label ?? q.probeId)}: deficit ${watts(q.deficitW)}</button> · reduced vs baseline ${reduction(q.deficitReductionW)}${q.noLocalAction ? ' · no local action' : ''}</li>`).join('');
     return `<div class="comparison-toolbar"><button data-action="copy-scenario" id="copy-scenario">Copy to other draft</button><button data-action="reset-active" id="reset-active">Reset to baseline</button><button data-action="paste-project">Import MCP scenario JSON</button></div>
   <div class="comparison-grid">${cards}</div>
-  <div class="assumption-box" id="remaining-deficits"><strong>Hottest spots in the selected scenario</strong>${worst ? `<ol>${worst}</ol>` : '<p>No deficit points, or not evaluated.</p>'}${st && st.invalidCount ? `<p>${st.invalidCount}/${st.probeCount} points not evaluated. Top entries cover evaluated points only.</p>` : ''}</div>
+  <div class="assumption-box" id="remaining-deficits"><strong>Highest cooling-deficit locations in the selected scenario</strong>${worst ? `<ol>${worst}</ol>` : '<p>No deficit points, or not evaluated.</p>'}${st && st.invalidCount ? `<p>${st.invalidCount}/${st.probeCount} points not evaluated. Top entries cover evaluated points only.</p>` : ''}</div>
   <p class="micro">Deficits and areas are 60-min representative-point means under fixed weather. Means are simple averages over 70 points — not weighted by headcount or occupancy time. "Max" is the largest per-point 60-min mean deficit. "Reduction" is baseline deficit − scenario deficit (positive = improvement). "Not reduced" means a point still has a deficit that is no smaller than baseline. "No local action" is a diagnostic that fan, soaker and mist have no effect there; it excludes roof measures.</p>
-  <p class="micro">Water and power integrate 24-hour operation on a separate evaluation day. The 60-min deficit and daily resources cover different aggregation windows, and do not identify an all-day optimum. Milk, conception and running cost are under the reference tab.</p>`;
+  <p class="micro">Water and energy use integrate 24-hour operation on a separate evaluation day. The 60-min deficit and daily resources cover different aggregation windows, and do not identify an all-day optimum. Milk, conception and running cost are under the reference tab.</p>`;
 }
 function areaContent(p, r) {
     const l = (0, layout_js_1.buildLayout)(p.template), s = r?.scenarios.find(s => s.id === p.activeScenarioId), base = r?.scenarios.find(s => s.id === p.baselineScenarioId);

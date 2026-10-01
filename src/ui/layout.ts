@@ -1,7 +1,7 @@
 import {icon} from './dom.js';
 export function layout(){return `
 <header class="topbar">
- <div class="brand"><span class="brand-mark">${icon('barn',24)}</span><strong>Cooling Planner</strong><span class="version">v0.9</span></div>
+ <div class="brand"><span class="brand-mark">${icon('barn',24)}</span><span class="brand-text"><strong>Cooling Planner</strong><small class="tagline">Compare cooling options for dairy barns—balancing cow cooling, water, and energy.</small></span><span class="version">v0.9</span></div>
  <div id="scenario-tabs" class="segments" role="tablist" aria-label="Switch scenario"></div>
  <button id="weather-chip" data-action="weather" type="button" title="Open shared weather conditions"></button>
  <span id="status" role="status" data-state="calculating">Preparing</span>
@@ -17,7 +17,7 @@ export function layout(){return `
 <div class="summary-bar" aria-label="Selected point and scenario summary">
  <button class="sum-chip" data-action="panel-probe" id="sum-deficit" type="button"><small id="sum-deficit-label">Cooling deficit</small><b id="sum-deficit-value">—</b></button>
  <div class="sum-chip"><small>Water · whole scenario / day</small><b id="sum-water">—</b></div>
- <div class="sum-chip"><small>Power · whole scenario / day</small><b id="sum-power">—</b></div>
+ <div class="sum-chip"><small>Energy use · whole scenario / day</small><b id="sum-power">—</b></div>
  <span class="summary-note">Summary: 60-min mean at the selected point, plus whole-scenario daily totals</span>
 </div>
 <main class="stage">

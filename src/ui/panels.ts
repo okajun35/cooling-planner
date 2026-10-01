@@ -152,9 +152,9 @@ export function renderReferencePane(p:Project,r:SimulationResult|null){
  setHTML('reference-pane',`
  ${milkCard(p,r,s)}
  <div class="reference-card"><div class="reference-heading">${icon('heart',17)}<h3>Conception-rate scenario</h3></div><div class="fertility-value">${num(fert?.probability==null?null:fert.probability*100)}<small>%</small><span class="tag">${p.references.fertility.mode==='manual'?'independent representative environment':'point weather applied'}</span></div><p>${p.references.fertility.mode==='manual'?`reference ${p.references.fertility.temperatureC}℃ / ${p.references.fertility.relativeHumidityPct}%RH`: `difference from baseline ${signed(fdelta,2)} pts · ${fdelta===0?'same reference band':'comparison of weather bands'}`}<br>Assumes representative conditions from 21 days before to 30 days after insemination. Baseline conception ${num(p.references.fertility.p0*100,0)}%. A different time model from daily milk.</p><button data-action="references" class="text-button">Review period assumptions &amp; inputs →</button></div>
- <div class="resource-cards"><div>${icon('drop',18)}<span>Water <small>whole scenario / day</small></span><strong>${res===null?'Not calculated':num(res.waterLPerDay,0)}${res===null?'':'<small>L</small>'}</strong></div><div>${icon('bolt',18)}<span>Power <small>whole scenario / day</small></span><strong>${res===null?'Not calculated':num(res.totalKwhPerDay,1)}${res===null?'':'<small>kWh</small>'}</strong></div></div>
+ <div class="resource-cards"><div>${icon('drop',18)}<span>Water <small>whole scenario / day</small></span><strong>${res===null?'Not calculated':num(res.waterLPerDay,0)}${res===null?'':'<small>L</small>'}</strong></div><div>${icon('bolt',18)}<span>Energy use <small>whole scenario / day</small></span><strong>${res===null?'Not calculated':num(res.totalKwhPerDay,1)}${res===null?'':'<small>kWh</small>'}</strong></div></div>
  <p class="micro">Daily running cost: ${cost==null?'not evaluated (check calculation and unit prices)':num(cost,0)+' yen/day'}. A rough estimate from the entered unit prices; excludes installation cost and payback.</p>
- <p class="micro">The temperature and heat-loss cards above are per-point 60-min means after the device turns ON. Water, power and milk integrate the 24-hour operation mask of the evaluation day.</p>
+ <p class="micro">The temperature and heat-loss cards above are per-point 60-min means after the device turns ON. Water, energy use and milk integrate the 24-hour operation mask of the evaluation day.</p>
  <div class="result-note">Conversion of heat loss (W) into milk yield uses only the hypothesis model milk-heat-deficit-v0.1. It is not a guaranteed value for cow core temperature or real-farm outcomes.</div>`);
 }
 
@@ -191,11 +191,11 @@ export function renderHelp(){
  <h3>How to read the display</h3><table><tbody>
  <tr><th>Cooling deficit</th><td>60-min mean of the shortfall against reference heat loss Qref. 0 means no deficit; larger values are hotter points.</td></tr>
  <tr><th>Heat-loss improvement</th><td>Heat-loss difference from baseline. 0 means "same as baseline"; negative is worse.</td></tr>
- <tr><th>Water &amp; power</th><td>Daily totals for the whole scenario, integrated from the same 24-hour operation mask as daily milk.</td></tr>
+ <tr><th>Water &amp; energy use</th><td>Daily totals for the whole scenario, integrated from the same 24-hour operation mask as daily milk.</td></tr>
  <tr><th>Wind &amp; spray</th><td>Fan airflow and droplets are schematic representations of device action. This is not CFD.</td></tr>
  <tr><th>Milk &amp; conception</th><td>Daily milk is a hypothesis model (demo_assumption); conception is a reference scenario by THI band. Neither predicts a real farm.</td></tr></tbody></table>
  <h3>Using it from an AI agent (MCP)</h3><table><tbody>
- <tr><th>Remote MCP</th><td>This model can be called by external agents via MCP (Model Context Protocol).<br><code>https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/</code><br>Tools: get_default_project / evaluate / describe_model / get_doc.</td></tr>
+ <tr><th>Remote MCP</th><td>This model can be called by external agents via MCP (Model Context Protocol).<br><code>https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/</code><br>Tools: get_default_project / evaluate / compare_candidates / describe_model / get_doc.<br>compare_candidates: constrained comparison of 1–3 candidate operation sets — daily results, constraint verdicts and ranking.</td></tr>
  <tr><th>Public demo token</th><td><code>demo-581fKusGqNgk7YrycFNw6M_5</code> (public, free to use. Disabled individually if abused)</td></tr>
  <tr><th>Connection example</th><td><code>{"type":"http","url":"&lt;URL above&gt;","headers":{"Authorization":"Bearer demo-581fKusGqNgk7YrycFNw6M_5"}}</code></td></tr>
  <tr><th>Local MCP</th><td>Running <code>npm run mcp</code> in the repository enables the PoC where an AI directly operates the open page.</td></tr></tbody></table>
@@ -208,7 +208,7 @@ const SHEET_TABS=['compare','areas','timeline','reference'] as const;
 /** Panel visibility, view-mode chrome, legend, dock enablement, ghost/hint/guide. */
 export function renderChrome(p:Project,r:SimulationResult|null,w:Workspace){
  const s=activeScenario(p),disabled=s.readOnly;
- const panel=el('selection-panel');panel.dataset.panel=w.panel??'';panel.hidden=w.panel===null;
+ const panel=el('selection-panel');panel.dataset.panel=w.panel??'';panel.hidden=w.panel===null||!w.guide.done;
  el('panel-title').textContent=PANEL_TITLES[w.panel??'']??'';
  for(const k of ['device','probe','devices','roof','weather'] as const)el(`panel-${k}`).hidden=w.panel!==k;
  const sheet=el('sheet');sheet.hidden=w.sheet===null;sheet.dataset.tab=w.sheet??'';
