@@ -1,55 +1,55 @@
-# Cooling Planner 仕様追補 v0.6
+# Cooling Planner spec supplement v0.6
 
-> 2026-09-28追記：本書は既存実装・過去決定の記録。現在計画の乳量は[仮説モデルv0.1](MILK_HEAT_MODEL_V0_1.md)（D09-M01）を優先する。掲載6条件のみを主出力とする制限と、乳量接続のための時間境界を同仕様に限って更新する。原表自体の補間禁止は維持する。新モデルは未実装で、受胎の仕様は変更しない。
+> Note added 2026-09-28: This document records the existing implementation and past decisions. For milk in the current plan, the [hypothesis model v0.1](MILK_HEAT_MODEL_V0_1.md) (D09-M01) takes precedence. The limitation of "the 6 published conditions as the main output" and the time boundary for milk coupling are updated only within that spec. The prohibition on interpolating the original table itself is kept. The new model was unimplemented at the time; the conception spec is unchanged.
 
-## 乳量参照表の適用範囲・時間の扱い・残件管理
+## Milk reference table: applicable scope, time handling and open-items management
 
-- 決定日：2026-09-26
-- 文書版：0.6.0
-- 乳量参照モデルID：`milk-table-cowbell178-v1`
-- 継承する熱計算モデルID：`cooling-thermal-v0.5-assumptions-1`
-- 決定状態：**承認・クローズ（仕様決定）**
-- 実装状態：**本追補のアプリ実装・統合試験は未完了**
+- Decision date: 2026-09-26
+- Document version: 0.6.0
+- Milk reference model ID: `milk-table-cowbell178-v1`
+- Inherited thermal model ID: `cooling-thermal-v0.5-assumptions-1`
+- Decision status: **approved and closed (spec decision)**
+- Implementation status: **app implementation and integration testing of this supplement incomplete**
 
-> 初版は、掲載条件だけで乳量の参考値を返す。補間・外挿・近似条件への丸めは行わない。熱計算は固定気象の60分試行とし、乳量・繁殖の経時変化とは分離する。「対応範囲が狭い」ことを理由に、本決定を未決事項へ戻さない。
+> v1 returns a reference milk value only under the published conditions. No interpolation, extrapolation, or rounding to approximate conditions. The thermal calculation is a 60-minute trial under fixed weather, kept separate from milk/conception over time. The narrow applicable scope is not a reason to reopen this decision into open items.
 
-## 1. 目的と文書の優先順位
+## 1. Purpose and document precedence
 
-目的は、モデル牛舎で設備を操作し、環境と牛への作用を比較するシミュレーションを完成させることである。実牛舎の実測・校正・研究による妥当性確認は初版の完成条件にしない。
+The purpose is to finish a simulation that operates equipment in a model barn and compares the environment and the effect on the cow. Real-barn measurement, calibration and research-grade validation are not completion criteria for the first version.
 
-対象は既存のフリーストール1テンプレートとする。つなぎ牛舎を追加しない。
+The target is the existing single freestall template. No tie-stall barn is added.
 
-文書間で衝突する部分は、以下の順で適用する。
+Where documents conflict, apply them in this order:
 
-1. **本追補 v0.6**：乳量表の適用範囲、時間、表示・状態、決定の閉じ方。
-2. **熱モデル v0.5 の `MODEL.md`**：遮熱・断熱・屋根散水・ソーカー・ミストと牛の放熱の計算。
-3. **`dairy_cooling_simulator_spec_v0_4.md` と既存受入仕様**：上記で変更しない幾何、設備操作、状態管理、資源量、保存・比較等。
-4. 旧v0.3／v0.2仕様、過去の画面イメージ。
+1. **This supplement v0.6**: milk table's applicable scope, time, display/state, how decisions close.
+2. **Thermal model v0.5 `MODEL.md`**: shading, insulation, roof spray, soaker, mist and cow heat loss.
+3. **`dairy_cooling_simulator_spec_v0_4.md` and the existing acceptance spec**: geometry, equipment operation, state management, resources, saving/comparison, etc. not changed above.
+4. Old v0.3/v0.2 specs and past screen images.
 
-本書はv0.4の「乳量を出さない」を、**表に掲載された条件の参考乳量比は表示可能**へ限定的に置き換える。全設備の効果を乳量へ換算する包括的なモデルを採用した、という意味ではない。
+This document replaces v0.4's "do not output milk" only with the limited change that **the reference milk ratio under the conditions published in the table may be displayed**. It does not mean a comprehensive model converting every equipment effect into milk was adopted.
 
-本書は総合仕様の差分であり、熱計算の係数やコードは変更しない。画面イメージ内の数値はモデルの基準値として使用しない。
+This is a diff to the overall spec; thermal coefficients and code are unchanged. Numbers in screen images are not used as model reference values.
 
-## 2. 決定した範囲
+## 2. Decided scope
 
-| 決定ID | 内容 | 状態 |
+| Decision ID | Content | Status |
 |---|---|---|
-| D06-01 | 乳量参照は掲載された6条件だけ。中間値・範囲外は対象外 | CLOSED |
-| D06-02 | 補間、外挿、最近傍選択、条件の表示丸めによる適用は行わない | CLOSED |
-| D06-03 | 熱・散水の時間は固定気象60分、基本刻み1秒 | CLOSED |
-| D06-04 | 乳量参照表には時間モデルを追加しない | CLOSED |
-| D06-05 | 対象外の乳量はnullとして扱い、熱計算・設備操作は続行する | CLOSED |
-| D06-06 | 送風体感温度と、全対策の放熱改善を分けて表示するv0.5の境界を継承 | CLOSED（既存仕様の再確認） |
+| D06-01 | Milk reference covers only the 6 published conditions. Intermediate and out-of-range values are out of scope | CLOSED |
+| D06-02 | No interpolation, extrapolation, nearest-neighbour selection, or application via display rounding | CLOSED |
+| D06-03 | Thermal/spray time: 60 minutes fixed weather, base step 1 s | CLOSED |
+| D06-04 | No time model is added to the milk reference table | CLOSED |
+| D06-05 | Out-of-scope milk is null; thermal calculation and equipment operation continue | CLOSED |
+| D06-06 | Keep v0.5's boundary: fan-aided feels-like and whole-measure heat-loss improvement are shown separately | CLOSED (reconfirmation of existing spec) |
 
-CLOSEDは「仕様の判断が終わった」を意味する。コード反映・単体試験・画面統合・公開が済んだことを意味しない。
+CLOSED means "the spec judgment is finished". It does not mean code, unit tests, UI integration or publication are done.
 
-## 3. 乳量参照モデル
+## 3. Milk reference model
 
-### 3.1 掲載値
+### 3.1 Published values
 
-全酪連『COWBELL No.178 秋季号（2025年10月）』8ページ掲載の表を採用する。表の注記は「日本飼養標準乳牛2017年 表4.9.1.1より一部抜粋」「柴田ら、1984」。元実験を本プロジェクトで再検証したとは扱わない。[S1]
+Adopt the table on page 8 of JDLA 'COWBELL No.178 autumn issue (Oct 2025)'. The table notes read "excerpted in part from Japanese Feeding Standard for Dairy Cattle 2017, Table 4.9.1.1" and "Shibata et al., 1984". This project is not treated as having re-verified the original experiment. [S1]
 
-| 局所気温（℃） | 牛位置の風速（m/s） | 適温時を100とする乳量比（%） |
+| Local temperature (°C) | Wind speed at cow (m/s) | Milk ratio with mild temperature as 100 (%) |
 |---:|---:|---:|
 | 27 | 0.18 | 85 |
 | 27 | 2.24 | 95 |
@@ -58,162 +58,162 @@ CLOSEDは「仕様の判断が終わった」を意味する。コード反映�
 | 35 | 2.24 | 79 |
 | 35 | 4.02 | 79 |
 
-表の注記に合わせ、相対湿度は **60～70%（両端を含む）** を適用範囲とする。この範囲内で独自の湿度補正は行わない。表の「適温」は基準乳量100%を定義する説明であり、具体的な適温範囲を本表から新設しない。「―」は欠測・未掲載であって、0や100として取り扱わない。
+Following the table note, relative humidity **60–70% (both ends inclusive)** is the applicable range. No custom humidity correction inside that range. The table's "mild temperature" is explanatory wording defining the 100% baseline; no concrete mild-temperature range is newly created from this table. "―" is missing/unpublished, and is never treated as 0 or 100.
 
-### 3.2 適用判定
+### 3.2 Applicability check
 
-入力は外気温ではなく、乳量の参照対象とする**牛位置の局所気温・風速・相対湿度**とする。独立した表の比較では、選択された参照条件をそのまま入力とする。
+The input is not outdoor temperature but the **local temperature, wind speed and relative humidity at the cow position** chosen as the milk reference target. For an independent table lookup, the selected reference conditions are the input as-is.
 
-- 気温は27℃または35℃、風速は0.18、2.24、4.02m/sのいずれか、RHは60～70%のときに掲載値を返す。
-- 33.7℃、2.0m/sなどは対象外とする。
-- 33.7℃を35℃、2.0m/sを2.24m/sへ丸めない。
-- 適用判定には表示丸め前の値を使う。
-- 数値計算の表現誤差を処理する場合のみ、気温・風速の照合に絶対差`1e-9`以下を同値としてよい。これは実環境の許容幅や補間ではない。
-- 単位不明、NaN、Infinity、気温等の必須値欠落は入力不正として区別する。対象範囲の拡大で救済しない。
+- The published value is returned when temperature is 27°C or 35°C, wind speed is 0.18, 2.24 or 4.02 m/s, and RH is 60–70%.
+- 33.7°C, 2.0 m/s etc. are out of scope.
+- 33.7°C is not rounded to 35°C, and 2.0 m/s is not rounded to 2.24 m/s.
+- The applicability check uses values before display rounding.
+- Only when handling floating-point representation error may temperature and wind speed match on absolute difference ≤ `1e-9`. This is not a real-environment tolerance or interpolation.
+- Unknown units, NaN, Infinity and missing required values are distinguished as invalid input. They are not rescued by widening the applicable range.
 
-### 3.3 出力と状態
+### 3.3 Outputs and states
 
-| 状態 | 乳量比 | UI表示 |
+| State | Milk ratio | UI display |
 |---|---|---|
-| `available` | 掲載された割合 | 「乳量比（気温・風速の参照値）」＋条件と出典 |
-| `out_of_scope` | `null` | 「乳量推定：参照表の対象外」＋理由 |
-| `invalid_input` | `null` | 「入力を確認してください」＋対象項目 |
+| `available` | published ratio | "Milk ratio (reference value for temperature/wind speed)" + conditions and source |
+| `out_of_scope` | `null` | "Milk estimate: outside the published table" + reason |
+| `invalid_input` | `null` | "Check the input" + the item |
 
-対象外理由は、気温、風速、湿度、時間変動などを分けて記録する。値が`null`のときに0kg・0%・効果なし・対策前と同じ数値へ置き換えない。前回の有効値を最新結果として残さない。
+Out-of-scope reasons are recorded separately for temperature, wind speed, humidity, time variation, etc. When the value is `null`, it is not replaced by 0 kg, 0%, "no effect" or the same value as before the measure. A previous valid value is not kept as the latest result.
 
-基準乳量（適温時のkg/頭/日）が入力されている場合に限り、次の参考換算を行ってよい。
+Only when a baseline milk figure (kg/cow/day at mild temperature) has been entered may this reference conversion run:
 
 `referenceMilkKgPerDay = baselineMilkKgPerDay * milkRatioPct / 100`
 
-基準乳量が未入力でも、表の乳量比は表示できる。換算値は瞬時の生理応答、当該日の実測、将来予測とは呼ばない。同じ基準乳量・同じモデルの有効な2条件に限り参考差を表示できる。片方でも対象外なら差も`null`とする。
+The table ratio can be displayed even without a baseline milk figure. The converted value is not called an instantaneous physiological response, that day's measurement or a future prediction. A reference difference may be shown only between two valid conditions under the same baseline milk and same model. If either side is out of scope, the difference is `null`.
 
-### 3.4 この表に含めない効果
+### 3.4 Effects this table does not contain
 
-この表に、ソーカーによる直接冷却、放射熱、断熱性能、体温変化、受胎率の独立した条件軸はない。これらの効果を独自係数で乳量比へ上乗せしない。
+This table has no independent condition axes for direct soaker cooling, radiant heat, insulation performance, body-temperature change or conception rate. These effects are not stacked onto the milk ratio with custom coefficients.
 
-- 全酪連の送風体感温度`Tlocal - 6*sqrt(v)`を、この表の気温欄へ代入しない。
-- 放熱改善Wを、乳量kgや乳量比へ変換しない。
-- 屋根対策等で局所気温が変わり、掲載条件に一致した場合は、その**気温・風速に対応する参考値だけ**を表示できる。
-- 参考値が変わらない場合でも、表が扱わない対策の効果を「ゼロ」と評価しない。
-- 全設備を含む「総合的な増乳予測」「年間回復乳量」「投資回収年数」への自動接続は本表モデルには設けない。
+- The JDLA fan-aided feels-like temperature `Tlocal - 6*sqrt(v)` is not substituted into this table's temperature column.
+- Heat-loss improvement W is not converted into milk kg or milk ratio.
+- If a roof measure changes the local temperature so that it matches a published condition, only **the reference value for that temperature and wind speed** may be displayed.
+- Even when the reference value does not change, an effect the table does not cover is not evaluated as "zero".
+- No automatic coupling to an "overall milk-yield forecast including all equipment", "annual recovered milk" or "payback years" is provided in this table model.
 
-### 3.5 主画面での扱い
+### 3.5 Handling on the main screen
 
-通常の設備配置シミュレーションでは、連続値の気温・風速が計算されるため、乳量が対象外になることを許容する。乳量カードを埋めるために環境モデルを表の値へ補正しない。
+Normal equipment-placement simulation computes continuous temperature and wind values, so milk may be out of scope — that is allowed. The environment model is not corrected to table values just to fill the milk card.
 
-温度・風速の掲載条件は、参考資料カード等から確認できるようにする。表の条件を選んだ参照表示と、現在の牛舎計算結果を混同しない。このためだけに新しい独立アプリや大型画面を追加することは必須にしない。
+The published temperature/wind conditions must be checkable from a reference-material card or similar. Do not confuse a reference display with selected table conditions and the current barn's computed results. Adding a new standalone app or a large screen just for this is not mandatory.
 
-## 4. 時間と集計
+## 4. Time and aggregation
 
-### 4.1 熱・設備計算
+### 4.1 Thermal and equipment calculation
 
-- 試行時間：3,600秒。
-- 基本時間刻み：1秒。
-- 外気温、屋外水蒸気条件、日射、建物条件、機器の配置は1回の試行中固定。
-- 散水・ミストのON/OFF周期を計算する。開始時はON、保持水は0から開始する。
-- 屋根と空気は各時刻の準定常解とし、壁・屋根の蓄熱による応答時間は追加しない。
-- 牛体・屋根に残る水は時間更新し、供給停止後の乾燥を計算する。
-- 主結果は60分間の時間平均。平均は`sum(value * dt) / 3600`で計算する。
-- タイムラインには0～60分の温度・湿度・保持水・放熱等を表示できる。24時間の日変化の予測とは表示しない。
-- 再生倍率、停止、カメラ操作は計算期間・数値・水量を変えない。
-- 設備を変更したときは同一の初期条件から再計算する。前案の残水を次案へ引き継がない。
+- Trial duration: 3,600 s.
+- Base time step: 1 s.
+- Outdoor temperature, outdoor vapour conditions, solar, building conditions and equipment placement are fixed during one trial.
+- The spray/mist ON/OFF cycles are computed. They start ON; retained water starts at 0.
+- Roof and air use the quasi-steady solution at each step; no response lag from wall/roof heat storage is added.
+- Water remaining on the cow or roof is updated over time; drying after supply stops is computed.
+- Main results are 60-minute time means. The mean is `sum(value * dt) / 3600`.
+- The timeline can show temperature, humidity, retained water, heat loss etc. over 0–60 min. It is not displayed as a 24-hour daily forecast.
+- Playback speed, pause and camera operations change neither the calculation period, the values nor the water amounts.
+- After equipment changes, recompute from identical initial conditions. One scenario's residual water is not carried into the next.
 
-これらは熱モデルv0.5と既存仕様の境界を固定するものであり、新たに気象API、牛の行動モデル、建物蓄熱モデルを要求しない。[S2][S3]
+These fix the boundary of thermal model v0.5 and the existing spec; they do not newly require a weather API, a cow behaviour model or a building heat-storage model. [S2][S3]
 
-### 4.2 乳量表モデル
+### 4.2 Milk table model
 
-乳量表には時間依存の式がないため、時間応答を新設しない。[S1]
+The milk table has no time-dependent formula, so no time response is introduced. [S1]
 
-- 掲載条件に対応する静的な参考値として返す。
-- 温度・風速・湿度が変動する60分試行について、平均値が掲載条件に一致しただけでは乳量表を適用しない。
-- 瞬間的に掲載値を通過したことを根拠に、1日分の乳量を表示しない。
-- ミスト等の周期運転で参照入力が変動する場合、試行全体の乳量換算は`out_of_scope`とする。
-- 静的な条件の参照表示と、時間変動する熱計算は別の結果として保持する。
-- 「散水10分後に増乳」「翌日に回復」「60分の放熱から日乳量を積算」は行わない。
-- 時系列の乳量値の平均、24時間化、季節・年間への外挿は行わない。
+- Return it as a static reference value corresponding to the published conditions.
+- For a 60-minute trial in which temperature, wind or humidity varies, the table is not applied merely because the mean matches a published condition.
+- Do not display a day's milk on the grounds that a published value was instantaneously passed through.
+- When the reference input varies under cyclic operation such as mist, the whole-trial milk conversion is `out_of_scope`.
+- A static-condition reference display and the time-varying thermal calculation are kept as separate results.
+- No "milk gain 10 minutes after spraying", "recovery the next day", or "integrate daily milk from 60-minute heat loss".
+- No averaging of time-series milk values, no 24-hour scaling, no extrapolation to seasons or a year.
 
-これはソーカー等の周期運転を禁止するものではない。熱・水の時系列は通常どおり計算する。
+This does not prohibit cyclic operation such as soakers. Heat and water time series are computed as usual.
 
-### 4.3 資源量
+### 4.3 Resource amounts
 
-60分試行の水量は「試行中の使用量」と表示する。日水量・日電力量を併記する場合は、既存の運転時間・ON/OFF周期の算術で別計算し、60分の熱効果から日乳量を外挿しない。両者の単位と期間を明記する。[S2][S3]
+The 60-minute water figure is displayed as "amount used during the trial". If daily water/power are shown alongside, compute them separately by the existing arithmetic of operating hours and ON/OFF cycles — daily milk is never extrapolated from the 60-minute heat effect. State both units and periods. [S2][S3]
 
-## 5. 結果表示の境界
+## 5. Boundaries of result display
 
-| 表示項目 | 採用する定義 | 初版で追加しないもの |
+| Display item | Adopted definition | Not added in v1 |
 |---|---|---|
-| 舎内／局所気温、屋根温度、放射温度 | 熱モデルv0.5 | 実牛舎の精度保証 |
-| 送風体感温度（℃） | 全酪連掲載式`Tlocal - 6*sqrt(v)` | ソーカー・放射熱を独自に℃へ上乗せ |
-| 放熱改善（W、参考） | v0.5の基準案との差 | 牛の深部体温、実際の必要冷却量 |
-| 乳量比／参考kg | 本書の表掲載条件のみ | 全対策の総合効果、時間予測 |
-| 受胎への影響 | **残件R01：未決定** | 未定の係数を使った見せかけの数値 |
+| Barn/local air, roof and radiant temperatures | thermal model v0.5 | real-barn accuracy guarantee |
+| Fan-aided feels-like (°C) | JDLA-published formula `Tlocal - 6*sqrt(v)` | custom °C additions for soaker/radiant heat |
+| Heat-loss improvement (W, reference) | v0.5 difference from baseline | cow core temperature, actual required cooling |
+| Milk ratio / reference kg | only this document's published conditions | overall effect of all measures, time prediction |
+| Impact on conception | **open item R01: undecided** | cosmetic numbers using undecided coefficients |
 
-「全対策を一つの体感温度へ換算する」ことは、v0.5で未採用としている境界を継承する。これは今回新しく追加する未決事項ではない。既存の2つの指標を表示する仕様で進める。[S2]
+"Convert all measures into one feels-like temperature" inherits the boundary that v0.5 did not adopt. This is not a new open item this time. Proceed with the spec that displays the two existing indicators. [S2]
 
-したがって、初版は当初の「すべての設備→乳量・受胎まで必ず数値を出す」という構想より、出力範囲を限定する。未対応のものを対応済みと扱わない。
+The first version therefore narrows the output range compared with the original vision of "always producing a number all the way to milk and conception for every equipment". Unsupported items are not treated as supported.
 
-## 6. 受入テスト仕様（未実施）
+## 6. Acceptance test spec (not yet run)
 
-本表は今後の実装の受入条件であり、この文書作成時にテストが通過したという記録ではない。
+This table is the acceptance condition for future implementation, not a record that tests passed at the time of writing.
 
-| ID | 入力・操作 | 期待結果 |
+| ID | Input / operation | Expected |
 |---|---|---|
-| M01 | 掲載6条件、RH65% | 各行の85/95/95/63/79/79を返す |
-| M02 | 掲載気温・風速、RH60%または70% | 適用可 |
-| M03 | 掲載気温・風速、RH59%または71% | 対象外、乳量はnull |
-| M04 | 33.7℃・2.24m/s・RH65% | 対象外。35℃へ丸めない |
-| M05 | 27℃・2.0m/s・RH65% | 対象外。2.24m/sへ丸めない |
-| M06 | 表の「―」に対応する条件 | 0・100等で埋めず対象外 |
-| M07 | 有効な条件→対象外へ変更 | 旧乳量を最新値として残さない |
-| M08 | 基準乳量35kg、27℃・2.24m/s・RH65% | 参考乳量33.25kg/頭/日。予測実績とは表示しない |
-| M09 | 基準乳量なし、条件は有効 | 比率95%は表示、kgはnull |
-| M10 | 比較する片方だけ対象外 | 乳量差もnull。0差にしない |
-| M11 | 時間平均だけ27℃、途中に他の温度 | 試行全体の乳量は対象外 |
-| M12 | NaN、Infinity、単位不明など | 入力不正。対象外・ゼロとは区別 |
-| M13 | 表にない条件で設備を移動 | 熱・風・水の計算は継続。乳量対象外が操作を止めない |
-| T01 | 同じ入力で再計算 | 同じ3,600秒の計算結果 |
-| T02 | 再生倍率・停止・カメラのみ変更 | 数値結果・試行水量は変わらない |
-| T03 | 散水がOFF、体表に水あり | 残水の範囲で蒸発。乳量の即時回復は出さない |
-| T04 | グラフ・資源カード | 熱の時間軸は0～60分、60分資源量と日資源量の期間を区別 |
+| M01 | the 6 published conditions, RH 65% | returns 85/95/95/63/79/79 per row |
+| M02 | published temperature/wind, RH 60% or 70% | applicable |
+| M03 | published temperature/wind, RH 59% or 71% | out of scope; milk null |
+| M04 | 33.7°C, 2.24 m/s, RH 65% | out of scope; not rounded to 35°C |
+| M05 | 27°C, 2.0 m/s, RH 65% | out of scope; not rounded to 2.24 m/s |
+| M06 | conditions matching the table's "―" | out of scope; not filled with 0 or 100 |
+| M07 | valid conditions changed to out of scope | the old milk figure is not kept as the latest value |
+| M08 | baseline milk 35 kg, 27°C, 2.24 m/s, RH 65% | reference milk 33.25 kg/cow/day. Not displayed as a measured prediction |
+| M09 | no baseline milk, conditions valid | ratio 95% shown; kg is null |
+| M10 | only one side of a comparison is out of scope | milk difference also null, not 0 |
+| M11 | time-mean alone is 27°C with other temperatures mid-trial | whole-trial milk is out of scope |
+| M12 | NaN, Infinity, unknown units, etc. | invalid input. Distinguished from out-of-scope and zero |
+| M13 | move equipment under conditions not in the table | heat/wind/water calculations continue; out-of-scope milk does not stop operation |
+| T01 | recompute with the same inputs | same 3,600 s result |
+| T02 | change playback speed, pause or camera only | numeric results and trial water unchanged |
+| T03 | spray OFF with water on the skin | evaporation within the residual water; no instant milk recovery shown |
+| T04 | graph / resource card | thermal axis 0–60 min; 60-min resources and daily resources keep distinct periods |
 
-既存の熱・水収支、潜熱の二重計上、保存復元、非有限値、案比較のテストは維持する。本追補の仕様決定の完了と、これらの実装テスト合格は別管理とする。
+The existing tests for heat/water balances, no latent-heat double counting, save/restore, non-finite values and scenario comparison are kept. Completing this supplement's spec decision and passing those implementation tests are managed separately.
 
-## 7. 残件
+## 7. Open items
 
-### 7.1 新たにモデル仕様を決める残件
+### 7.1 Open items needing a new model spec
 
-**R01：受胎への推定影響モデル。**
+**R01: model estimating the impact on conception.**
 
-未決定なのは、採用する式・表、説明するアウトカム（例：1回の授精当たり受胎率）、適用条件、参照する暑熱曝露期間である。全酪連の今回の記事は繁殖への影響を収支計算に含めていないため、本乳量表からは導出しない。[S1]
+Undecided: the formula or table to adopt, the outcome to describe (e.g. conception rate per insemination), applicable conditions and the referenced heat-exposure period. This JDLA article does not include fertility effects in the balance calculation, so it is not derived from this milk table. [S1]
 
-完了条件は、モデル名・出典または明示的仮定・入力・出力・対象外条件・時間の扱い・計算例を一つの仕様に固定すること。実農場での前向き試験を完了条件にはしない。受胎モデルが未定でも、熱計算・配置・比較の統合は進める。
+Completion condition: fix in a single spec the model name, source or explicit assumption, inputs, outputs, out-of-scope conditions, time handling and a calculation example. A prospective real-farm trial is not a completion condition. Even without a conception model, integrating the thermal calculation, placement and comparison proceeds.
 
-### 7.2 仕様がある部分の実装・確認残件
+### 7.2 Implementation/verification open items where a spec exists
 
-| ID | 作業 | 現状と完了条件 |
+| ID | Work | Status and completion condition |
 |---|---|---|
-| R02 | 乳量参照関数と対象外表示 | 本追補は仕様のみ。6条件・null・状態遷移・比較の単体／画面テストを通す |
-| R03 | 熱モデルv0.5と既存2D／3Dアプリを接続 | v0.5は独立計算コード。配置→局所風・水→屋根／熱→結果が同じ状態を参照し、対策前後を一周して比較できること |
-| R04 | 統合・ブラウザの動作確認 | 設備選択・移動・向き、再計算、Undo、保存・復元、比較、3D実描画、エラー・対象外状態を確認する |
-| R05 | 公開・提出用の確認 | 公開URLで主要操作と比較が動くことを確認し、デモと根拠・仮定の表示を整理する。最新の公開状態は今回未確認 |
+| R02 | milk reference function and out-of-scope display | this supplement is spec only. Pass unit/view tests for the 6 conditions, null, state transitions and comparison |
+| R03 | connect thermal model v0.5 to the existing 2D/3D app | v0.5 is standalone calculation code. Placement → local wind/water → roof/heat → results must reference the same state, so a before/after measure can be compared end to end |
+| R04 | integration and browser operation checks | verify equipment selection/move/direction, recalculation, Undo, save/restore, comparison, real 3D rendering, error and out-of-scope states |
+| R05 | pre-release/submission checks | confirm main operations and comparison work at the published URL; organise the demo and the display of grounds/assumptions. The latest published state was not checked this time |
 
-v0.3の実装報告にある「3D実描画検証未完」を、最新の全コードが未実装であるという意味には読み替えない。最新アプリの完了箇所は統合時に確認し、既存実装を再利用する。[S4]
+"Real 3D rendering verification incomplete" in the v0.3 implementation report is not to be reread as "the whole latest code is unimplemented". Verify what the latest app completes at integration time and reuse the existing implementation. [S4]
 
-**モデルの不完全さに関する一般的な追加調査、実牛舎の計測、CFD、表の穴埋め、総合体感温度の新設は、この残件一覧に追加しない。**
+**General follow-up research about model incompleteness, real-barn measurement, CFD, filling gaps in the table and a new overall feels-like temperature are NOT added to this open-items list.**
 
-## 8. 今回変更していないものと引継ぎ
+## 8. What was not changed this time, and handover
 
-本追補で行ったのは仕様の記録である。既存HTML、TypeScript、Pythonの計算コード、保存データ、公開環境は変更していない。ソースライブラリの旧仕様を上書き・削除していない。
+This supplement records the spec. Existing HTML, TypeScript, Python calculation code, saved data and the delivery environment are unchanged. The source library's old specs are not overwritten or deleted.
 
-同梱するv0.5一式は元ZIPの内容を変更せず保持する。v0.5のテスト記録は過去の実行記録であり、今回再実行した結果ではない。v0.6アプリの完成を意味しない。
+The bundled v0.5 set is kept without modifying the original ZIP contents. v0.5's test records are past execution records, not results rerun this time. They do not mean the v0.6 app is finished.
 
-実装の順序は、R02とR03で一つの操作・比較を通す作業を進めつつ、残るモデル判断R01を固定し、R04→R05へ進む。閉じたD06-01～06を、一般的な精度不安だけで再度調査タスクに戻さない。変更する場合は明示的な仕様変更として別の決定IDを作る。
+Implementation order: proceed with R02 and R03 to complete one operation/comparison loop, fix the remaining model decision R01, then move to R04→R05. The closed D06-01–06 are not returned to investigation tasks over generic accuracy anxiety. A change must be an explicit spec change under a new decision ID.
 
-## 9. 参照資料
+## 9. References
 
-- **[S1]** 全酪連『COWBELL No.178 秋季号（2025.10）』、保存名`No178HP(2).pdf`。p.6：送風体感温度式。p.8：気温・風速と乳量比の表、相対湿度60～70%の注記、繁殖影響を計算に含めない旨。参照表は原典を抜粋したものであり、全酪連独自の追試とは記載しない。
-- **[S2]** `cooling_planner_thermal_v05/MODEL.md`、2026-09-26、§1・3・9・11。独立計算実装、未統合の範囲、3,600秒・1秒、総合体感温度を含めない境界、検証範囲を確認。
-- **[S3]** `dairy_cooling_simulator_spec_v0_4.md`、§6・7・8・9。設備と局所環境、60分試行、日資源量、状態管理、比較・保存、計算と描画の分離。
-- **[S4]** `dairy_cooling_planner_implementation_report.md`、v0.3.0-preview.1、2026-09-25。2D・共通モデルと3D実描画の検証状況を区別した過去の実装報告。
+- **[S1]** JDLA 'COWBELL No.178 autumn issue (2025.10)', saved as `No178HP(2).pdf`. p.6: fan-aided feels-like formula. p.8: temperature/wind vs milk-ratio table, the RH 60–70% note, and the statement that fertility effects are excluded from the balance. The reference table is an excerpt of the original — it is not described as JDLA's own replication for this project.
+- **[S2]** `cooling_planner_thermal_v05/MODEL.md`, 2026-09-26, §1, 3, 9, 11. Confirms the standalone calculation implementation, the not-yet-integrated scope, 3,600 s / 1 s, the boundary excluding an overall feels-like temperature, and the verification scope.
+- **[S3]** `dairy_cooling_simulator_spec_v0_4.md`, §6, 7, 8, 9. Equipment and local environment, 60-min trial, daily resources, state management, comparison/saving, separation of calculation and rendering.
+- **[S4]** `dairy_cooling_planner_implementation_report.md`, v0.3.0-preview.1, 2026-09-25. Past implementation report that distinguished the verification status of the 2D/shared model from real 3D rendering.
 
-本書の適用範囲・補間禁止・時間境界は、2026-09-26のユーザーとの合意によるプロダクト仕様であり、上記資料自体がこのアプリ仕様を定めたという意味ではない。
+The applicable scope, no-interpolation rule and time boundary in this document are product spec agreed with the user on 2026-09-26 — the listed materials did not themselves set this app's spec.

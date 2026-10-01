@@ -1,83 +1,83 @@
-# Cooling Planner — 暑熱負荷から乳量への仮説モデル v0.1
+# Cooling Planner — heat-load to milk hypothesis model v0.1
 
-仕様決定：2026-09-28。状態更新：2026-10-01。決定ID：D09-M01。モデルID：`milk-heat-deficit-v0.1`。
-状態：**仮説モデルとして実装済み**。算術・統合・ブラウザ検証の対応は[実装報告](MILK_MODEL_IMPLEMENTATION_REPORT.md)を参照。実牛舎での妥当性・係数の校正は未検証。
-固定気象・日射を24時間反復する代表日比較であり、時刻別気象・夜間の日射変化は未実装。
-コードへの接続方法・運転開始時刻・保存形式・実装順序は[実装計画・引継ぎ](MILK_MODEL_IMPLEMENTATION_PLAN.md)を参照する。
+Spec decided: 2026-09-28. Status updated: 2026-10-01. Decision ID: D09-M01. Model ID: `milk-heat-deficit-v0.1`.
+Status: **implemented as a hypothesis model**. See the [implementation report](MILK_MODEL_IMPLEMENTATION_REPORT.md) for arithmetic, integration and browser verification. Validity on real farms and coefficient calibration are unverified.
+This compares a representative day in which fixed weather and solar repeat for 24 hours; hourly weather and night-time solar variation are not implemented.
+For how the model connects to the code, operation start times, save format and implementation order, see the [implementation plan / handover](MILK_MODEL_IMPLEMENTATION_PLAN.md).
 
-## 1. 目的・優先順位
+## 1. Purpose and priorities
 
-設備 → 牛舎環境 → 牛の放熱 → 1日の暑熱負荷 → 日乳量の参考影響を接続する。
-モデルが不完全でも仮定を明示し、同じ気象・牛条件で設備案を比較する。
-実牛舎での計測・妥当性検証は別フェーズで、初版の完成条件にはしない。
+Connect equipment → barn environment → cow heat loss → daily heat load → reference impact on daily milk.
+Even if the model is incomplete, state the assumptions and compare equipment scenarios under the same weather and cow conditions.
+Real-farm measurement and validity checks belong to another phase and are not completion criteria for the first version.
 
-本書は現在計画の乳量計算仕様である。v0.6の「掲載6条件のみを主出力とする」方針、
-v0.8の包括的なW→乳量接続禁止を、本書の明示的な仮説モデルに限って置き換える。
-熱v0.5の物理式は継承するが、本書では24時間集計のために計算期間・履歴管理を拡張する計画とする。
-環境THI、送風体感温度、深部体温、受胎への独自換算は追加しない。
+This document is the milk calculation spec of the current plan. v0.6's policy of "the 6 published conditions only, as the main output" and
+v0.8's blanket prohibition on W→milk coupling are replaced only within the explicit hypothesis model defined here.
+The thermal physics of v0.5 is inherited, but this plan extends the computation period and history handling for 24-hour aggregation.
+No in-house conversions to environmental THI, fan-aided feels-like temperature, core body temperature or conception are added.
 
-既存の乳量表 `milk-table-cowbell178-v1` は原資料として保持する。
-表自体の補間・外挿を行うものではなく、本書の係数を表から導出したとも扱わない。
-現在のアプリは60分の熱診断に加え、本仮説モデルの日計算を実装している。表参照は独立した資料として残している。
+The existing milk table `milk-table-cowbell178-v1` is kept as source material.
+The table itself is not interpolated or extrapolated, and this spec's coefficients are not treated as derived from it.
+The current app implements this hypothesis model's daily calculation on top of the 60-minute thermal diagnosis. The table reference remains as an independent resource.
 
-## 2. 初期値と根拠の分類
+## 2. Initial values and classification
 
-| 項目 | 初期値 | 単位・意味 | 分類 |
+| Item | Initial value | Unit / meaning | Class |
 |---|---:|---|---|
-| 暑熱がない場合の日乳量 Y0 | 40 | kg/頭/日。現在の実測乳量とは区別 | demo_assumption |
-| 基準放熱量 Qref | 630 | W/頭。負荷を数える固定の起点 | demo_assumption |
-| 換算係数 beta | 0.010 | (kg/頭/日)/(W/頭)。日平均不足100 Wで低下1 kg/頭/日 | demo_assumption |
-| 低下上限率 rmax | 0.25 | Y0の25%。生物学的な最大低下率ではない | demo_assumption |
-| 当日・前日・前々日の重み | 0.2 / 0.5 / 0.3 | 合計1 | demo_assumption |
-| 牛床・採食・その他の滞在割合 | 14/24 / 6/24 / 4/24 | 各時刻の牛群分布 | demo_assumption |
-| betaの感度比較 | 0.005 / 0.010 / 0.015 | 仮定による幅。信頼区間ではない | demo_assumption |
+| Daily milk without heat stress Y0 | 40 | kg/cow/day. Distinct from current measured milk | demo_assumption |
+| Reference heat loss Qref | 630 | W/cow. Fixed origin for counting load | demo_assumption |
+| Conversion coefficient beta | 0.010 | (kg/cow/day)/(W/cow). A 100 W daily-mean deficit lowers milk by 1 kg/cow/day | demo_assumption |
+| Loss cap fraction rmax | 0.25 | 25% of Y0. Not a biological maximum loss rate | demo_assumption |
+| Weights for today / yesterday / day before | 0.2 / 0.5 / 0.3 | sums to 1 | demo_assumption |
+| Occupancy fractions: stall / feeding / other | 14/24 / 6/24 / 4/24 | herd distribution at each time | demo_assumption |
+| beta sensitivity comparison | 0.005 / 0.010 / 0.015 | spread across assumptions. Not a confidence interval | demo_assumption |
 
-Qrefの設定材料：熱v0.5へ気温25℃・RH60%・風速0.4 m/s・放射環境25℃、
-日射0・背景顕熱0・散水なし・体表温度35℃を与えた試算は約628.8359 W/頭。
-この計算値を丸めて初期値630 Wを選んだ。25℃等を負荷の起点に選ぶこと自体が仮定である。
-630 Wは代謝熱・実際の必要放熱量・生理的閾値の観測値ではない。
-Qrefは案ごとに計算し直さず、モデル版の係数として保存する。
+Basis for Qref: a trial on thermal v0.5 with air 25°C, RH 60%, wind 0.4 m/s, radiant environment 25°C,
+zero solar, zero background sensible heat, no sprinkling and skin 35°C gives about 628.8359 W/cow.
+That computed value was rounded to the initial value 630 W. Choosing 25°C etc. as the load origin is itself an assumption.
+630 W is not an observation of metabolic heat, actual required heat loss, or a physiological threshold.
+Qref is not recomputed per scenario; it is stored as a coefficient of the model version.
 
-betaは実験から推定済みの回帰係数ではない。まず比較挙動を確認するための仮置きである。
-Y0を変更しても、初版ではbetaを自動補正しない。高泌乳牛ほど発熱が増える応答も追加しない。
+beta is not a regression coefficient estimated from experiments. It is a placeholder for first checking comparative behaviour.
+Changing Y0 does not auto-adjust beta in v1. No response is added for higher-yielding cows producing more heat.
 
-## 3. 暑熱負荷の定義
+## 3. Definition of heat load
 
-案s、地点i、時刻tにおける既存の正味放熱量を Q[s,i,t] とする。外へ放熱する方向が正。
-対流・放射・通常蒸発・ソーカー蒸発・結露を既存モデルで一度ずつ計上する。
+Let Q[s,i,t] be the existing net heat loss of scenario s, point i, time t. Outward heat loss is positive.
+Convection, radiation, base evaporation, soaker evaporation and condensation are each counted once by the existing model.
 
 ```text
 H[s,i,t] = max(0, Qref - Q[s,i,t])
 ```
 
-Hは「基準に対する放熱不足」という仮説上の指標であり、実際の体内蓄熱ではない。
-Qが負の場合も上式を使う。冷たい場所・時刻の余剰放熱で、暑い場所・時刻の不足を相殺しない。
-まず地点ごとにmaxを適用してから空間・時間平均する。
+H is a hypothetical index, "heat-loss deficit relative to the reference" — not actual body heat storage.
+The formula applies even when Q is negative. Surplus heat loss at cool places/times does not offset deficits at hot ones.
+Apply max per point first, then average over space and time.
 
-### 牛群平均の滞在分布
+### Herd-mean occupancy distribution
 
-全時刻で牛床14/24、採食場所6/24、その他4/24とする。
-同一区域の評価点には、その区域の割合を均等に割り当てる。全地点の重みの合計は1。
-これは各牛が指定時刻に移動するモデルではなく、牛群平均の滞在分布である。
-実装計画では牛床50地点、採食12地点、その他を代表するロボット前8地点を使用する。
-ロボット前を通路・搾乳中等の代理とする点も設計仮定として表示する。
-同じ分布を全案に適用し、設備の有無で牛を自動的に移動させない。
+At all times: stalls 14/24, feeding area 6/24, other 4/24.
+Evaluation points in the same area share that area's fraction equally. All point weights sum to 1.
+This is not a model in which each cow moves at the specified times — it is a herd-mean occupancy distribution.
+The implementation plan uses 50 stall points, 12 feeding points and 8 robot-front points to represent the other area.
+That robot-front stands in for alley/milking etc. is also shown as a design assumption.
+The same distribution applies to every scenario; cows are not moved automatically by the presence of equipment.
 
-各評価点と3区域の対応が必要である。欠けた区域を他区域へ無断で配分しない。
-従来の全地点単純平均や、画面で選択した1地点をそのまま牛群平均へ置き換えない。
-地点の保持水は従来どおり独立した代表表面の状態とし、移動に伴う水の持ち運びは解かない。
+Each evaluation point must map to one of the 3 areas. A missing area is never redistributed to others without notice.
+Do not replace this with the old simple all-points mean, or with the single point selected in the UI as the herd mean.
+A point's retained water stays a state of an independent representative surface, as before; water carried between locations is not modelled.
 
-### 1日の集計
+### Daily aggregation
 
 ```text
 D[s,d] = sum_t(sum_i(weight[i,t] * H[s,i,t]) * dt_seconds) / 86400
 ```
 
-Dの単位はW/頭（日平均）。集計期間は24時間、重みは各時刻で合計1。
-200 Wの不足が24時間ならD=200 W、12時間で残りは不足なしならD=100 W。
-1時間の結果を説明なしに24時間化しない。表示用サンプルから再集計せず、計算刻みで積算する。
+D is in W/cow (daily mean). The aggregation period is 24 hours; weights sum to 1 at each time.
+A 200 W deficit over 24 h gives D=200 W; over 12 h with no deficit for the rest gives D=100 W.
+A 1-hour result is never scaled to 24 hours without explanation. Values are integrated at the computation step, not re-aggregated from display samples.
 
-## 4. 遅れ・日乳量・上限
+## 4. Lag, daily milk and cap
 
 ```text
 E[s,d] = 0.2*D[s,d] + 0.5*D[s,d-1] + 0.3*D[s,d-2]
@@ -86,121 +86,121 @@ Y[s,d] = Y0 - L[s,d]
 deltaY[d] = Y[improved,d] - Y[baseline,d]
 ```
 
-Eは遅れを含めた負荷、Lは乳量低下、Yは日乳量。LとYの単位はkg/頭/日。
-暑熱のない状態でも過去2日分の負荷が残っていれば、直ちにY0へ戻らない。
-本式に体内蓄熱、夜間回復の独立した機構、3日より長い影響は含まれない。
+E is the lagged load, L the milk reduction, Y the daily milk. L and Y are in kg/cow/day.
+Even without heat stress today, residual load from the past two days means Y does not return to Y0 immediately.
+The formula contains no body heat storage, no independent night-time recovery mechanism, and no effects beyond 3 days.
 
-Yは初期値では30〜40 kg/頭/日となる。上限到達時は「低下上限に到達」と表示し、
-それ以上の負荷差が乳量に現れないことを説明する。限界を生理的な安全域として扱わない。
-改善案が悪化した場合、deltaYは負になり得る。改善差を0以上へ切り上げない。
-基準案の選び直しは差だけを変え、各案のYそのものは変えない。
+With the initial values Y is 30–40 kg/cow/day. When the cap is reached, show "loss cap reached" and
+explain that further load differences no longer appear in milk. The cap is not treated as a physiological safe zone.
+If the improved scenario is worse, deltaY can be negative. Improvement differences are not clamped to ≥0.
+Re-picking the baseline changes only the difference; each scenario's Y itself does not change.
 
-ファン・遮熱・断熱・屋根散水・ソーカー・ミストを熱モデル側で同時に計算する。
-「ファンで何kg、散水で何kg」を足し合わせず、文献の増乳値を追加で上乗せしない。
+Fans, shading, insulation, roof spray, soakers and mist are computed together on the thermal-model side.
+"X kg from fans, Y kg from sprinkling" are not added together, and literature milk gains are not stacked on top.
 
-## 5. 時間・運転・初期化
+## 5. Time, operation and initialisation
 
-熱計算は1秒刻みを継承する。1日=86400秒とし、屋根・空気は各刻みの準定常解。
-保持水と周期位相は時間・日境界をまたいで維持する。毎時乾いた状態から再起動しない。
-実装計画の日運転ポリシーでは、各日の設定開始時刻で周期をONから再開始する。
-これは午前0時や評価日開始時の無条件リセットとは区別し、24時間運転にも適用する。
-設備の変更後は同じ共通条件から案ごとに再計算し、編集順に結果を依存させない。
+The thermal calculation keeps its 1-second step. A day is 86400 s; roof and air use the quasi-steady solution at each step.
+Retained water and cycle phase are carried across time and day boundaries. Equipment is not restarted from dry every hour.
+Under the implementation plan's daily-operation policy, each day's cycle restarts ON at the configured start hour.
+This is distinct from an unconditional reset at midnight or evaluation-day start, and also applies to 24-hour operation.
+After equipment changes, each scenario is recomputed from the same shared conditions; results do not depend on edit order.
 
-### 初版：同じ代表日が続いた場合
+### v1: when the same representative day repeats
 
-1. 気象、配置、24時間の運転条件、滞在分布を全案で対応させる。
-2. 各案を乾いた初期状態から24時間準備計算する。
-3. 状態を引き継ぎ、次の24時間を評価する。
-4. 評価日のDを前日・前々日にも置く。したがってE=Dとなる。
+1. Make weather, placement, 24-hour operation conditions and occupancy distribution correspond across all scenarios.
+2. Compute each scenario for a 24-hour preparation run from a dry initial state.
+3. Carry the state over and evaluate the next 24 hours.
+4. Set the evaluation day's D on the two preceding days as well. Hence E=D.
 
-「同じ代表日が続いた場合の参考推定」と表示する。設備導入当日の増乳とは表示しない。
-準備計算24時間は初版の仮定であり、厳密な周期定常解への収束保証ではない。
-時刻別気象がない場合は、現在の気温・湿度・日射を24時間一定とする仮想日として明示する。
-夜も日射が一定の設定を、実際の日変化や日平均気象として扱わない。
+Display as "reference estimate for a repeated representative day". Do not present it as milk gained on the day equipment is installed.
+The 24-hour preparation is a v1 assumption, not a guarantee of convergence to an exact periodic steady state.
+When no hourly weather exists, state explicitly that current temperature, humidity and solar are treated as constant for a virtual 24-hour day.
+Do not treat constant night-time solar as an actual diurnal variation or daily-mean weather.
 
-既存の日運転時間だけではONの時刻が決まらないため、日乳量への接続には24時間の
-運転マスクが必要である。[実装計画](MILK_MODEL_IMPLEMENTATION_PLAN.md)で、開始08:00を初期値とし、日跨ぎと周期再開始の規則を定義した。
-日運転時間を無視した終日稼働へ黙って置き換えない。終日稼働の計算例は24時間ONと明記する。
-資源量を日乳量と比較する場合も、同じ運転マスクから計算する。
+Because daily operating hours alone do not fix when ON occurs, connecting to daily milk needs a 24-hour
+operation mask. The [implementation plan](MILK_MODEL_IMPLEMENTATION_PLAN.md) sets 08:00 as the default start and defines midnight-crossing and cycle-restart rules.
+Do not silently replace daily operating hours with all-day operation. An all-day example must say "24 h ON" explicitly.
+Resource amounts compared against daily milk are computed from the same operation mask.
 
-### 将来拡張：設備を切り替えた後の時系列
+### Future extension: time series after switching equipment
 
-数式は共通だが、初版の必須画面にはしない。切替前2日のDは両案で共通とし、
-切替時の残水・周期位相等も共通履歴から定める。履歴不足を0で埋めない。
-実際の履歴を使わない場合は、切替前の基準案の代表日を2日分置く仮定を記録する。
+The formula is shared, but this is not a required v1 view. D for the two days before the switch is shared by both scenarios,
+and residual water and cycle phase at the switch are taken from the shared history. Missing history is not filled with 0.
+When no actual history is used, record the assumption that the baseline scenario's representative day fills the two pre-switch days.
 
-## 6. 入出力・表示・保存
+## 6. Inputs, outputs, display and saving
 
-入力にはモデルID、Y0、Qref、beta、rmax、遅れの重み、区域と滞在割合、
-気象と運転の24時間条件、時間モード、初期化条件を含める。全案で牛・係数・気象の条件を揃える。
+Inputs include the model ID, Y0, Qref, beta, rmax, lag weights, areas and occupancy fractions,
+24-hour weather and operation conditions, the time mode and initialisation conditions. Cow, coefficient and weather conditions are aligned across scenarios.
 
-出力はD、E、L、Y、基準案との差、上限到達フラグ、使用した仮定とモデルID。
-必要入力が不足する場合は数値をnullとし、前回値や0を最新の乳量として残さない。
-Y0は有限の正値、beta・Qrefは有限の非負値、rmaxは0〜1、各重みは非負で合計1とする。
-気象・風速等は熱モデルの入力範囲を継承し、範囲外を丸めて受け入れない。
-欠損時刻・地点、区域対応不足、非有限値は計算不可として原因を返す。
+Outputs are D, E, L, Y, the difference from baseline, the cap-reached flag, the assumptions used and the model ID.
+When required inputs are missing, values are null — the previous value or 0 is not kept as the latest milk figure.
+Y0 is a finite positive value, beta and Qref finite non-negative, rmax in 0–1, each weight non-negative summing to 1.
+Weather, wind speed etc. inherit the thermal model's input ranges; out-of-range values are not rounded in.
+Missing times or points, missing area mapping, and non-finite values are returned as not calculable with reasons.
 
-主表示は「乳量への参考影響（仮説モデル）」とし、日乳量と基準案との差を小数1桁で示す。
-計算途中は丸めない。詳細でY0、負荷、係数、上限、代表日の仮定と出典を確認できるようにする。
-betaの3条件は全案共通で比較する。案ごとに有利な係数を選ばない。
-その幅は「換算の仮定を変えた場合の幅」であり、信頼区間・実農場の予測範囲とは表示しない。
-乳量表の対象外理由カードを新モデルの主導線には置かない。原表は根拠資料として閲覧できる。
+The main display is "reference impact on milk yield (hypothesis model)", showing daily milk and the difference from baseline to one decimal place.
+No rounding during computation. The detail view must expose Y0, load, coefficients, cap and the representative-day assumptions with sources.
+The three beta conditions are applied to all scenarios equally. A favourable coefficient is never picked per scenario.
+That spread is "the spread when the conversion assumption is changed" — not shown as a confidence interval or real-farm prediction range.
+The milk table's out-of-scope reason card is not placed on the new model's main path. The original table stays browsable as source material.
 
-保存・復元では係数と仮定を保持し、既存v8データを新モデルで黙って再解釈しない。
-実装計画では保存形式9を採用し、v8の自動変換は行わず現在案を保持して拒否する。
-現在のコード・保存形式は未変更。
+Save/restore keeps the coefficients and assumptions; existing v8 data is not silently reinterpreted under the new model.
+The implementation plan adopts save format 9, does not auto-convert v8, keeps the current scenario and rejects the load.
+The current code and save format are unchanged.
 
-## 7. 計算例・受入条件
+## 7. Calculation examples and acceptance criteria
 
-### 数値例
+### Numeric examples
 
-Y0=40、beta=0.010、rmax=0.25とする。
+Let Y0=40, beta=0.010, rmax=0.25.
 
-| E（W/頭） | L（kg/頭/日） | Y（kg/頭/日） |
+| E (W/cow) | L (kg/cow/day) | Y (kg/cow/day) |
 |---:|---:|---:|
 | 0 | 0 | 40 |
 | 100 | 1 | 39 |
 | 300 | 3 | 37 |
-| 1200 | 10（上限） | 30 |
+| 1200 | 10 (cap) | 30 |
 
-基準案D=300、改善案D=100が続いた場合、37→39 kg/頭/日、差は+2。
-切替前2日はD=300、切替日からD=100なら、Eは260→160→100、Yは37.4→38.4→39.0。
-これらは式の算術例であり、論文や実農場の再現結果ではない。
+If baseline D=300 and the improved D=100 persist, milk goes 37→39 kg/cow/day, difference +2.
+With D=300 for the two pre-switch days and D=100 from the switch day, E goes 260→160→100 and Y 37.4→38.4→39.0.
+These are arithmetic examples of the formulas, not reproductions of papers or real farms.
 
-### 受入条件（MH01〜MH15の実施対応は実装報告を参照）
+### Acceptance criteria (see the implementation report for how MH01–MH15 were exercised)
 
-| ID | 確認内容 | 期待結果 |
+| ID | Check | Expected |
 |---|---|---|
-| MH01 | 同一案の比較 | D・E・Yが等しく乳量差0 |
-| MH02 | 当日・過去2日とも不足0 | Y=Y0 |
-| MH03 | QがQrefを上回る | H=0、Y0以上に増乳しない |
-| MH04 | E=1200、初期係数 | Y=30、上限到達を表示 |
-| MH05 | 不足200 Wが12時間、残り0 | D=100 W |
-| MH06 | 同じ割合の2地点でQ=430/830 | 平均不足100 W。先にQを平均して0にしない |
-| MH07 | 切替前300、切替後100 | Y=37.4→38.4→39.0 |
-| MH08 | 基準案を選び直す | 各案のY不変、差だけ変更 |
-| MH09 | 改善案の負荷が大きい | 負の乳量差を保持 |
-| MH10 | 1時間または日境界で散水停止・残水あり | 残水・周期を引継ぎ。再初期化しない |
-| MH11 | 欠損時刻・区域・不正係数 | 乳量はnull、理由表示。熱の可能な比較は継続 |
-| MH12 | betaの感度3条件 | 各条件を全案へ共通適用し、仮定の幅と表示 |
-| MH13 | 表示地点・カメラ・再生倍率を変更 | 牛群平均乳量・集計期間は不変 |
-| MH14 | 保存・復元 | モデルID、係数、気象・運転・履歴仮定、結果が一致 |
-| MH15 | 複合設備 | 同時計算したQを使い、設備別乳量を加算しない |
+| MH01 | compare identical scenarios | D, E, Y equal; milk difference 0 |
+| MH02 | no deficit today or the past 2 days | Y=Y0 |
+| MH03 | Q exceeds Qref | H=0; milk never rises above Y0 |
+| MH04 | E=1200, initial coefficients | Y=30, cap-reached shown |
+| MH05 | 200 W deficit for 12 h, then 0 | D=100 W |
+| MH06 | two equal-weight points, Q=430/830 | mean deficit 100 W — Q is not averaged first to 0 |
+| MH07 | 300 before switch, 100 after | Y=37.4→38.4→39.0 |
+| MH08 | re-pick the baseline | each scenario's Y unchanged; only the difference changes |
+| MH09 | improved scenario has larger load | keep the negative milk difference |
+| MH10 | spray stops at an hour or day boundary with residual water | water and cycle carried over; no re-initialisation |
+| MH11 | missing times, areas or invalid coefficients | milk is null with reasons; feasible thermal comparison continues |
+| MH12 | 3 beta sensitivity conditions | each applied to all scenarios; shown as assumption spread |
+| MH13 | change displayed point, camera, playback speed | herd-mean milk and aggregation period unchanged |
+| MH14 | save and restore | model ID, coefficients, weather/operation/history assumptions and results match |
+| MH15 | combined equipment | use the jointly computed Q; do not add per-equipment milk figures |
 
-MH07の時系列は数式の単体受入とし、時系列画面の追加を初版の必須条件にしない。
+MH07's time series is accepted at formula level; adding a time-series screen is not a v1 requirement.
 
-## 8. 根拠・制限・変更記録
+## 8. Grounds, limits and change log
 
-- [熱モデルv0.5](../reference/thermal/MODEL.md)：Qの定義。固定体表温度、代謝・呼吸・体内蓄熱を解かない境界を継承する。
-- [Reuscherら（2023）](https://pubmed.ncbi.nlm.nih.gov/37678773/)：フリーストールの送風実験。風速0.4→1.7/2.4 m/sで乳量41.0→42.6/43.0 kg/日。乳量解析で前日のTHIも扱う。送風の作用と遅れを考える根拠であり、本書の630 W・beta・重みを与える資料ではない。
-- [Chenら（2016）](https://www.sciencedirect.com/science/article/pii/S0022030216301503)：3分ON・9分OFFの散水実験。無散水との差は3.3〜3.7 kg/日。1.3/4.9 L/分の間で乳量の有意差なし。飽和的な効果を確認する材料であり、全条件共通の増乳加算値として使わない。
+- [Thermal model v0.5](../reference/thermal/MODEL.md): definition of Q. Inherits the boundary that fixes skin temperature and does not solve metabolism, respiration or body heat storage.
+- [Reuscher et al. (2023)](https://pubmed.ncbi.nlm.nih.gov/37678773/): fan experiments in a freestall barn. Wind 0.4→1.7/2.4 m/s gave milk 41.0→42.6/43.0 kg/day. Their milk analysis also handled the previous day's THI. Grounds for considering fan action and lag — not the source of this spec's 630 W, beta or weights.
+- [Chen et al. (2016)](https://www.sciencedirect.com/science/article/pii/S0022030216301503): 3 min ON / 9 min OFF spray experiment. Difference vs no spray: 3.3–3.7 kg/day. No significant milk difference between 1.3/4.9 L/min. Material confirming a saturating effect — not used as a milk bonus added under all conditions.
 
-適用対象は泌乳中ホルスタインの標準牛群。泌乳段階、飼料、疾病、個体差の補正は含めない。
-文献条件の再現や、初期係数の校正が完了したとは扱わない。乳量上限への到達で差が消える場合もある。
-Qを同じだけ改善した異なる設備を、この乳量式では同じ作用として扱うことも仮定である。
+Scope: standard herds of lactating Holsteins. No correction for lactation stage, feed, disease or individual differences.
+It is not treated as reproducing the literature conditions or as having completed calibration of the initial coefficients. Differences can also vanish when the milk cap is reached.
+That different equipment improving Q by the same amount is treated as the same action in this milk formula is also an assumption.
 
-2026-09-28：D09-M01として本仕様を追加。基準放熱量の独立試算と算術例は前段の検討で確認。
-今回の文書更新でアプリ・参照Python・テスト・配布物を変更していない。
-同日追記：[実装計画・引継ぎ](MILK_MODEL_IMPLEMENTATION_PLAN.md)で区域対応・日運転開始時刻・計算構成・保存形式・表示・検証手順を具体化した。新モデルの実装と性能測定は未実施。
+2026-09-28: this spec added as D09-M01. The independent estimate of the reference heat loss and the arithmetic examples were checked in the preceding review.
+The document update at that time did not change the app, the reference Python, tests or distributions.
+Same-day addendum: the [implementation plan / handover](MILK_MODEL_IMPLEMENTATION_PLAN.md) made area mapping, daily-operation start time, computation structure, save format, display and verification procedure concrete. Implementation of the new model and performance measurement were not yet done.
 
-2026-10-01：実装済みの状態と文書を整合。上の2026-09-28の未実施記録は当時の文書更新履歴。本更新では式・係数・適用範囲を変更していない。
+2026-10-01: the document was aligned with the implemented state. The "not yet implemented" record under 2026-09-28 above is the update history of that time. This update changed no formulas, coefficients or scope.

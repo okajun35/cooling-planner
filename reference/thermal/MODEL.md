@@ -1,77 +1,77 @@
-# Cooling Planner：遮熱・断熱・散水の接続モデル v0.5
+# Cooling Planner: coupled shading, insulation and sprinkling model v0.5
 
-> 2026-09-28追記：本書は既存熱モデルの仕様。現在計画では[乳量仮説モデルv0.1](../../docs/MILK_HEAT_MODEL_V0_1.md)を追加し、放熱不足の24時間集計から乳量へ接続する。本文の乳量接続禁止・60分の時間境界は、既存v0.5単独の範囲を記したもの。新モデルの式・係数・時間管理は同仕様を優先する。熱の物理式と本参照コードは今回変更していない。
+> Note added 2026-09-28: This document is the spec of the existing thermal model. The current plan adds the [milk hypothesis model v0.1](../../docs/MILK_HEAT_MODEL_V0_1.md), which connects the 24-hour heat-deficit aggregate to milk. Statements here that prohibit milk coupling and the 60-minute time boundary describe the scope of v0.5 on its own. For the new model's formulas, coefficients and time handling, that spec takes precedence. The thermal physics and this reference code are unchanged by it.
 
-モデルID：`cooling-thermal-v0.5-assumptions-1`  
-作成日：2026-09-26
+Model ID: `cooling-thermal-v0.5-assumptions-1`  
+Created: 2026-09-26
 
-## 1. 今回決めた範囲
+## 1. Scope decided this time
 
-モデル牛舎の設備を変更し、屋根表面・屋根裏・空気の温度、放射環境、代表牛の放熱量を比較するための初版仕様である。実牛舎の校正・実験は完成条件にしない。
+First-version spec for changing the model barn's equipment and comparing roof-surface, roof-underside and air temperatures, the radiant environment and the representative cow's heat loss. Calibration or experiments on a real barn are not completion criteria.
 
-従来仕様 `dairy_cooling_simulator_spec_v0_4.md` の「平均放射温度＝外部気温＋2℃」を置き換える。対流、ソーカーの保持水・蒸発、ミストの湿り空気計算は既存の設計を継承する。元ファイルは変更していない。
+This replaces the "mean radiant temperature = outdoor temperature + 2°C" rule of the previous spec `dairy_cooling_simulator_spec_v0_4.md`. Convection, soaker retained-water/evaporation and the mist moist-air calculation inherit the existing design. The original file is unchanged.
 
-添付Pythonプログラムはこの仕様の独立した参照実装。現在のアプリは同じ熱仕様をTypeScriptで接続し、HTML・3D画面へ統合済み（[README](../../README.md)）。乳量・受胎モデル、牛の体温変化、総合体感温度への新たな換算は本追補に含めていない。既存の送風体感温度式 `Tair - 6*sqrt(v)` はそのまま別の出力として残す。屋根の放射やソーカーの効果を、同式で全部表現したとは扱わない。
+The attached Python program is an independent reference implementation of this spec. The current app connects the same thermal spec in TypeScript and integrates it into HTML and a 3D view ([README](../../README.md)). Milk and conception models, changes in cow body temperature, and new conversion into an overall feels-like temperature are not in this supplement. The existing fan-aided feels-like formula `Tair - 6*sqrt(v)` stays as a separate output. Roof radiation and soaker effects are not treated as fully expressed by that formula.
 
-## 2. 根拠の分類
+## 2. Classification of the grounds
 
-- **物理関係**：吸収日射、熱抵抗による伝熱、対流、放射、蒸発潜熱、湿り空気の関係式。
-- **既存プロジェクトの設計仮定**：牛舎の寸法、換気量、固定体表温度・面積、牛体の熱伝達率、保持水量など。
-- **今回の設計仮定**：屋根反射率、屋根の熱抵抗と伝熱係数、断熱材の厚さ・熱伝導率、屋根散水条件、形態係数、背景発熱。
+- **Physical relations**: absorbed solar, conduction through thermal resistance, convection, radiation, latent heat of evaporation, moist-air relations.
+- **Design assumptions inherited from the existing project**: barn dimensions, air exchange, fixed skin temperature and area, cow heat-transfer coefficient, retained-water capacity, etc.
+- **Design assumptions made this time**: roof reflectance, roof thermal resistance and heat-transfer coefficients, insulation thickness and conductivity, roof-spray conditions, view factor, background heat release.
 
-以下の係数セット全体が、論文やメーカーで検証されたことを意味しない。物理式に仮定値を入れたオリジナルの縮約モデルである。EnergyPlusやZhouらのモデルの再実装ではない。
+The coefficient set as a whole is not verified by papers or manufacturers. It is an original reduced-order model that plugs assumed values into physical formulas — not a reimplementation of EnergyPlus or the Zhou et al. model.
 
-## 3. 共通の初期条件
+## 3. Shared initial conditions
 
-| 項目 | 値 | 位置づけ |
+| Item | Value | Basis |
 |---|---:|---|
-| 牛舎長さ・幅 | 36.4 m × 23.5 m | 既存テンプレートを継承 |
-| 軒高・棟高 | 4.0 m・8.7 m | 同上 |
-| 床面積 Af | 855.4 m² | 長さ×幅 |
-| 屋根実面積 Ar | `2*L*sqrt((W/2)^2+(棟高-軒高)^2)` | 対称切妻、軒の張り出しを省略 |
-| 外気 | 32℃、RH70%、101325 Pa | デモ条件 |
-| 屋根面に入射する日射 I | 800 W/m² | 水平面日射ではなく、屋根実面積あたりの入力 |
-| 空気交換量 | `0.015*Af` m³/s = 12.831 m³/s | 既存仮定。循環ファン台数から自動増加させない |
-| 背景顕熱 Qbg | 10000 W | 新規仮定。共通の背景負荷で、70評価点の合算ではない |
-| 壁・床等の放射背景温度 | 外気温 Tout と同じ | 無限の熱容量を持つ固定境界として近似 |
-| 牛表面温度 Ts | 35℃ | 固定の比較面。実際の牛の体温の予測ではない |
-| 牛の有効面積 A | 4.5 m² | 既存仮定 |
-| 散水で濡れる面積 Aw | 2.0 m² | 既存仮定 |
-| 牛の放射率 epsilon | 0.95 | 既存仮定 |
-| 牛から屋根への形態係数 F | 0.35 | 新規仮定。全地点共通の初版値 |
-| 通常の有効湿潤係数 f0 | 0.06 | 既存仮定 |
-| 牛体の保持水上限 | 0.30 kg | 既存仮定 |
-| rho、cp、Rv、Lv | 1.2 kg/m³、1006 J/(kg K)、461.5 J/(kg K)、2430000 J/kg | 固定物性近似を継承 |
-| 試算時間・刻み | 3600秒・1秒 | 機器はONから開始、保持水は0から開始 |
+| Barn length × width | 36.4 m × 23.5 m | Inherits the existing template |
+| Eave/ridge height | 4.0 m / 8.7 m | Same |
+| Floor area Af | 855.4 m² | length × width |
+| Actual roof area Ar | `2*L*sqrt((W/2)^2+(ridge-eave)^2)` | symmetric gable; eave overhang omitted |
+| Outdoor air | 32°C, RH 70%, 101325 Pa | demo conditions |
+| Solar incident on the roof I | 800 W/m² | input per actual roof area, not horizontal-plane solar |
+| Air exchange | `0.015*Af` m³/s = 12.831 m³/s | existing assumption; not auto-increased by circulation-fan count |
+| Background sensible heat Qbg | 10000 W | new assumption; a shared background load, not a sum over the 70 points |
+| Radiant background temperature of walls/floor etc. | same as outdoor temperature Tout | approximated as a fixed boundary with infinite heat capacity |
+| Cow surface temperature Ts | 35°C | fixed comparison surface; not a prediction of real body temperature |
+| Cow effective area A | 4.5 m² | existing assumption |
+| Area wetted by sprinkling Aw | 2.0 m² | existing assumption |
+| Cow emissivity epsilon | 0.95 | existing assumption |
+| View factor cow→roof F | 0.35 | new assumption; a first-version value shared by all points |
+| Normal effective wetness fraction f0 | 0.06 | existing assumption |
+| Cow retained-water cap | 0.30 kg | existing assumption |
+| rho, cp, Rv, Lv | 1.2 kg/m³, 1006 J/(kg K), 461.5 J/(kg K), 2430000 J/kg | fixed-property approximation inherited |
+| Trial time / step | 3600 s / 1 s | devices start ON; retained water starts at 0 |
 
-代表牛の計算結果は地点別の独立した比較である。同時に存在する50頭/70頭の収支ではなく、牛舎総負荷へ合算・フィードバックしない。
+Each representative-cow result is an independent per-point comparison — not the balance of 50/70 cows present at once, and it is not summed or fed back into the barn's total load.
 
-## 4. 設備パラメータの決定
+## 4. Equipment parameters
 
-| 設備・パラメータ | 初版値 |
+| Equipment / parameter | First-version value |
 |---|---|
-| 屋根日射反射率 r | 通常0.20、遮熱塗装0.70 |
-| 元の屋根材の熱抵抗 R0 | 0.02 m² K/W（表面熱伝達抵抗は含まない） |
-| 断熱材 | 厚さd=0.02 m、熱伝導率lambda=0.035 W/(m K) |
-| 断熱後の材料熱抵抗 R | `R0+d/lambda` = 約0.59143 m² K/W |
-| 屋根外側の対流係数 ho,c | 10 W/(m² K) |
-| 屋根外側の線形放射係数 ho,r | 5 W/(m² K) |
-| 屋根内側の対流係数 hi,c | 3 W/(m² K) |
-| 屋根内側の線形放射係数 hi,r | 5 W/(m² K) |
-| 屋根散水 | 実屋根面積あたり0.05 L/(min m²)、2分ON/8分OFF |
-| 屋根保持水上限 Mr,max | 0.05 kg/m²（薄い水膜のモデル値） |
-| 屋根散水対象 | 初版は屋根全体に一様。供給水は屋根に全量到達する仮定 |
-| 牛体散水 | 1ノズル1.3 L/min、2分ON/10分OFF |
-| 牛体への捕水率 c | 画面実装時は既存の256レイ幾何計算。独立試算の値は0.25 |
-| ミスト | 供給量の0.60を蒸発可能量の上限とし、さらに飽和制約を適用 |
-| ミストの空気セル | 床面積4 m²、換気0.06 m³/s、セルへの配分済み流量0.01 L/min |
-| ミスト周期 | 1分ON/4分OFF |
+| Roof solar reflectance r | 0.20 normal, 0.70 with reflective coating |
+| Original roof material resistance R0 | 0.02 m² K/W (surface film resistance excluded) |
+| Insulation | thickness d=0.02 m, conductivity lambda=0.035 W/(m K) |
+| Material resistance after insulation R | `R0+d/lambda` ≈ 0.59143 m² K/W |
+| Roof outside convection coefficient ho,c | 10 W/(m² K) |
+| Roof outside linearised radiation coefficient ho,r | 5 W/(m² K) |
+| Roof inside convection coefficient hi,c | 3 W/(m² K) |
+| Roof inside linearised radiation coefficient hi,r | 5 W/(m² K) |
+| Roof sprinkling | 0.05 L/(min m²) per actual roof area, 2 min ON / 8 min OFF |
+| Roof retained-water cap Mr,max | 0.05 kg/m² (model value for a thin water film) |
+| Roof-spray coverage | uniform over the whole roof in v1; all supplied water assumed to reach the roof |
+| Cow sprinkling | 1.3 L/min per nozzle, 2 min ON / 10 min OFF |
+| Capture fraction onto the cow c | existing 256-ray geometric calculation in the UI; the standalone estimate uses 0.25 |
+| Mist | evaporable cap of 0.60 of supply, with a saturation bound on top |
+| Mist air cell | floor area 4 m², ventilation 0.06 m³/s, allocated flow to the cell 0.01 L/min |
+| Mist cycle | 1 min ON / 4 min OFF |
 
-ここでいう断熱材は厚さを持つ断熱層であり、薄いアルミ反射シートの製品性能ではない。画面ラベルも「断熱材20mm」とする。低放射率の反射シートを、このR値と同一視しない。
+"Insulation" here means a finite-thickness insulation layer, not the product performance of a thin aluminium reflective sheet. The UI label is also "Insulation 20 mm". A low-emissivity reflective sheet must not be equated with this R value.
 
-## 5. 屋根・空気の連立計算
+## 5. Coupled roof–air calculation
 
-記号：To=外気温、Te=屋根外表面温度、Ti=屋根裏面温度、Ta=牛舎空気温度。温度差は℃差＝K差、各熱流束qはW/m²、屋根蒸発速度erはkg/(m² s)。
+Symbols: To = outdoor temperature, Te = roof outer surface, Ti = roof inner surface, Ta = barn air. Temperature differences in °C = K; each heat flux q in W/m²; roof evaporation rate er in kg/(m² s).
 
 ```text
 q = (Te - Ti) / R
@@ -80,13 +80,13 @@ q = hi,c*(Ti-Ta) + hi,r*(Ti-To)
 rho*cp*Vdot*(Ta-To) = Ar*hi,c*(Ti-Ta) + Qbg
 ```
 
-この4式を同時に満たすTe、Ti、Ta、qを求める。屋根の放射熱をすべて空気温度へ加えず、内側対流の項だけを空気収支へ入れる。屋根と牛舎空気の蓄熱は解かず、各時刻で準定常解を使う。
+Solve for Te, Ti, Ta and q satisfying these four equations simultaneously. Not all roof radiant heat is added to the air temperature — only the inside-convection term enters the air balance. Roof and barn-air heat storage are not solved; a quasi-steady solution is used at each step.
 
-外側の長波放射も外気温を基準とした線形項で近似する。天空放射・雲量・夜間の放射冷却を独立には解かない。壁床は固定境界で、建物全体の閉じた動的エネルギーモデルではない。
+The outside long-wave radiation is also approximated by a linear term referenced to outdoor temperature. Sky radiation, cloud cover and night-time radiative cooling are not solved independently. Walls and floor are fixed boundaries; this is not a closed dynamic energy model of the whole building.
 
-### 屋根散水
+### Roof sprinkling
 
-1m²あたりの水膜をMとして、各ステップで次を行う。
+With the water film per m² denoted M, each step does:
 
 ```text
 received = M + roofSupply*dt
@@ -99,13 +99,13 @@ er = min(km,roof*fwet*max(deltaRho,0), Mpre/dt)
 Mnext = Mpre-er*dt
 ```
 
-Teとerは相互に依存するため、屋根熱収支の残差を二分法で解く。蒸発潜熱は**屋根からのみ**差し引く。水が余れば流出し、停止後も残水分だけ蒸発する。ここでは水膜温度は屋根温度と同じ、水の流入・流出顕熱、屋根の結露・凍結は省略する。
+Since Te and er depend on each other, the roof heat-balance residual is solved by bisection. Latent heat is deducted **from the roof only**. Excess water runs off; after the spray stops, only the remaining water keeps evaporating. The film temperature is taken equal to the roof temperature; sensible heat of water inflow/outflow, and condensation or freezing on the roof, are omitted.
 
-屋根水蒸気は屋外へ抜け、流出水は雨樋で排出される設定。室内湿度を直接増やさない。屋根散水の「供給量＝全量蒸発」にはしない。
+Roof vapour is assumed to escape outdoors and runoff to drain via the gutter; indoor humidity is not directly increased. Roof spraying is not modelled as "supply = all evaporated".
 
-## 6. 牛が受ける放射・対流
+## 6. Radiation and convection on the cow
 
-屋根の温度を、従来固定値の代わりに牛体側へ渡す。
+The roof temperature is passed to the cow side instead of the old fixed value.
 
 ```text
 Tr,K^4 = F*(Ti+273.15)^4 + (1-F)*(To+273.15)^4
@@ -114,11 +114,11 @@ hc(v) = 3.5 + 4*sqrt(v)
 Qconv = A*hc(v)*(Ts-Tlocal)
 ```
 
-`hc(v)`は既存の独自係数関数を継承する。屋根が冷えれば受ける放射負荷が減る。空気がTsより高ければQconvは負となり、温風から熱が入る。負値をゼロへ丸めない。
+`hc(v)` inherits the existing in-house coefficient function. A cooler roof reduces the radiant load on the cow. If the air is above Ts, Qconv goes negative and warm air adds heat. Negative values are not rounded to zero.
 
-## 7. 牛体散水（ソーカー）
+## 7. Cow sprinkling (soaker)
 
-噴霧が牛へ到達する量だけを保持水へ入れる。床や飼料へ落ちる分を牛の冷却に加算しない。
+Only the spray amount reaching the cow enters the retained water. What falls onto the floor or feed is not credited to cow cooling.
 
 ```text
 mCaptured = nozzleLpm/60 * capturedFraction
@@ -135,22 +135,22 @@ Mnext = Mpre-mSoak*dt
 Qsoak = Lv*mSoak
 ```
 
-空気を冷やす処理は行わない。蒸発は牛の放熱へ直接加える。風速の影響はkm、湿度の影響はdeltaRho、散水の量と周期の影響はMを通じて反映する。濡れた体表と水の有効温度は固定Tsと等しいとし、水の顕熱や被毛の内部温度を別計算しない。
+No air-cooling step is applied. Evaporation is added directly to the cow's heat loss. Wind speed acts through km, humidity through deltaRho, and the spray amount and cycle through M. The effective temperature of the wet skin and water equals the fixed Ts; water sensible heat and coat interior temperature are not computed separately.
 
-ソーカー蒸発による牛舎全体の湿度上昇はフィードバックしない。これは既存の「独立評価点」というモデル境界を継承した仮定。
+The barn-wide humidity rise from soaker evaporation is not fed back — this inherits the existing "independent evaluation points" model boundary.
 
-## 8. ミスト
+## 8. Mist
 
-屋根・牛舎の熱計算で得たTaを入口温度とし、屋外の水蒸気圧を引き継ぐ。気温が上がっただけでRH70%に固定し直すことはしない。絶対湿度を保存し、局所RHを再計算する。
+Ta from the roof–air heat calculation is the inlet temperature; the outdoor vapour pressure is carried over. RH is not re-pinned to 70% just because the air warmed: absolute humidity is conserved and local RH recomputed.
 
-湿り空気式はPsychroLib/ASHRAEのSI関係を使う。
+Moist-air relations use the PsychroLib/ASHRAE SI forms.
 
 ```text
 w = 0.621945*pv/(P-pv)
 h(T,w) = 1000*(1.006*T+w*(2501+1.86*T))
 ```
 
-一定hの飽和端点を求め、
+Find the saturation endpoint at constant h, then
 
 ```text
 deltaW = min(0.6*mWater/mdry, max(wSatAtH-wIn,0))
@@ -159,71 +159,71 @@ TOut = (hIn/1000-2501*wOut)/(1.006+1.86*wOut)
 mEvap = mdry*deltaW
 ```
 
-とする。湿度100%を超えず、入気が飽和していれば蒸発・気温低下とも0。OFFではセルはミスト前条件に戻る。空気の蒸発潜熱を、牛体放熱へさらに加えることはしない。低下した局所気温と増加した水蒸気圧を§6・7へ渡す。
+RH never exceeds 100%; if the inlet is saturated, evaporation and temperature drop are both 0. When OFF, the cell returns to pre-mist conditions. The air's latent heat of evaporation is not added again to cow heat loss. The lowered local temperature and raised vapour pressure are passed to §6–7.
 
-局所ミストから屋根や牛舎全体へ再び熱・湿度を戻す処理は行わない。セル間の移流・滞留も省略する。未蒸発の供給水は資源使用量へ残す。
+No step returns heat or humidity from a local mist cell to the roof or the whole barn; advection and residence between cells are omitted. Unevaporated supply water stays in the resource tally.
 
-## 9. 牛の熱負荷低減の表示定義
+## 9. Display definition of cow heat-load reduction
 
 ```text
 Qnet = Qconv + Qrad + Lv*(mBase + mSoak - mCond)
 heatLoadReduction = mean(Qnet,edited) - mean(Qnet,baseline)
 ```
 
-正が「同じ代表表面から、基準案より多く熱を逃がせる」を意味する。UIでは「熱負荷低減（参考）」または「放熱量の改善」と表示する。これは代謝を含めた実際の体内蓄熱量でも、深部体温の予測でもない。Wの差を乳量やTHIから直接差し引かない。
+Positive means "the same representative surface sheds more heat than the baseline". The UI shows this as "heat-load reduction (reference)" or "heat-loss improvement". It is neither the body's actual heat storage including metabolism, nor a core-temperature prediction. The W difference is not subtracted from milk yield or THI directly.
 
-全酪連掲載の送風体感温度は別に `Tlocal - 6*sqrt(v)` を保持する。水をかけただけで、この式の値を独自に下げない。総合体感温度へ換算する場合は別モデルIDの定義が必要で、本ファイルがその検証や換算を済ませたとは表示しない。
+The JDLA-published fan-aided feels-like temperature is kept separately as `Tlocal - 6*sqrt(v)`. Wetting the cow alone does not lower that formula's value on our own. Conversion to an overall feels-like temperature needs a definition under a different model ID; this file is not shown as having done that validation or conversion.
 
-## 10. 組み合わせの規則
+## 10. Combination rules
 
-- 遮熱はr、断熱はR、屋根散水はerを変更し、同じ連立計算で同時に評価する。
-- 個別の「-○℃」を足し合わせない。結果として複合効果が単純な和より小さくなる場合がある。
-- 循環ファンは牛位置のvを変える。建物の換気量を自動で増やさない。
-- 屋根散水の潜熱は屋根、ミストの潜熱は空気、牛体散水の潜熱は牛表面で一度だけ計上する。
-- 3Dの粒子・カメラ・ヒートマップ補間は計算値に影響させない。
+- Shading changes r, insulation R, roof spray er; all are evaluated in the same simultaneous solve.
+- Individual "-N°C" figures are not added together. Combined effects can be smaller than the plain sum.
+- Circulation fans change v at the cow position. They do not auto-increase the building ventilation rate.
+- Roof-spray latent heat is counted once at the roof, mist latent heat once in the air, soaker latent heat once on the skin.
+- 3D particles, camera and heat-map interpolation never affect the computed values.
 
-## 11. 実行方法・確認状況
+## 11. How to run / verification status
 
-Python 3.10以降、追加ライブラリ不要。
+Python 3.10+, no extra libraries.
 
 ```sh
 python thermal_model.py
 python -m unittest -v
 ```
 
-実行すると設定JSON、比較結果JSON・CSVを出力する。結果は全案で同じ外気・日射・牛位置の風速2m/sを使い、乾いた初期状態から60分を計算した平均。水量もこの60分間の使用量であり、日使用量ではない。
+Running it emits a settings JSON and comparison JSON/CSV. Results use the same outdoor air, solar and a 2 m/s wind at the cow position for every scenario: the mean of a 60-minute run from a dry initial state. Water use is the amount over those 60 minutes, not a daily figure.
 
-検証済み17項目：幾何、遮熱の方向、断熱の内外温度差、日射0での塗装効果0、均一平衡、屋根の3つの収支、屋根と牛体の水収支、ソーカーで空気温度を直接変えない、OFF後の乾燥、ミスト飽和・エンタルピー、潜熱二重計上なし、再現性、温風の負の対流、時間刻み1秒/0.5秒、異常入力。
+Verified items (17): geometry, shading direction, insulation inside/outside temperature difference, zero coating effect at zero solar, uniform equilibrium, the three roof balances, roof and skin water balances, soaker not changing air temperature directly, drying after OFF, mist saturation/enthalpy, no double counting of latent heat, reproducibility, negative convection from warm air, 1 s/0.5 s time steps, abnormal inputs.
 
-これはプログラムが本仕様に従うことの確認。実牛舎との一致の検証ではない。3D、保存復元、全地点計算の統合テストは今回実施していない。
+This confirms the program follows this spec — not agreement with a real barn. Integrated tests of 3D, save/restore and all-point computation were not done this time.
 
-## 12. 参照元
+## 12. References
 
-S1. 既存プロジェクト `dairy_cooling_simulator_spec_v0_4.md` 第3・4・6・7章。寸法・対流・保持水・ミスト・試行境界を継承。元資料の係数も設計仮定として継承した。
+S1. Existing project `dairy_cooling_simulator_spec_v0_4.md`, chapters 3, 4, 6 and 7. Dimensions, convection, retained water, mist and trial boundaries inherited. The source's coefficients were also inherited as design assumptions.
 
-S2. EnergyPlus 24.1 Engineering Reference, Outside Surface Heat Balance。日射・対流・放射・伝導の区別と連立の考え方。今回の係数・縮約計算そのものの出典ではない。  
+S2. EnergyPlus 24.1 Engineering Reference, Outside Surface Heat Balance. The distinction of solar/convection/radiation/conduction and the idea of solving them together. Not the source of this supplement's coefficients or reduced calculation itself.  
 https://bigladdersoftware.com/epx/docs/24-1/engineering-reference/outside-surface-heat-balance.html
 
-S3. PsychroLib API Documentation / source。ASHRAE 2017の湿り空気・飽和蒸気圧の関係とSI単位。  
+S3. PsychroLib API Documentation / source. ASHRAE 2017 moist-air and saturation vapour-pressure relations in SI units.  
 https://psychrometrics.github.io/psychrolib/api_docs.html  
 https://psychrometrics.github.io/psychrolib/_modules/psychrolib.html
 
-S4. 千葉県「乳牛：暑熱対策のすすめ」（2025年）。屋根からの放射、遮熱・断熱・屋根散水・細霧・牛体散水の作用を分ける根拠。事例の温度低下を全条件に適用する係数としては使わない。  
+S4. Chiba Prefecture, "Dairy cattle: recommendations for heat countermeasures" (2025). Basis for separating the actions of roof radiation, shading/insulation/roof spray, fine mist and cow sprinkling. Case-study temperature drops are not used as coefficients applicable to all conditions.  
 https://www.pref.chiba.lg.jp/ninaite/network/field-chiku/chiku-2025-06.html
 
-S5. Zhou et al. (2024), Effectiveness of cooling interventions on heat-stressed dairy cows based on a mechanistic thermoregulatory model. Biosystems Engineering 244:114–121. 大学公開要旨で作用経路の分類を確認。本追補は同論文の3ノード体温調節モデルではない。  
+S5. Zhou et al. (2024), Effectiveness of cooling interventions on heat-stressed dairy cows based on a mechanistic thermoregulatory model. Biosystems Engineering 244:114–121. The university's public abstract was used to check the classification of action paths. This supplement is not that paper's 3-node thermoregulation model.  
 https://research.wur.nl/en/publications/effectiveness-of-cooling-interventions-on-heat-stressed-dairy-cow/  
 DOI: 10.1016/j.biosystemseng.2024.06.003
 
-## 13. 同梱コードの実行結果
+## 13. Bundled-code results
 
-| 案 | 屋根裏℃ | 舎内・局所気温℃ | 平均放射温度℃ | 放熱量の改善W |
+| Scenario | Roof underside °C | Barn/local air °C | Mean radiant °C | Heat-loss improvement W |
 |---|---:|---:|---:|---:|
-| 送風あり・屋根対策なし | 57.9 | 36.5 | 41.8 | 0 |
-| 遮熱塗装 | 41.8 | 34.0 | 35.5 | 285 |
-| 断熱材20mm | 39.3 | 33.7 | 34.6 | 326 |
-| 屋根散水 | 46.4 | 34.7 | 37.3 | 204 |
-| 牛体散水 | 57.9 | 36.5 | 41.8 | 459 |
-| 遮熱塗装＋断熱 | 34.9 | 33.0 | 33.0 | 399 |
-| 遮熱塗装＋断熱＋牛体散水 | 34.9 | 33.0 | 33.0 | 861 |
-| ミスト | 57.9 | 35.7 | 41.8 | 29 |
+| Fans, no roof measures | 57.9 | 36.5 | 41.8 | 0 |
+| Reflective coating | 41.8 | 34.0 | 35.5 | 285 |
+| Insulation 20 mm | 39.3 | 33.7 | 34.6 | 326 |
+| Roof sprinkling | 46.4 | 34.7 | 37.3 | 204 |
+| Cow sprinkling | 57.9 | 36.5 | 41.8 | 459 |
+| Coating + insulation | 34.9 | 33.0 | 33.0 | 399 |
+| Coating + insulation + cow sprinkling | 34.9 | 33.0 | 33.0 | 861 |
+| Mist | 57.9 | 35.7 | 41.8 | 29 |

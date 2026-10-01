@@ -1,48 +1,48 @@
-# Cooling Planner 統合決定 v0.8
+# Cooling Planner integration decisions v0.8
 
-> 2026-09-28追記：本書は既存実装・過去決定の記録。現在計画の乳量は[仮説モデルv0.1](MILK_HEAT_MODEL_V0_1.md)（D09-M01）を優先する。掲載6条件のみを主出力とする制限と、乳量接続のための時間境界を同仕様に限って更新する。原表自体の補間禁止は維持する。新モデルは未実装で、受胎の仕様は変更しない。
+> Note added 2026-09-28: This document records the existing implementation and past decisions. For milk in the current plan, the [hypothesis model v0.1](MILK_HEAT_MODEL_V0_1.md) (D09-M01) takes precedence. The limitation of "the 6 published conditions as the main output" and the time boundary for milk coupling are updated only within that spec. The prohibition on interpolating the original table itself is kept. The new model was unimplemented at the time; the conception spec is unchanged.
 
 
-日付：2026-09-26 / アプリ版：0.8.0-preview.1
+Date: 2026-09-26 / App version: 0.8.0-preview.1
 
-## D08-01：C案を実装する
+## D08-01: Implement option C
 
-ユーザーの実装依頼に従い、v0.4の幾何・物理・配置・状態管理を再利用し、画面と統合処理を新しくする。既存コード全体の廃棄や別の牛舎形式は追加しない。
+Following the user's implementation request, reuse v0.4's geometry, physics, placement and state management, and rebuild the view and integration handling. Do not discard the entire existing codebase or add another barn format.
 
-## D08-02：物理・参照モデルの範囲を閉じたまま実装する
+## D08-02: Keep the physics/reference models within their existing scope
 
-熱v0.5、乳量v0.6、前の対話で採用対象とした受胎v0.7を接続する。受胎の実装モデルIDは `fertility-thi-period-or-baccouri2025-v1` とする。`reference/fertility/FERTILITY_MODEL_PROPOSAL.md` は作成当時の採用案という原資料をそのまま残す。原資料の未承認表記を、統合版が受胎を未実装であるという意味には使わない。
+Connect thermal v0.5, milk v0.6, and conception v0.7 which was adopted in the earlier discussion. The conception implementation model ID is `fertility-thi-period-or-baccouri2025-v1`. `reference/fertility/FERTILITY_MODEL_PROPOSAL.md` is kept as-is as the source record of the adopted option. The source's "unapproved" wording must not be read as meaning the integrated version has no conception implementation.
 
-パラメータ・係数は変えず、人工授精を対象とする。乳量の補間・外挿、Wから乳量/THI/総合体感温度への独自換算は追加しない。現場実測は完成条件に追加しない。
+Parameters and coefficients are unchanged; the target is artificial insemination. No interpolation/extrapolation of milk, and no in-house conversions from W to milk/THI/overall feels-like temperature. Field measurement is not added to the completion criteria.
 
-## D08-03：新しい保存形式
+## D08-03: New save format
 
-schemaVersion 8、統合モデルID `cooling-integrated-v0.8`。案ごとにroof、共通条件に日射・参照設定を追加する。ハッシュ・同一案キャッシュ・入力検証・Undo・JSON保存に屋根設定を含める。
+schemaVersion 8, integrated model ID `cooling-integrated-v0.8`. Each scenario gains roof; shared conditions gain solar and reference settings. Roof settings are included in the hash, identical-scenario cache, input validation, Undo and JSON save.
 
-旧v4からの自動変換は行わない。読込失敗は原子的に拒否し、現在の案を保持する。原本コード・旧データを更新しない。
+No automatic migration from old v4. Failed loads are rejected atomically and the current scenario is kept. The original code and old data are not updated.
 
-## D08-04：画面と計算の時間を分離する
+## D08-04: Separate view time from calculation time
 
-熱計算は3600秒・1秒刻み、各案同じ初期条件。時系列として第1秒と各60秒の61点を返す。表示用のカーソルは近いサンプルを示すだけで、入力値を丸めない。曲線は表示のためサンプル間を線で結ぶ。乳量表の補間とは無関係。
+The thermal calculation is 3600 s at 1 s steps; every scenario shares the same initial conditions. As a time series it returns 61 points: the first second and every 60 s. The display cursor only shows a nearby sample and does not round inputs. Curves join samples with lines for display. Unrelated to milk-table interpolation.
 
-床の色と結果カードは60分平均。再生は風・散水の表示と時間カーソルを動かし、計算を変更しない。水は周期・流量・運転時間、日電力は運転時間から別計算する。
+Floor colors and result cards are 60-minute means. Playback moves the wind/spray display and the time cursor; it does not change the calculation. Water uses cycle, flow and operating hours; daily electricity is computed separately from operating hours.
 
-## D08-05：受胎の期間代表化を黙って行わない
+## D08-05: Do not silently turn conception into a period representative
 
-初期の受胎入力は独立した手動代表環境26℃・RH70%。各期間共通、基準確率40%を仮定する。「現在の設備の受胎率」とは表示しない。
+The initial conception input is an independent manual representative environment of 26°C, RH 70%. The same for all periods; baseline probability 40% is assumed. It is not displayed as "the conception rate under the current equipment".
 
-「選択地点の60分平均を52日代表条件として採用」をチェックしたときだけ `mode=simulation` とし、`exposureAssumed=true` を保存する。同じモデル・p0で基準案との差を比較する。同じTHI区分なら変わらない。地点ごとの参照値であり、全牛群の受胎予測ではない。
+Only when "adopt the selected point's 60-min mean as the 52-day representative conditions" is checked does it become `mode=simulation`, saving `exposureAssumed=true`. The difference from baseline is compared under the same model and p0. Within the same THI band it does not change. It is a per-point reference, not a herd-wide conception forecast.
 
-## D08-06：配布を一系統へ整理する
+## D08-06: Consolidate distribution into one line
 
-今回の動作品はTypeScript→単体HTML／静的ファイル群、描画は既存のnative WebGLを再利用する。旧Three.jsアダプター・未確認のVite配信経路は新パッケージから外す。ライブラリ導入だけで見た目を変えることはせず、操作・熱の可視化を優先する。
+This working build is TypeScript → a single-file HTML / static file set, reusing the existing native WebGL rendering. The old Three.js adapter and the unverified Vite delivery path are excluded from the new package. Do not change the look merely by introducing a library — prioritise operation and heat visualisation.
 
-WebGL初期化失敗時は既存SVG 2Dへフォールバックする。Workerは外部APIではなくブラウザ内。単体HTMLはBlob Workerを含むため、配信環境でCSPを設定するときはinline script/styleおよび`worker-src blob:`等との整合確認が別途必要。CSPの制限を自動回避しない。
+If WebGL initialisation fails, fall back to the existing SVG 2D. The worker runs inside the browser, not an external API. The single-file HTML embeds a Blob Worker, so when CSP is configured in the delivery environment, consistency with inline script/style and `worker-src blob:` etc. must be checked separately. CSP restrictions are not bypassed automatically.
 
-## D08-07：資源量の実装パラメータ
+## D08-07: Resource-quantity implementation parameters
 
-既存ファン・ソーカー・ミストの運転時間・ポンプ電力を継承する。屋根散水の日量表示には、初期運転8時間/日、ポンプ0.25kWを追加の資源試算仮定として置く。熱側の2分ON/8分OFF、0.05L/分/m²はv0.5から継承。屋根ポンプの実機性能を意味しない。
+Inherit operating hours and pump power of the existing fans, soaker and mist. For the daily roof-spray figure, add initial operation 8 h/day and pump 0.25 kW as extra resource-estimation assumptions. The thermal side keeps v0.5's 2 min ON / 8 min OFF and 0.05 L/min/m². This does not represent actual roof-pump performance.
 
-## D08-08：完了判定
+## D08-08: Completion criteria
 
-モデル定義は再調査しない。配置と屋根条件→全地点再計算→結果→比較→保存復元の経路、および乳量・受胎の適用範囲を試験する。ブラウザ内の操作確認と、HTTP/公開環境での配信確認は別に記録する。
+Model definitions are not re-investigated. Test the path of placement and roof conditions → recompute all points → results → comparison → save/restore, and the applicable scope of milk and conception. In-browser operation checks and delivery checks over HTTP/public hosting are recorded separately.
