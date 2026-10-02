@@ -1,7 +1,7 @@
 # Cooling Planner — 乳量仮説モデルの実装計画・引継ぎ
 
 更新日：2026-09-28。計画ID：`milk-implementation-plan-v1`。
-対象リポジトリ：`/home/hddwm390/tmp/cooling-planner`。
+対象リポジトリ：`<this repository>`。
 状態：実装担当エージェントへの引継ぎ用。**本計画の作成時点では未実装**。
 
 ## 0. 担当エージェントへの指示

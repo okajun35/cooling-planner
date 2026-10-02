@@ -1,41 +1,52 @@
 # Cooling Planner v0.10 preview
 
-モデル牛舎で設備を操作し、環境と牛の放熱を比べるブラウザアプリです。既存v0.4の幾何・物理・編集機能を再利用し、画面と計算の接続を組み直しました。v0.9では、設備変更に連動する牛群平均の代表日乳量（仮説モデル `milk-heat-deficit-v0.1`）を追加しました。v0.10では代表日の時刻別気象（24行）と日単位の地点・区画別集計、制約付き候補比較 `compare_candidates` を追加しました。
+English | [日本語](docs/README.ja.md)
 
-このリポジトリはDairy Horizonから切り出した独立版です。FastAPI・APIキー・親プロジェクトは不要です。
-Node.js 22.12以上で、初回は `npm ci && npm run build`、以降は `npm start` で起動します。
-ソースとビルド済み配布物を管理し、変更時は配布物も再生成します。
+A browser app that operates equipment in a model dairy barn and compares environment, cow heat loss, water and energy use. It reuses the v0.4 geometry, physics and editing features with a rebuilt screen–calculation connection. v0.9 added a herd-average representative-day milk estimate linked to equipment changes (hypothesis model `milk-heat-deficit-v0.1`). v0.10 added hourly weather for the representative day (24 rows), per-day point/area aggregation, and constrained candidate comparison (`compare_candidates`).
 
-## まず動かす
+This repository is a standalone version split out of Dairy Horizon. No FastAPI, API keys or parent project required.
+Requires Node.js 22.12+. First run: `npm ci && npm run build`, then `npm start`.
+The repository tracks both sources and built distributions; regenerate the distributions on change.
 
-`cooling-planner-v0.10.html` は、CSS・JavaScript・計算Workerを内包した単体ファイルです。ZIPを展開し、PCのChrome/Edge等で開いてください。インターネット接続、ログイン、APIキーは不要な構成です。ブラウザの制限でローカルファイルを開けない場合は、下のローカルHTTP配信を利用してください。
+## Live demo & branches
 
-現在の目的・対象範囲は[現在計画](docs/CURRENT_PLAN.md)、設備操作から案比較までの受入条件案と現行コードの対応は[受入条件](docs/ACCEPTANCE_CRITERIA.md)を参照してください。
+| Branch | UI language | Hosted demo (AWS Amplify) |
+|---|---|---|
+| `english` | English | https://english.da05znjm47ziu.amplifyapp.com/ |
+| `main` | Japanese | https://main.da05znjm47ziu.amplifyapp.com/ |
 
-乳量の計算仕様は[暑熱負荷→乳量の仮説モデルv0.1](docs/MILK_HEAT_MODEL_V0_1.md)、作業手順と検証結果は[実装計画](docs/MILK_MODEL_IMPLEMENTATION_PLAN.md)・[実装報告](docs/MILK_MODEL_IMPLEMENTATION_REPORT.md)です。掲載6条件の乳量表は資料として参照条件画面に残しています。
+The `english` branch was created for an overseas hackathon and carries an English-only UI (no language switcher). Model calculations, save format and the MCP vocabulary are identical on both branches; only user-facing strings differ. Each branch auto-deploys to its own Amplify URL on push. UI labels quoted below are the English ones; the Japanese walkthrough is in [docs/README.ja.md](docs/README.ja.md).
 
-検証範囲と結果は [独立版の検証記録](docs/STANDALONE_VALIDATION.md) に記載します。
-公開HTTPS、`file://`、実機のChrome/Edge/Safariの全組合せを確認したものではありません。
+## Quick start
 
-### 最初の操作（3〜5分）
+`cooling-planner-v0.10.html` is a single file containing CSS, JavaScript and the calculation worker. Unzip it and open it in a desktop Chrome/Edge. No internet connection, login or API key is needed. If your browser refuses local files, use the local HTTP serving below.
 
-画面は牛舎中心のHUD構成です。下部ドックから設備を置き、右パネルで設定、下部シートで結果を比べます。初回は3ステップのガイドが出ます（スキップ可、ヘルプの？から再表示可）。
+For the current scope, see [current plan](docs/CURRENT_PLAN.md); for how the acceptance criteria map to the current code, see [acceptance criteria](docs/ACCEPTANCE_CRITERIA.md).
 
-1. 初期計算の完了を待つ。初期の「編集案A」は基準案の複製なので、放熱差0Wが正常です。
-2. 下部ドックの「屋根対策」から「遮熱塗装」「断熱材20mm」をONにする。採食7では局所気温36.5→33.0℃、放熱差は約+384Wになります。この値はモデル計算です。
-3. ドックの「ファン」を押し、牛舎内をクリックして新しい設備を置く（Esc/中止でキャンセル）。既存のファンはクリックで選択しドラッグで移動、高さ・向きは右パネルで変更します。背景ドラッグは視点回転です。「戻す」で1回の操作を戻せます。
-4. 「結果・比較」→「時間変化」で固定気象60分間のグラフと再生を見る。左上の指標チップ（放熱不足／放熱改善／風速／気温）で床の色を切り替えます。カードと床の色は60分平均のままです。
-5. 「結果・比較」→「参考影響」で牛群平均の代表日乳量と基準案との差、受胎の代表条件を確認する。「掲載表（資料）を見る」で乳量の表も参照できます。
-6. 「案比較」で平均・最大不足、牛床／採食／待機の不足、水・電力と基準差を確認する。不足上位の地点を押すと、床の不足表示と場所の放熱内訳へ移動する。
-7. 上部の「保存」で配置・条件をJSONに保存し、「読込」で復元する。MCP案は「案比較」または「設定・保存」の「MCP案のJSONを読込」から貼り付けても復元できる。
+The milk-yield calculation spec is [heat-load → milk hypothesis model v0.1](docs/MILK_HEAT_MODEL_V0_1.md); procedure and verification are in the [implementation plan](docs/MILK_MODEL_IMPLEMENTATION_PLAN.md) and [report](docs/MILK_MODEL_IMPLEMENTATION_REPORT.md). The published 6-condition milk table is kept as reference material on the reference screen.
 
-UI改修の計画と検証結果は[ゲーム風UI実装計画](docs/GAME_UI_IMPLEMENTATION_PLAN.md)・[実装報告](docs/GAME_UI_IMPLEMENTATION_REPORT.md)を参照してください。
+Verification scope and results are recorded in [standalone validation record](docs/STANDALONE_VALIDATION.md).
+Not every combination of public HTTPS, `file://`, and real Chrome/Edge/Safari has been checked.
 
-**基準案は無設備ではありません。既存ファン10台＋ソーカー12個、屋根対策なしです。** 編集案Bの初期状態は、同じファンでソーカー停止・ミスト稼働です。Bの負の放熱差は、この基準との比較であり「ミストに効果がない」という意味ではありません。
+### First steps (3–5 minutes)
 
-## ビルドとテスト
+The screen is a barn-centered HUD. Place equipment from the bottom dock, configure it in the right panel, and compare results in the bottom sheet. On first run a short guide appears (skippable; replay from "?" help).
 
-開発条件：Node.js 22.12以上、TypeScript 5.8.3。3D描画はThree.js 0.180.0（npm依存としてビルド時に同梱）。ブラウザ実行時の外部通信・CDNは不要です。
+1. Wait for the initial calculation. "Draft A" starts as a copy of the baseline, so a heat-loss delta of 0 W is correct.
+2. From the "Roof" button in the dock, turn on "reflective coating" and "20 mm insulation". At Feeding 7 the local air temperature goes 36.5 → 33.0 °C and the heat-loss improvement is about +384 W. These are model-calculated values.
+3. Press "Fan" in the dock and click inside the barn to place a new device (Esc / Cancel to abort). Click an existing fan to select it and drag to move; change height and direction in the right panel. Dragging the background rotates the view. "Undo" reverts one operation.
+4. In "Results & compare" → "Timeline", watch the 60-minute fixed-weather chart and playback. The metric chips at top-left (deficit / improvement / wind speed / air temperature) switch the floor colors. Cards and floor colors stay on 60-minute means.
+5. In "Results & compare" → "Reference impacts", check the herd-average representative-day milk, its delta vs baseline, and the conception reference conditions. "View published table" shows the milk reference table.
+6. In "Compare", review mean/max deficit, stall/feeding/waiting deficits, and water/energy deltas vs baseline. Pressing a top-deficit location jumps to the floor deficit view and that point's heat-loss breakdown.
+7. Use "Save" at the top to store the placement and conditions as JSON, and "Load" to restore. An MCP scenario JSON can also be pasted via "Compare" or "Settings & save" → "Import MCP scenario JSON".
+
+For the UI rework plan and verification, see [game-style UI implementation plan](docs/GAME_UI_IMPLEMENTATION_PLAN.md) and [report](docs/GAME_UI_IMPLEMENTATION_REPORT.md).
+
+**The baseline is not "no equipment": it has 10 existing fans + 12 soakers and no roof measures.** Draft B starts with the same fans, soakers stopped and mist running. A negative heat-loss delta for B means "worse than this baseline", not "mist has no effect".
+
+## Build and test
+
+Requirements: Node.js 22.12+, TypeScript 5.8.3. 3D rendering uses Three.js 0.180.0 (bundled at build time as an npm dependency). No external network or CDN is needed at runtime.
 
 ```sh
 npm ci
@@ -45,18 +56,18 @@ npm run build
 npm start
 ```
 
-`npm start` は `http://127.0.0.1:4173/` で `dist-offline` を配信します。`PORT` 環境変数でポートを変更できます。ビルド済み配信物だけを見る場合、`npm install` や再ビルドは不要で、Nodeがあれば `npm start` を使えます。
+`npm start` serves `dist-offline` at `http://127.0.0.1:4173/`; change the port with `PORT`. If you only want to view the built distribution, `npm start` works with just Node — no `npm install` or rebuild needed.
 
-ビルド出力：
+Build outputs:
 
-- `cooling-planner-v0.10.html`：単体HTML（旧`cooling-planner-v0.9.html`も残しています）。
-- `dist-offline/`：静的配信用のHTML/CSS/app.js/worker.js。フォルダー全体を配信対象にします。
+- `cooling-planner-v0.10.html`: standalone HTML (the older `cooling-planner-v0.9.html` is also kept).
+- `dist-offline/`: HTML/CSS/app.js/worker.js for static hosting; serve the whole folder.
 
-ハッカソンPOCでは、エージェントの検証は型チェック・関連する単体／統合テスト・ビルドを基本とします。E2E・実ブラウザの操作確認は人間とCIが担当し、エージェントは明示的に依頼された場合のみ実行します。
+For the hackathon PoC, agent-side verification is typecheck, relevant unit/integration tests, and build. E2E and real-browser checks belong to humans and CI; agents run them only when explicitly asked.
 
-以下は人間／CI向けのE2E手順です。ブラウザテストはPython Playwright/pytestとChromiumを使います。既定ではヘッドレス実行でXvfbは不要です。
-`CHROMIUM_PATH` で既存のChromiumを指定でき、省略時はPlaywright管理のChromiumを使います。
-有画面で実行する場合は、表示環境を用意したうえで `HEADLESS=0` を指定します。
+The following E2E procedure is for humans/CI. Browser tests use Python Playwright/pytest and Chromium; headless is the default and Xvfb is not required.
+Point `CHROMIUM_PATH` at an existing Chromium, or omit it to use the Playwright-managed one.
+For headed runs, provide a display and set `HEADLESS=0`.
 
 ```sh
 python -m pip install -r requirements-test.txt
@@ -65,70 +76,71 @@ npm run build
 npm run test:browser
 ```
 
-既定では単体HTMLのインライン実行を確認します。別ターミナルで `npm start` を起動し、
-`COOLING_PLANNER_URL=http://127.0.0.1:4173/ npm run test:browser` とするとHTTP版を確認できます。
-WebGL利用不可の試験は、この設定時も単体HTMLを使用します。
+By default the standalone HTML is exercised inline. Start `npm start` in another terminal and run
+`COOLING_PLANNER_URL=http://127.0.0.1:4173/ npm run test:browser` to check the HTTP version.
+WebGL-unavailable tests still use the standalone HTML under that setting.
 
-Python参照実装の確認：
+Python reference implementations:
 
 ```sh
 (cd reference/thermal && python -m unittest -v)
 (cd reference/fertility && python -m unittest -v)
 ```
 
-`node scripts/make-examples.mjs` で、検証済みの入力例と統合計算結果を再生成できます。先に `npm run build` を実行してください。
+`node scripts/make-examples.mjs` regenerates the verified input examples and integrated calculation results. Run `npm run build` first.
 
-## MCP PoC（外部AIクライアント連携）
+## MCP PoC (external AI client integration)
 
-`docs/MCP_POC_IMPLEMENTATION_PLAN.md` のPoC実装です。外部のMCP対応AIクライアントが、開いている画面そのものを読み取り・操作します。状態の正本はブラウザのProjectStoreで、サーバー側は計算・保存のコピーを持ちません。
+PoC implementation from `docs/MCP_POC_IMPLEMENTATION_PLAN.md`. An external MCP-capable AI client reads and operates the actual open screen. The source of truth is the browser-side ProjectStore; the server keeps no copy of calculations or saves.
 
-### 起動と接続
+### Launch and connect
 
-1. リポジトリ内で `npm ci && npm run build`。
-2. AIクライアントへ下記のstdioサーバーを登録して接続する（パスはリポジトリの実位置に合わせる。`npm run mcp` と同等）。
+1. Inside the repository, run `npm ci && npm run build`.
+2. Register the following stdio server in your AI client (adjust the path to the real repository location; equivalent to `npm run mcp`):
 
 ```json
 {
   "mcpServers": {
     "cooling-planner": {
       "command": "node",
-      "args": ["/home/hddwm390/tmp/cooling-planner/scripts/mcp-server.mjs"]
+      "args": ["/absolute/path/to/cooling-planner/scripts/mcp-server.mjs"]
     }
   }
 }
 ```
 
-Devin CLI ではリポジトリ内で次を実行します（`.devin/mcp_config.local.json` へ登録）。
+For Devin CLI, run inside the repository (registers to `.devin/mcp_config.local.json`):
 
 ```bash
-devin mcp add cooling-planner -- node /home/hddwm390/tmp/cooling-planner/scripts/mcp-server.mjs
+devin mcp add cooling-planner -- node "$(pwd)/scripts/mcp-server.mjs"
 ```
 
-3. `http://127.0.0.1:4174/?mcp=1` を1タブで開く。このモードでは `npm start` は不要です。MCPプロセスが `dist-offline` の静的配信も担当します。
-4. AIから `get_state` を呼ぶ。
+3. Open `http://127.0.0.1:4174/?mcp=1` in a single tab. `npm start` is not needed in this mode; the MCP process also serves `dist-offline`.
+4. Call `get_state` from the AI.
 
-ツールは `get_state` / `edit` / `evaluate` / `describe_model` / `set_view` / `get_results` / `undo` の7つです。編集は現在の案へ適用され、画面へ即時反映・既存経路で自動再計算されます。人の画面操作とMCPの操作は同じUndo履歴を共有します。
+The tools are `get_state` / `edit` / `evaluate` / `compare_candidates` / `describe_model` / `set_view` / `get_results` / `undo` — 8 in total. Edits apply to the current scenario, reflect on screen immediately, and recalculate through the existing path. Human screen operations and MCP operations share the same undo history.
 
-- `evaluate`：画面を変えずに仮説を評価します。`edit` と同じ操作を配列で渡すと、現在の確定状態の複製へ順に適用して計算し、その案の区画別集計・resources・roof・（`includeDaily`指定時）日乳量と基準案の比較集計を返します。画面の案・設備・Undo履歴・再計算には一切影響しないため、「この対策ならどうなるか」「どこまで不足を減らせるか」の探索は `edit→undo` ではなくこちらを使います。
-- `edit`/`evaluate` の `add_device` は `x`・`y`（両方指定）で任意座標へ直接配置できます。範囲外・立体ゾーンはエラーになります。
-- `describe_model`：計算モデルの構造・入力/出力フィールドの意味・主な仮定定数・限界・検証状態を返します。数値を解釈・説明する前に呼ぶことを想定しています（サーバーinstructionsにも記載）。
-- モデルの係数もMCPで変更できます。`update_model`（物理モデル：噴流拡散・減衰、対流熱伝達、放射オフセット、屋根モデル係数、`profiles`の感度仮定セットなど）、`update_milk`（乳量仮説：Qref・beta・遅れ重みなど）、`update_references`（基準乳量・受胎参照）。モデル式とバージョン識別子は変更できず、値域は既存の検証が拒否します。`evaluate` と組み合わせると、係数を変えた場合の結果を画面を汚さず比較できます。
+- `evaluate`: evaluates a hypothesis without changing the screen. Pass the same operations as `edit` as an array; they are applied in order to a clone of the committed state, and the call returns the scenario's per-area aggregation, resources, roof and (with `includeDaily`) daily milk plus comparison stats vs baseline. Since it never touches the screen scenario, devices, undo history or recalculation, use this — not `edit→undo` — to explore "what if this measure" or "how far can the deficit go down".
+- `compare_candidates`: applies 1–3 candidate operation lists separately to clones of the same committed project and returns daily results (mean deficit, water, energy use, worsened points), constraint verdicts and ranks. Candidates may only use `update_device` / `update_system` / `update_roof`; coefficients, weather, scenario switching and add/remove are rejected. Ranks hold only within the call.
+- `add_device` in `edit`/`evaluate` can place at arbitrary coordinates with `x` and `y` (both required). Out-of-range or solid-zone positions are errors.
+- `describe_model`: returns the model's calculation structure, input/output field meanings, main assumption constants, limits and verification status. Call it before interpreting or explaining numbers (also noted in the server instructions).
+- Model coefficients can also be changed via MCP: `update_model` (physics: jet diffusion/decay, convective heat transfer, radiation offsets, roof model coefficients, `profiles` sensitivity assumption sets, etc.), `update_milk` (milk hypothesis: Qref, beta, lag weights, etc.), `update_references` (baseline milk and conception references). Model formulas and version identifiers cannot change, and out-of-range values are rejected by existing validation. Combined with `evaluate`, you can compare results under different coefficients without touching the screen.
 
-- MCP SDKは `@modelcontextprotocol/server` 2.1.0（v2系）を使用し、lockfileで固定しています。
-- 通常の `npm start`（ポート4173）や単体HTMLでは従来どおり利用でき、`?mcp=1` なしではMCP接続を開始しません。
-- 配信とWebSocketは `127.0.0.1` 固定です。2タブ目の接続は拒否されます。認証・遠隔接続・複数ユーザー・アプリ内チャットはPoC対象外です。
-- ポート4174が使用中だとサーバーは起動時メッセージを出して終了します。手動起動の `npm run mcp` とAIクライアント起動の両方を同時に立ち上げないでください。環境変数 `COOLING_PLANNER_PORT` でポートを変えられます（ブラウザ側は開いたページのポートへ自動で接続します）。stdioクライアントが切断されるとサーバーは自動終了します。
-- 計算式・係数・保存スキーマは変更していません。
+- The MCP SDK is `@modelcontextprotocol/server` 2.1.0 (v2 line), pinned by the lockfile.
+- Plain `npm start` (port 4173) and the standalone HTML work as before; without `?mcp=1` no MCP connection is started.
+- Serving and WebSocket are fixed to `127.0.0.1`; a second tab connection is refused. Authentication, remote access, multi-user and in-app chat are out of PoC scope.
+- If port 4174 is busy, the server prints a startup message and exits. Do not run a manual `npm run mcp` and an AI-client-launched server at the same time. `COOLING_PLANNER_PORT` changes the port (the browser auto-connects to the port of the opened page). The server exits automatically when the stdio client disconnects.
+- Formulas, coefficients and the save schema are unchanged.
 
-ブラウザ結合確認：`CHROMIUM_PATH` を指定し `python3 -m pytest tests/e2e/test_mcp.py`（実際のMCP stdio会話で画面が変わることまで確認します）。
+Browser integration check: `CHROMIUM_PATH` set + `python3 -m pytest tests/e2e/test_mcp.py` (drives a real MCP stdio session and verifies the screen changes).
 
-## AWS へのデプロイ
+## Deploying to AWS
 
-実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト、GitHub連携で `main` への push で自動デプロイ）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `describe_model` / `get_doc`（操作語彙はローカル版と同一）。
+Implementation plan: `docs/AWS_DEPLOY_PLAN.md`. Amplify Hosting (static site; GitHub-connected, auto-deploys on push to `main`/`english`) + Lambda Function URL (REST and remote MCP). The remote MCP is a stateless, browserless variant; its tools are `get_default_project` / `evaluate` / `compare_candidates` / `describe_model` / `get_doc` (same operation vocabulary as the local version).
 
-### リモートMCP への接続
+### Connecting to the remote MCP
 
-Kiro・Claude・その他のMCPクライアントに以下を登録します。公開デモトークン `demo-581fKusGqNgk7YrycFNw6M_5` は誰でも利用可能です（悪用時はローテーション）。管理用の私有トークンは `aws/deploy.local.json` の `mcpBearerToken`（git管理外）：
+Register the following in Kiro, Claude, or another MCP client. The public demo token `demo-581fKusGqNgk7YrycFNw6M_5` is open to anyone (rotated if abused). The private admin token is `mcpBearerToken` in `aws/deploy.local.json` (not committed):
 
 ```json
 {"cooling-planner-remote":{"type":"http","url":"https://puzxplbkg2qglia72tkhs2z7km0jrusa.lambda-url.us-east-1.on.aws/","headers":{"Authorization":"Bearer demo-581fKusGqNgk7YrycFNw6M_5"}}}
@@ -136,90 +148,90 @@ Kiro・Claude・その他のMCPクライアントに以下を登録します。�
 
 ```sh
 cd aws && npm ci && cd ..
-npm run deploy:aws   # サイトbuild → Lambda bundle → cdk deploy（Lambdaバックエンドのみ）
+npm run deploy:aws   # site build → Lambda bundle → cdk deploy (Lambda backend only)
 ```
 
-デプロイ状態（Bearerトークン・URL）は `aws/deploy.local.json`（git管理外）に保存されます。初回はCDK bootstrapが必要な場合自動で実行します。サイトの公開はGitHub接続済みAmplifyアプリが `main` へのpushをトリガーに `amplify.yml` でビルドして行います。
+Deployment state (Bearer token, URLs) is stored in `aws/deploy.local.json` (not committed). CDK bootstrap runs automatically on first deploy if needed. Site publishing is done by the GitHub-connected Amplify app building via `amplify.yml` on push.
 
-## 保存形式
+## Save format
 
-`schemaVersion: 10`。配置・屋根条件・気象（固定＋代表日の時刻別）・係数・参照モデルの仮定・日運転開始時刻・乳量モデル設定・表示設定を保存します。v8・v4のJSONは自動変換せず拒否し、現在の案を保持します。既存のv8本体・データを別途残してください。
+`schemaVersion: 10`. Saves placements, roof conditions, weather (fixed + representative-day hourly), coefficients, reference-model assumptions, per-device daily start times, milk model settings and view settings. v8/v4 JSON are rejected without conversion, keeping the current scenario. Keep existing v8 bodies and data separately.
 
-配置JSONに加え、トップレベルに`project`を含むMCPの`evaluate`応答JSONも読込・貼付できます。`project`の配置・気象・係数・基準案を検証して復元し、画面で再計算します。受信した計算結果やハッシュは信用して表示しません。最大2MiB、対応版はschema 10（v9は自動変換）です。
+Besides placement JSON, an MCP `evaluate` response JSON with a top-level `project` can also be loaded or pasted. It validates the `project`'s placement, weather, coefficients and baseline, restores them and recalculates on screen. Received results and hashes are not trusted for display. Max 2 MiB; supported version is schema 10 (v9 converts automatically).
 
-「結果JSON」はプロジェクトと計算結果を合わせた検証用ファイルです。2MiB以内なら`project`を取り出して復元できますが、結果を含むため通常の受け渡しには配置JSONまたはMCP応答の`project`を使ってください。
+"Results JSON" is a verification file combining the project and calculation results. Under 2 MiB its `project` can be extracted and restored, but because it contains results, use a placement JSON or the `project` of an MCP response for normal interchange.
 
-端末内保存は使えるブラウザで行いますが、初回起動は必ず標準デモから始めます。「共通設定・保存」から端末内保存を復元できます。案JSONは端末内保存が使えない環境でも利用できます。
+On-device storage is used where available, but the first launch always starts from the standard demo. Restore the on-device save from "Settings & save". Scenario JSON works even where on-device storage is unavailable.
 
-## 区画別可視化
+## Per-area visualization
 
-### 標準3D / リアル3D / 2D
+### Standard 3D / Realistic 3D / 2D
 
-牛舎上部のタブで切り替えます。従来の描画は「標準3D」に残し、配置・選択地点・計算結果を共用します。
-「リアル3D」は鋼材、牛床、床材、牛・設備の形状、照明と影を加えた表示です。追加ダウンロードは不要です。
-ホルスタインを意識した体形と大きな斑模様で立位・休息姿勢を描き分け、50頭のうち3頭をソーカーのある採食帯に表示します。牛の表示位置・姿勢は演出で、計算地点や滞在時間の設定を変更しません。
+Switch with the tabs above the barn. The classic rendering remains as "Standard 3D" and shares placements, selected points and results.
+"Realistic 3D" adds steel members, stalls, floor material, cow/device geometry, lighting and shadows. No extra download needed.
+Holstein-like proportions and large spots are drawn in standing and resting postures; 3 of the 50 cows are placed in the feeding band with soakers. Cow positions and postures are cosmetic and do not change evaluation points or occupancy settings.
 
-- 背景ドラッグで回転、ホイールで拡大、Shift＋ドラッグまたは右ドラッグで平行移動。
-- ファン・ノズルを選んでドラッグすると、標準3Dと同じ設備を編集します。「戻す」も共通です。
-- 「風」で流れる筋、「散水」でソーカーの水滴／ミストの粒子を表示します。時間スライダーで運転のON/OFFを確認できます。
-- 「ヒートマップ」で床に既存の計算結果を重ねます。「分析表示」は牛を隠してヒートマップを表示します。
-- 「屋根断面」は片側の屋根を表示します。柱とトラスは内部構造を確認できるよう常時表示します。
+- Drag the background to rotate, wheel to zoom, Shift+drag or right-drag to pan.
+- Select and drag a fan/nozzle to edit the same device as in Standard 3D. Undo is shared.
+- "Wind" shows flow streaks; "Spray" shows soaker droplets / mist particles. Check ON/OFF operation with the time slider.
+- "Map" overlays existing results on the floor. "Analysis" hides the cows and shows the heat map.
+- "Roof" shows one roof side. Columns and trusses stay visible so the interior structure can be inspected.
 
-風はファンの向き・モデルの広がりと減衰・障害物に基づく模式表現です。粒子の軌道はCFDではありません。
-粒子アニメーションは表示用で、時刻を進めたりモデル計算を書き換えたりしません。
-材質と形状はコードで生成しており、写真測量や実写品質の牛モデルではありません。
-実装と検証の詳細は[リアル3D実装記録](docs/REALISTIC_3D_IMPLEMENTATION.md)を参照してください。
+Wind is a schematic representation based on fan direction, model spread/decay and obstacles. Particle trajectories are not CFD.
+The particle animation is display-only; it does not advance time or rewrite model results.
+Materials and shapes are generated in code — this is not photogrammetry or a photo-quality cow model.
+For implementation and verification details see [realistic 3D implementation record](docs/REALISTIC_3D_IMPLEMENTATION.md).
 
-[区画別の暑熱・冷却可視化仕様v0.1](docs/AREA_COOLING_VISUALIZATION_V0_1.md)を実装しています。50牛床・採食12区画・待機8区画の面を、放熱不足（Qrefに対する秒積算平均）・放熱改善・風速・気温で色分けします。面や表のクリックで代表地点を選択し、濡れ方・放熱内訳・設備作用の診断を表示します。各面はその地点の代表値であり、面全体の空間計算ではありません。schemaVersionは10です。
+Implements [per-area heat/cooling visualization spec v0.1](docs/AREA_COOLING_VISUALIZATION_V0_1.md). 50 stalls, 12 feeding and 8 waiting area faces are colored by cooling deficit (per-second integrated mean against Qref), heat-loss improvement, wind speed and air temperature. Clicking a face or table row selects its representative point and shows wetting, heat-loss breakdown and device-action diagnostics. Each face shows its point's representative value, not a spatial calculation over the whole face. schemaVersion is 10.
 
-## モデルの対応範囲
+## Model coverage
 
-- フリーストール1テンプレート・50床・70独立評価点。CFDや実農場の精度保証ではありません。
-- 熱・水は固定気象60分、基本1秒刻み。再生は計算済みサンプルの表示です。
-- 日乳量は別の代表日計算です。固定気象を24時間反復し、準備24時間の後で評価24時間を集計します。設備ごとの日運転開始時刻・運転時間・ON/OFF周期、日付をまたぐ残水を含みます。
-- 送風体感温度、放熱改善W、乳量、受胎は別の意味の指標です。
-- 日乳量は `milk-heat-deficit-v0.1`（demo_assumption）による牛群平均の参考値です。H=max(0,Qref−Q) を70地点・区域別滞在割合（14/6/4時間相当）・時間で加重し、遅れ込みEから Y=Y0−min(Y0×25%,beta×E) を計算します。係数は文献回帰値ではなく、実農場での精度は未検証です。
-- 掲載表の乳量は全酪連掲載6条件・RH60〜70%・静的条件のみ。未掲載値はnull、補間・外挿なし。資料として保持します。
-- 受胎は5期間のTHI区分と仮の基準受胎率から計算する参考シナリオ。初期値は独立した代表26℃・RH70%、基準受胎率40%。設備から自動的に総合受胎改善を算出するものではありません。
-- 60分平均を授精前後52日の代表条件へ適用する場合は、参照条件画面のチェックで明示的に選びます。ファン・ソーカーの放熱WをTHIへ変換しません。
-- 5期間別のTHIを渡す関数はありますが、初版UIは全期間共通の代表条件だけです。
+- One freestall template, 50 stalls, 70 independent evaluation points. Not CFD, and not an accuracy guarantee for real barns.
+- Heat and water use fixed weather for 60 minutes at a base step of 1 s. Playback shows precomputed samples.
+- Daily milk is a separate representative-day calculation: the fixed weather repeats for 24 h, and after a 24 h warm-up a 24 h evaluation window is aggregated. Includes per-device daily start times, run times, ON/OFF cycles, and water film carried past midnight.
+- Felt air temperature, heat-loss improvement W, milk and conception are metrics with different meanings.
+- Daily milk is a herd-average reference value under `milk-heat-deficit-v0.1` (demo_assumption). H=max(0,Qref−Q) is weighted across 70 points, per-area occupancy shares (14/6/4 h equivalent) and time, then Y=Y0−min(Y0×25%, beta×E) is computed from the lagged E. Coefficients are not literature regression values and accuracy on real farms is unverified.
+- The published milk table covers only the 6 Zen-raku-ren published conditions at RH 60–70% under static conditions. Unlisted values are null — no interpolation or extrapolation. Kept as reference material.
+- Conception is a reference scenario computed from 5-period THI bands and a hypothetical baseline conception rate. Initial values use an independent representative 26 °C / RH 70% and a 40% baseline rate. It does not automatically derive an overall conception improvement from equipment.
+- Applying the 60-minute mean to the 52-day peri-insemination representative conditions is an explicit opt-in checkbox on the reference screen. Fan/soaker heat loss W is never converted to THI.
+- A function accepting per-period THI exists, but the first UI exposes only a shared representative condition for all periods.
 
-## ファイル案内
+## File guide
 
-`docs/IMPLEMENTATION_REPORT.md`：作り直した意図・実装内容・数値結果・検証・残件。
+`docs/IMPLEMENTATION_REPORT.md`: intent of the rebuild, implementation, numerical results, verification and remaining items.
 
-`docs/DECISIONS_v0_8.md`：統合時に固定した実装契約。
+`docs/DECISIONS_v0_8.md`: implementation contracts fixed during integration.
 
-`docs/REUSE_MAP.json`：v0.4とのファイル別比較とSHA-256。
+`docs/REUSE_MAP.json`: per-file comparison with v0.4 plus SHA-256.
 
-`docs/evidence-v08/`：切り出し前のv0.8実装時のログ・画面・計算結果。
+`docs/evidence-v08/`: logs, screens and calculation results from the pre-split v0.8 implementation.
 
-`evidence/`：テスト実行時の出力先。Git管理対象外。
+`evidence/`: output destination at test time. Not tracked by Git.
 
-`reference/`：照合に使用した元のPythonモデルと仕様。
+`reference/`: original Python models and specs used for cross-checking.
 
-`examples/`：読込可能なschema9の配置例。
+`examples/`: loadable schema-9 placement examples.
 
-## 課題と独立リポジトリ化
+## Issues and standalone repo
 
-- [遮熱モデルと乳量参照表示の課題](docs/MODEL_REVIEW_2026-09-27.md)：評価結果、感度確認、未実装の改善候補。
-- [単独リポジトリへの切り出し](docs/STANDALONE_REPOSITORY.md)：必要ファイルの書き出し、独立したビルド・起動、Git初期化の手順。
-- [AGENTS.md](AGENTS.md)：独立版で作業するエージェント向けの範囲・検証規則。
+- [Reflective-coating model and milk reference issues](docs/MODEL_REVIEW_2026-09-27.md): evaluation results, sensitivity checks, unimplemented improvement candidates.
+- [Standalone repository split](docs/STANDALONE_REPOSITORY.md): file extraction, independent build/launch, Git init procedure.
+- [AGENTS.md](AGENTS.md): scope and verification rules for agents working on this standalone version.
 
-## MCPで作った案を画面で確認する
+## Checking an MCP-built scenario on screen
 
-1. AIに既存MCPの`evaluate`で案を計算させる。日資源の照合には`includeDaily: true`を指定する。
-2. 「evaluateの返値のprojectをJSONファイルとして渡して」と依頼する。添付を作れないクライアントなら、JSONの本文を受け取る。
-3. 画面上部の「読込」でファイルを開くか、「案比較」／「設定・保存」→「MCP案のJSONを読込」で本文を貼り付ける。応答全体のJSONも対応する。
-4. 再計算完了後、選択案・配置・気象・区域別不足と水・電力を確認する。読込は全案・共通条件を復元する操作で、「戻す」で読込前の条件へ戻せる。不正JSONは現在の案を保持する。
+1. Have the AI calculate a scenario with the existing MCP `evaluate`; specify `includeDaily: true` for daily-resource reconciliation.
+2. Ask for "the `project` from the evaluate response as a JSON file". If the client cannot create attachments, take the JSON body.
+3. Open the file via "Load" at the top, or paste the body into "Import MCP scenario JSON" under "Compare" / "Settings & save". A whole response JSON also works.
+4. After recalculation, check the selected scenario, placement, weather, per-area deficit and water/energy. Loading restores all scenarios and shared conditions, and "Undo" returns to the pre-load state. Invalid JSON keeps the current scenario.
 
-比較の平均は70代表点の単純平均で、牛群の頭数・滞在時間加重ではない。最大不足は地点ごとの60分平均不足の最大。「不足が減らず残る」は不足があり基準から低減していない地点、「局所作用なし」は局所設備の作用診断（屋根対策の改善を含まない）として区別する。地点の放熱内訳の差は複合設備の同時計算であり、設備別の独立寄与ではない。
+Comparison means are simple averages over the 70 representative points, not weighted by herd size or occupancy. Max deficit is the largest per-point 60-min mean deficit. "Deficit not reduced" means points that still have a deficit no smaller than baseline; "no local action" is a diagnosis of local device action (roof measures excluded). Differences in a point's heat-loss breakdown come from simultaneous multi-device calculation, not per-device independent contributions.
 
-[MCP案復元と比較の実装報告](docs/MCP_COMPARISON_IMPLEMENTATION_REPORT.md)に今回の検証範囲を記載する。ソース・配布物の更新と、公開AWS版への反映は別の作業である。
+[MCP scenario restore and comparison implementation report](docs/MCP_COMPARISON_IMPLEMENTATION_REPORT.md) records this round's verification scope. Updating sources/distributions and reflecting them to the public AWS deployment are separate tasks.
 
-### 今回の変更を手動確認する（人間／CI向け）
+### Manual checks for this round (humans/CI)
 
-1. MCPの案JSONを「MCP案のJSONを読込」に貼付し、配置・屋根条件が反映されることを確認する。「戻す」で元へ戻ることを確認する。
-2. 「案比較」で平均・最大不足、牛床／採食／待機、水・電力を見る。不足上位の地点を押して、選択地点と放熱内訳が切り替わることを確認する。
+1. Paste an MCP scenario JSON into "Import MCP scenario JSON" and confirm placement and roof conditions are reflected; confirm "Undo" restores the prior state.
+2. In "Compare", look at mean/max deficit, stall/feeding/waiting, water and energy; press a top-deficit location and confirm the selected point and its heat-loss breakdown switch.
 
-専用のE2Eは `python3 -m pytest tests/e2e/test_mcp_comparison.py -v` の2件に絞っています。エージェントによる実行は省略します。
+Dedicated E2E is limited to 2 tests in `python3 -m pytest tests/e2e/test_mcp_comparison.py -v`. Agent-side execution is omitted.
