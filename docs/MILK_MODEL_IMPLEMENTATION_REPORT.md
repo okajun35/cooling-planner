@@ -1,7 +1,7 @@
 # 乳量仮説モデル v0.1 実装報告
 
 作成：2026-09-28。対象：`docs/MILK_MODEL_IMPLEMENTATION_PLAN.md`（計画ID `milk-implementation-plan-v1`）のP0〜P6。
-対象リポジトリ：`/home/hddwm390/tmp/cooling-planner`（独立版。親プロジェクトへは触れていない）。
+対象リポジトリ：`<this repository>`（独立版。親プロジェクトへは触れていない）。
 
 ## 1. 実装したもの
 

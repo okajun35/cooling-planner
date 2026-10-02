@@ -78,7 +78,7 @@ Node用コードは`scripts/`に置き、ブラウザ用`src/`からSDKや`ws`�
   "mcpServers": {
     "cooling-planner": {
       "command": "node",
-      "args": ["/home/hddwm390/tmp/cooling-planner/scripts/mcp-server.mjs"]
+      "args": ["<absolute-path-to-repo>/scripts/mcp-server.mjs"]
     }
   }
 }
