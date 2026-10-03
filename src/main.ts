@@ -274,6 +274,6 @@ function evaluateProject(project:Project,opts:{daily:boolean}):Promise<EvalJob>{
  });
 }
 if(location.protocol==='http:'&&new URLSearchParams(location.search).get('mcp')==='1'){
- const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback,evaluate:evaluateProject});
+ const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback,evaluate:evaluateProject,openSheet:tab=>{tab?openSheet(ws,tab):closeSheet(ws);render()}});
  startMcpBridge({url:`ws://${location.host}/bridge`,commands,notify:toast});
 }

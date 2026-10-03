@@ -180,7 +180,7 @@ function createServer(){
  },args=>relay('edit',args));
 
  server.registerTool('set_view',{
-  description:'View-only changes (no physics, not undoable). Partial update of mode/metric/selected point, device and area/display flags/timeSec. Selecting a point also selects its area. timeSec stops playback.',
+  description:'View-only changes (no physics, not undoable). Partial update of mode/metric/selected point, device and area/display flags/timeSec, and open/close of the bottom results sheet. Selecting a point also selects its area. timeSec stops playback.',
   inputSchema:z.strictObject({
    mode:z.enum(['3d','2d']).optional(),
    metric:z.enum(['delta','deficit','speed','temperature']).optional(),
@@ -189,6 +189,7 @@ function createServer(){
    selectedAreaId:z.string().nullable().optional(),
    analysis:z.boolean().optional(),realistic:z.boolean().optional(),heatmap:z.boolean().optional(),roof:z.boolean().optional(),flow:z.boolean().optional(),particles:z.boolean().optional(),
    timeSec:z.number().min(0).max(3600).optional(),
+   sheet:z.enum(['compare','areas','timeline','reference']).nullable().optional().describe('Open the bottom results sheet on the given tab, or null to close it'),
   }),
  },args=>relay('set_view',args));
 

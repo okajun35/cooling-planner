@@ -20,6 +20,8 @@ export interface CommandDeps{
  currentResult:()=>SimulationResult|null;
  status:()=>CommandStatus;
  stopPlayback:()=>void;
+ /** Opens or closes (null) the bottom results sheet. Optional; absent in non-browser contexts. */
+ openSheet?:(tab:'compare'|'areas'|'timeline'|'reference'|null)=>void;
  /** Runs the same worker simulation on a cloned project. Must not touch live state. */
  evaluate:(project:Project,opts:{daily:boolean})=>Promise<EvalJob>;
 }
@@ -27,7 +29,7 @@ export interface CommandDeps{
 export type ResultStatus='editing'|'calculating'|'thermal_ready'|'ready'|'error';
 export interface EditArgs{operation:string;scenarioId?:string;deviceId?:string;systemId?:string;kind?:string;x?:number;y?:number;patch?:Record<string,unknown>}
 export interface EvaluateArgs{operations:EditArgs[];scenarioId?:string;includeDaily?:boolean}
-export interface SetViewArgs{mode?:View['mode'];metric?:View['metric'];selectedProbeId?:string;selectedDeviceId?:string|null;selectedAreaId?:string|null;analysis?:boolean;realistic?:boolean;heatmap?:boolean;roof?:boolean;flow?:boolean;particles?:boolean;timeSec?:number}
+export interface SetViewArgs{mode?:View['mode'];metric?:View['metric'];selectedProbeId?:string;selectedDeviceId?:string|null;selectedAreaId?:string|null;analysis?:boolean;realistic?:boolean;heatmap?:boolean;roof?:boolean;flow?:boolean;particles?:boolean;timeSec?:number;sheet?:'compare'|'areas'|'timeline'|'reference'|null}
 export interface GetResultsArgs{scenarioId?:string;probeId?:string}
 export interface CompareArgs{scenarioId?:string;candidates:{id:string;operations:EditArgs[]}[];constraints?:Partial<CandidateConstraints>;ranking?:RankingMode}
 
@@ -353,6 +355,7 @@ export function createCommands(d:CommandDeps){
    patch.selectedDeviceId=args.selectedDeviceId===null?null:deviceById(p,args.selectedDeviceId).id;
   }
   if(args.timeSec!==undefined){d.stopPlayback();patch.timeSec=args.timeSec}
+  if(args.sheet!==undefined)d.openSheet?.(args.sheet);
   store.setView(patch);
   return store.committed.view;
  }

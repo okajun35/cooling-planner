@@ -906,7 +906,7 @@ function evaluateProject(project, opts) {
     });
 }
 if (location.protocol === 'http:' && new URLSearchParams(location.search).get('mcp') === '1') {
-    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject });
+    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject, openSheet: tab => { tab ? (0, workspaceState_js_1.openSheet)(ws, tab) : (0, workspaceState_js_1.closeSheet)(ws); render(); } });
     (0, bridge_js_1.startMcpBridge)({ url: `ws://${location.host}/bridge`, commands, notify: toast });
 }
 
@@ -13242,6 +13242,8 @@ function createCommands(d) {
             d.stopPlayback();
             patch.timeSec = args.timeSec;
         }
+        if (args.sheet !== undefined)
+            d.openSheet?.(args.sheet);
         store.setView(patch);
         return store.committed.view;
     }
