@@ -180,7 +180,7 @@ function createServer(){
  },args=>relay('edit',args));
 
  server.registerTool('set_view',{
-  description:'表示のみ変更（物理計算・Undo対象外）。mode/metric/選択中の地点・設備・区画/表示フラグ/timeSecの部分更新。地点を選ぶと所属区画も選択される。timeSecは再生を止める。',
+  description:'表示のみ変更（物理計算・Undo対象外）。通常3D: mode:"3d",realistic:false、リアル3D: mode:"3d",realistic:true、2D: mode:"2d"。3DではcameraPreset all/top/side、camera（絶対角度rad・距離m）、orbit（相対角度deg）、pan（牛舎平面の移動m）、zoomFactor（距離倍率、1未満で拡大）の順で適用する。相対操作は画面の範囲へ制限。2Dからは同時にmode:"3d"を指定する。metric/選択/表示フラグ/timeSecと結果シートsheetも変更できる。地点選択で所属区画も選択される。timeSecは再生を止める。',
   inputSchema:z.strictObject({
    mode:z.enum(['3d','2d']).optional(),
    metric:z.enum(['delta','deficit','speed','temperature']).optional(),
@@ -189,6 +189,12 @@ function createServer(){
    selectedAreaId:z.string().nullable().optional(),
    analysis:z.boolean().optional(),realistic:z.boolean().optional(),heatmap:z.boolean().optional(),roof:z.boolean().optional(),flow:z.boolean().optional(),particles:z.boolean().optional(),
    timeSec:z.number().min(0).max(3600).optional(),
+   sheet:z.enum(['compare','areas','timeline','reference']).nullable().optional().describe('結果シートを指定のタブで開く。nullで閉じる'),
+   cameraPreset:z.enum(['all','top','side']).optional().describe('画面の全体・上・横ボタンと同じ視点'),
+   camera:z.strictObject({azimuth:z.number().min(-100).max(100).optional(),elevation:z.number().min(.1).max(1.56).optional(),distance:z.number().min(8).max(160).optional(),target:z.tuple([z.number().min(-100).max(200),z.number().min(-100).max(200),z.number().min(-100).max(200)]).optional()}).optional().describe('カメラ絶対値の部分更新。azimuth/elevationはrad、distanceとtarget [x,高さ,z]はm'),
+   orbit:z.strictObject({azimuthDeg:z.number().optional(),elevationDeg:z.number().optional()}).optional().describe('カメラの相対回転[deg]'),
+   pan:z.strictObject({xM:z.number().optional(),zM:z.number().optional()}).optional().describe('牛舎の長さ方向x・幅方向zへの相対移動[m]'),
+   zoomFactor:z.number().positive().optional().describe('距離倍率。1未満で拡大、1より大きければ縮小'),
   }),
  },args=>relay('set_view',args));
 

@@ -41,6 +41,7 @@ const workspaceState_js_1 = require("./ui/workspaceState.js");
 const placement_js_1 = require("./template/placement.js");
 const commands_js_1 = require("./mcp/commands.js");
 const bridge_js_1 = require("./mcp/bridge.js");
+const webmcp_js_1 = require("./mcp/webmcp.js");
 const projectImport_js_1 = require("./ui/projectImport.js");
 const store = new store_js_1.ProjectStore((0, defaults_js_1.createProject)()), gate = new protocol_js_1.ResultGate();
 let result = null, worker = null, scene = null, mode = '', calculating = false, lastCalculationMs = 0, startTime = 0, workerFailed = false, pending = false, invalid = false, workerError = null, suppressChange = false, pendingInput = null;
@@ -359,6 +360,8 @@ store.subscribe((p, kind) => {
         return;
     }
     if (cameraOnly) {
+        if (p.view.camera)
+            scene?.setCamera?.(p.view.camera);
         updateGhost();
         return;
     }
@@ -861,9 +864,28 @@ function evaluateProject(project, opts) {
         w.postMessage({ jobId: 1, inputHash: (0, simulation_js_1.inputHash)(project), project });
     });
 }
-if (location.protocol === 'http:' && new URLSearchParams(location.search).get('mcp') === '1') {
-    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject });
-    (0, bridge_js_1.startMcpBridge)({ url: `ws://${location.host}/bridge`, commands, notify: toast });
+const query = new URLSearchParams(location.search);
+const localMcp = location.protocol === 'http:' && query.get('mcp') === '1';
+const webMcp = (0, webmcp_js_1.isWebMcpEnabled)(location.search);
+if (localMcp || webMcp) {
+    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject, cameraAspectRatio: () => Math.max(1, (0, dom_js_1.el)('scene').clientWidth) / Math.max(1, (0, dom_js_1.el)('scene').clientHeight), openSheet: tab => { tab ? (0, workspaceState_js_1.openSheet)(ws, tab) : (0, workspaceState_js_1.closeSheet)(ws); render(); } });
+    if (localMcp)
+        (0, bridge_js_1.startMcpBridge)({ url: `ws://${location.host}/bridge`, commands, notify: toast });
+    if (webMcp) {
+        const badge = document.createElement('div');
+        badge.id = 'webmcp-status';
+        badge.className = 'webmcp-status';
+        badge.setAttribute('role', 'status');
+        badge.textContent = 'Starting WebMCP…';
+        document.body.append(badge);
+        void (0, webmcp_js_1.startWebMcp)({ context: (0, webmcp_js_1.findModelContext)(document, navigator), commands, notify: (status, message) => {
+                badge.dataset.state = status;
+                badge.textContent = status === 'unavailable' ? 'WebMCP unavailable' : message;
+                badge.title = message;
+                if (status !== 'ready' && query.get('webmcp') === '1')
+                    toast(message);
+            } });
+    }
 }
 
 },
@@ -2756,6 +2778,7 @@ const realistic3d_js_1 = require("./realistic3d.js");
 const math3d_js_1 = require("./math3d.js");
 const faces_js_1 = require("../template/faces.js");
 const layout_js_1 = require("../template/layout.js");
+const camera_js_1 = require("./camera.js");
 class Viewport3D {
     container;
     cb;
@@ -2949,7 +2972,9 @@ class Viewport3D {
             this.canvas.releasePointerCapture(a.id);
     };
     wheel = (e) => { e.preventDefault(); this.camera.distance = Math.max(8, Math.min(160, this.camera.distance * Math.exp(e.deltaY * .001))); this.draw(); this.cb.camera(structuredClone(this.camera)); };
-    preset(name) { this.camera = { azimuth: name === 'side' ? Math.PI / 2 : -.28, elevation: name === 'top' ? 1.55 : name === 'side' ? .2 : .6, distance: (name === 'top' ? 48 : 42) * Math.max(1, 1.7 / (this.size().w / this.size().h)), target: [this.p.template.lengthM / 2, 0, this.p.template.widthM / 2] }; this.draw(); this.cb.camera(structuredClone(this.camera)); }
+    /** Redraw camera-only changes without rebuilding scene geometry. */
+    setCamera(camera) { this.camera = structuredClone(camera); this.draw(); }
+    preset(name) { this.setCamera((0, camera_js_1.presetCamera)(name === 'overview' ? 'all' : name, this.p.template, this.size().w / this.size().h)); this.cb.camera(structuredClone(this.camera)); }
     dispose() { this.abort.abort(); this.observer.disconnect(); this.backend.dispose(); this.canvas.remove(); }
 }
 exports.Viewport3D = Viewport3D;
@@ -12006,6 +12031,78 @@ function holsteinBody() {
 }
 
 },
+"views/camera.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.presetCamera = presetCamera;
+exports.controlledCamera = controlledCamera;
+const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+function presetCamera(name, template, aspect = 1.7) {
+    if (!['all', 'top', 'side'].includes(name))
+        throw Error('cameraPreset must be all, top or side');
+    if (!Number.isFinite(aspect) || aspect <= 0)
+        throw Error('Camera aspect ratio must be positive and finite');
+    return { azimuth: name === 'side' ? Math.PI / 2 : -.28, elevation: name === 'top' ? 1.55 : name === 'side' ? .2 : .6, distance: clamp((name === 'top' ? 48 : 42) * Math.max(1, 1.7 / aspect), 8, 160), target: [template.lengthM / 2, 0, template.widthM / 2] };
+}
+function finite(value, label) {
+    if (typeof value !== 'number' || !Number.isFinite(value))
+        throw Error(`${label} must be a finite number`);
+    return value;
+}
+function fields(value, allowed, label) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw Error(`${label} must be an object`);
+    const record = value;
+    if (!Object.keys(record).length)
+        throw Error(`${label} needs at least one field`);
+    for (const key of Object.keys(record))
+        if (!allowed.includes(key))
+            throw Error(`${label}.${key} is not allowed`);
+    return record;
+}
+/** Validate the whole request before any store, sheet or playback side effect. */
+function controlledCamera(current, controls, template, aspect = 1.7) {
+    const c = controls.cameraPreset !== undefined ? presetCamera(controls.cameraPreset, template, aspect) : structuredClone(current ?? presetCamera('all', template, aspect));
+    if (controls.camera !== undefined) {
+        const patch = fields(controls.camera, ['azimuth', 'elevation', 'distance', 'target'], 'camera');
+        for (const key of ['azimuth', 'elevation', 'distance'])
+            if (patch[key] !== undefined)
+                c[key] = finite(patch[key], `camera.${key}`);
+        if (patch.target !== undefined) {
+            if (!Array.isArray(patch.target) || patch.target.length !== 3)
+                throw Error('camera.target needs three coordinates');
+            c.target = patch.target.map((n, i) => finite(n, `camera.target[${i}]`));
+        }
+    }
+    // Match saved-camera limits before applying relative gestures.
+    if (c.azimuth < -100 || c.azimuth > 100 || c.elevation < .1 || c.elevation > 1.56 || c.distance < 8 || c.distance > 160 || c.target.some(n => n < -100 || n > 200))
+        throw Error('camera values are outside the allowed range');
+    if (controls.orbit !== undefined) {
+        const orbit = fields(controls.orbit, ['azimuthDeg', 'elevationDeg'], 'orbit');
+        if (orbit.azimuthDeg !== undefined) {
+            const angle = c.azimuth + (finite(orbit.azimuthDeg, 'orbit.azimuthDeg') % 360) * (Math.PI / 180);
+            c.azimuth = Math.atan2(Math.sin(angle), Math.cos(angle));
+        }
+        if (orbit.elevationDeg !== undefined)
+            c.elevation = clamp(c.elevation + finite(orbit.elevationDeg, 'orbit.elevationDeg') * (Math.PI / 180), .14, 1.55);
+    }
+    if (controls.pan !== undefined) {
+        const pan = fields(controls.pan, ['xM', 'zM'], 'pan');
+        if (pan.xM !== undefined)
+            c.target[0] = clamp(c.target[0] + finite(pan.xM, 'pan.xM'), -50, 100);
+        if (pan.zM !== undefined)
+            c.target[2] = clamp(c.target[2] + finite(pan.zM, 'pan.zM'), -50, 100);
+    }
+    if (controls.zoomFactor !== undefined) {
+        const factor = finite(controls.zoomFactor, 'zoomFactor');
+        if (factor <= 0)
+            throw Error('zoomFactor must be positive');
+        c.distance = clamp(c.distance * factor, 8, 160);
+    }
+    return c;
+}
+
+},
 "views/svg2d.js":function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -12828,6 +12925,7 @@ const simulation_js_1 = require("../model/simulation.js");
 const dailySimulation_js_1 = require("../model/dailySimulation.js");
 const modelInfo_js_1 = require("../model/modelInfo.js");
 const candidateComparison_js_1 = require("../model/candidateComparison.js");
+const camera_js_1 = require("../views/camera.js");
 const CONFIRM_INPUT = '画面の入力を確定してください';
 /** Short guidance also embedded in the MCP server instructions and tool descriptions. */
 exports.MODEL_NOTES = [
@@ -13179,6 +13277,11 @@ function createCommands(d) {
             patch.flow = args.flow;
         if (args.particles !== undefined)
             patch.particles = args.particles;
+        if (args.cameraPreset !== undefined || args.camera !== undefined || args.orbit !== undefined || args.pan !== undefined || args.zoomFactor !== undefined) {
+            if ((args.mode ?? p.view.mode) !== '3d')
+                throw Error('Camera controls require 3D mode. Set mode:"3d" in the same call');
+            patch.camera = (0, camera_js_1.controlledCamera)(p.view.camera, args, p.template, d.cameraAspectRatio?.() ?? 1.7);
+        }
         if (args.selectedAreaId !== undefined) {
             if (args.selectedAreaId !== null && !(0, faces_js_1.buildAreas)(l).some(a => a.id === args.selectedAreaId))
                 throw Error(`区画が見つかりません: ${args.selectedAreaId}`);
@@ -13198,6 +13301,8 @@ function createCommands(d) {
             d.stopPlayback();
             patch.timeSec = args.timeSec;
         }
+        if (args.sheet !== undefined)
+            d.openSheet?.(args.sheet);
         store.setView(patch);
         return store.committed.view;
     }
@@ -13468,6 +13573,152 @@ function startMcpBridge(opts) {
         }
     };
     ws.onclose = ev => { opts.notify(ev.reason ? `MCP接続が閉じられました: ${ev.reason}` : 'MCP接続が閉じられました。ページを再読込すると再接続します'); };
+}
+
+},
+"mcp/webmcp.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.WEBMCP_TOOLS = void 0;
+exports.findModelContext = findModelContext;
+exports.isWebMcpEnabled = isWebMcpEnabled;
+exports.startWebMcp = startWebMcp;
+const number = { type: 'number' }, string = { type: 'string' }, boolean = { type: 'boolean' };
+const choices = (...values) => ({ type: 'string', enum: values });
+const nullable = (schema) => ({ ...schema, type: [schema.type, 'null'], ...(schema.enum ? { enum: [...schema.enum, null] } : {}) });
+const object = (properties = {}, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
+const numbers = (names) => Object.fromEntries(names.split(' ').map(name => [name, number]));
+const patch = (properties) => object(properties);
+const operation = (name, properties = {}, required = []) => object({ operation: choices(name), ...properties }, ['operation', ...required]);
+const schedule = numbers('onSec offSec hoursPerDay dailyStartHour pumpPowerKw');
+const devicePatch = patch({ ...numbers('x y heightM yawDeg pitchDownDeg diameterM outletSpeedMps powerKw hoursPerDay dailyStartHour flowLpm halfAngleDeg'), enabled: boolean });
+const roofPatch = patch({ ...numbers('reflectance insulationM flowLpmM2'), ...schedule, sprayEnabled: boolean });
+const triplet = { type: 'array', items: number, minItems: 3, maxItems: 3 };
+const editSchema = { type: 'object', oneOf: [
+        operation('switch_scenario', { scenarioId: string }, ['scenarioId']),
+        operation('copy_to_other'),
+        operation('update_device', { deviceId: string, patch: devicePatch }, ['deviceId', 'patch']),
+        operation('update_roof', { patch: roofPatch }, ['patch']),
+        operation('update_system', { systemId: string, patch: patch({ ...schedule, enabled: boolean }) }, ['systemId', 'patch']),
+        operation('update_environment', { patch: patch(numbers('temperatureC relativeHumidityPct pressurePa backgroundSpeedMps ventilationM3sPerM2 solarRoofWm2')) }, ['patch']),
+        operation('update_daily_weather', { patch: object({ mode: choices('constant', 'hourly'), hours: { type: 'array', items: object({ hour: { type: 'integer', minimum: 0, maximum: 23 }, temperatureC: { type: 'number', minimum: 20, maximum: 40 }, relativeHumidityPct: { type: 'number', minimum: 0, maximum: 100 }, solarRoofWm2: { type: 'number', minimum: 0, maximum: 1200 } }, ['hour', 'temperatureC', 'relativeHumidityPct', 'solarRoofWm2']) } }, ['mode']) }, ['patch']),
+        operation('update_model', { patch: patch({
+                ...numbers('surfaceTemperatureC areaM2 wetAreaM2 patchLengthM patchWidthM baseWetFraction emissivity radiantOffsetC kSpread kDecay latentHeatJkg airDensityKgM3 airCpJkgK vaporGasConstant hcIntercept hcSlope'),
+                roof: patch(numbers('backgroundSensibleW bareResistance conductivity hOutConv hOutRad hInConv hInRad viewFactor waterCapacityKgM2')),
+                profiles: { type: 'object', additionalProperties: patch(numbers('outletMultiplier hcMultiplier mistEfficiency maxFilmKg')) },
+            }) }, ['patch']),
+        operation('update_milk', { patch: patch({
+                ...numbers('potentialMilkKgPerCowDay referenceCoolingWPerCow responseKgPerCowDayPerW maxLossFraction warmupDurationSec evaluationDurationSec timeStepSec'),
+                lagWeights: triplet, responseSensitivityKgPerCowDayPerW: triplet,
+                occupancyFractions: object(numbers('stall feeding waiting'), ['stall', 'feeding', 'waiting']),
+            }) }, ['patch']),
+        operation('update_references', { patch: patch({ baselineMilkKgPerDay: nullable(number), fertility: patch({ ...numbers('p0 temperatureC relativeHumidityPct'), mode: choices('manual', 'simulation'), exposureAssumed: boolean }) }) }, ['patch']),
+        operation('add_device', { kind: choices('fan', 'soaker', 'mist'), x: number, y: number }, ['kind']),
+        operation('duplicate_device', { deviceId: string }, ['deviceId']),
+        operation('remove_device', { deviceId: string }, ['deviceId']),
+    ] };
+const operations = { type: 'array', items: editSchema };
+const cameraViewProperties = {
+    cameraPreset: { ...choices('all', 'top', 'side'), description: 'Same framing as the All, Top and Side buttons. 3D only.' },
+    camera: object({ azimuth: { type: 'number', minimum: -100, maximum: 100, description: 'Absolute orbit angle in radians' }, elevation: { type: 'number', minimum: .1, maximum: 1.56, description: 'Absolute elevation in radians' }, distance: { type: 'number', minimum: 8, maximum: 160, description: 'Camera distance in metres' }, target: { type: 'array', items: { type: 'number', minimum: -100, maximum: 200 }, minItems: 3, maxItems: 3, description: 'Target [barn length x, vertical height, barn width z], in metres' } }),
+    orbit: object({ ...numbers('azimuthDeg elevationDeg') }),
+    pan: object({ ...numbers('xM zM') }),
+    zoomFactor: { type: 'number', description: 'Positive distance multiplier: <1 zooms in; >1 zooms out' },
+};
+exports.WEBMCP_TOOLS = [
+    { name: 'get_state', description: 'Read the committed Cooling Planner screen state, scenario/device/point/area IDs, selection, calculation status and model notes. Call first. The baseline is read-only.', inputSchema: object(), readOnly: true },
+    { name: 'edit', description: 'Apply one operation to the current screen scenario or shared settings, with automatic recalculation. Use IDs from get_state. copy_to_other overwrites the other editable scenario. Success does not mean calculation is finished.', inputSchema: editSchema, readOnly: false },
+    { name: 'set_view', description: 'Control the screen: Standard 3D = mode:"3d",realistic:false; Realistic 3D = mode:"3d",realistic:true; 2D = mode:"2d". In 3D use cameraPreset all/top/side, camera for absolute radians/metres, orbit for relative degrees, pan for ground-plane metres, zoomFactor for zoom. Applied in that order. Camera gestures clamp to screen limits; add mode:"3d" when switching from 2D. Also change metric/selection/overlays or open a results sheet. View changes do not change physics and are not undoable.', inputSchema: object({ mode: choices('3d', '2d'), metric: choices('delta', 'deficit', 'speed', 'temperature'), selectedProbeId: string, selectedDeviceId: nullable(string), selectedAreaId: nullable(string), analysis: boolean, realistic: boolean, heatmap: boolean, roof: boolean, flow: boolean, particles: boolean, timeSec: { type: 'number', minimum: 0, maximum: 3600 }, sheet: nullable(choices('compare', 'areas', 'timeline', 'reference')), ...cameraViewProperties }), readOnly: false },
+    { name: 'get_results', description: 'Read current calculation results and per-area comparisons. ready means daily results are complete; thermal_ready means daily results are pending. Other statuses have no result. Never treat null as zero. Leave at least 1 second between calls.', inputSchema: object({ scenarioId: string, probeId: string }), readOnly: true },
+    { name: 'undo', description: 'Undo the last screen edit using the same history as the Undo button. View changes cannot be undone.', inputSchema: object(), readOnly: false },
+    { name: 'describe_model', description: 'Read the model structure, assumptions and limits. Call before interpreting results. Daily milk is a hypothesis reference, not a guaranteed real-farm effect.', inputSchema: object(), readOnly: true },
+    { name: 'evaluate', description: 'Evaluate hypothetical operations on a clone without changing the screen or Undo history. Use for what-if questions. includeDaily also computes daily hypothesis results and may take tens of seconds.', inputSchema: object({ operations, scenarioId: string, includeDaily: boolean }, ['operations']), readOnly: true },
+    { name: 'compare_candidates', description: 'Evaluate 1–3 independent candidates on clones, compare daily deficits and resource constraints, and rank them. Candidate operations are equipment/roof operation tweaks only; no weather or performance coefficient changes. The screen is unchanged.', inputSchema: object({ scenarioId: string, candidates: { type: 'array', minItems: 1, maxItems: 3, items: object({ id: string, operations }, ['id', 'operations']) }, constraints: object({ ...numbers('maxWaterLPerDay maxElectricityKwhPerDay'), priorityArea: string, protectAreas: { type: 'array', items: string }, protectWorst: boolean }), ranking: choices('deficit', 'water', 'worst') }, ['candidates']), readOnly: true },
+];
+function validate(schema, value, path = 'arguments') {
+    if (schema.oneOf) {
+        // Select the operation first to retain a useful error for malformed arguments.
+        const name = value && typeof value === 'object' ? value.operation : undefined;
+        const selected = schema.oneOf.find(s => s.properties?.operation.enum?.includes(name));
+        if (!selected)
+            throw Error(`${path}.operation is unknown or missing`);
+        validate(selected, value, path);
+        return;
+    }
+    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+    const type = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+    if (!types.includes(type) && !(types.includes('integer') && typeof value === 'number' && Number.isInteger(value)))
+        throw Error(`${path} must be ${types.join(' or ')}`);
+    if (schema.enum && !schema.enum.includes(value))
+        throw Error(`${path} has an unsupported value`);
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value))
+            throw Error(`${path} must be finite`);
+        if (schema.minimum !== undefined && value < schema.minimum || schema.maximum !== undefined && value > schema.maximum)
+            throw Error(`${path} is outside the allowed range`);
+    }
+    if (type === 'object') {
+        const record = value;
+        for (const key of schema.required ?? [])
+            if (!Object.hasOwn(record, key))
+                throw Error(`${path}.${key} is required`);
+        for (const [key, v] of Object.entries(record)) {
+            const child = schema.properties && Object.hasOwn(schema.properties, key) ? schema.properties[key] : undefined;
+            if (child)
+                validate(child, v, `${path}.${key}`);
+            else if (schema.additionalProperties === false)
+                throw Error(`${path}.${key} is not allowed`);
+            else if (typeof schema.additionalProperties === 'object')
+                validate(schema.additionalProperties, v, `${path}.${key}`);
+        }
+    }
+    if (Array.isArray(value)) {
+        if (schema.minItems !== undefined && value.length < schema.minItems || schema.maxItems !== undefined && value.length > schema.maxItems)
+            throw Error(`${path} has an invalid length`);
+        if (schema.items)
+            value.forEach((v, i) => validate(schema.items, v, `${path}[${i}]`));
+    }
+}
+/** Prefer the current document API; support older navigator implementations too. */
+function findModelContext(doc, nav) {
+    for (const host of [doc, nav]) {
+        const context = host?.modelContext;
+        if (typeof context?.registerTool === 'function')
+            return context;
+    }
+}
+/** Like the Star Lab demo, ordinary URLs expose tools; an explicit 0 opts out. */
+function isWebMcpEnabled(search) {
+    return new URLSearchParams(search).get('webmcp') !== '0';
+}
+async function startWebMcp(opts) {
+    if (!opts.context) {
+        opts.notify('unavailable', 'WebMCP unavailable — enable WebMCP in a supported Chrome browser');
+        return;
+    }
+    const context = opts.context, registered = [];
+    try {
+        for (const definition of exports.WEBMCP_TOOLS) {
+            const { name, description, inputSchema, readOnly } = definition;
+            await context.registerTool({ name, description, inputSchema, annotations: { readOnlyHint: readOnly, consequentialHint: false }, execute: async (args) => {
+                    const input = args === undefined ? {} : args;
+                    validate(inputSchema, input);
+                    const command = opts.commands[name];
+                    return JSON.stringify(await command(input));
+                } });
+            registered.push(name);
+        }
+        opts.notify('ready', 'WebMCP ready');
+    }
+    catch (e) {
+        for (const name of registered) {
+            try {
+                await context.unregisterTool?.(name);
+            }
+            catch { /* Report the original registration error. */ }
+        }
+        opts.notify('error', `WebMCP registration failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
 }
 
 },

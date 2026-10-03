@@ -134,6 +134,49 @@ The tools are `get_state` / `edit` / `evaluate` / `compare_candidates` / `descri
 
 Browser integration check: `CHROMIUM_PATH` set + `python3 -m pytest tests/e2e/test_mcp.py` (drives a real MCP stdio session and verifies the screen changes).
 
+## WebMCP on the deployed site
+
+The Japanese `main` branch exposes the same WebMCP tools as the English branch. Open:
+
+https://main.da05znjm47ziu.amplifyapp.com/
+
+The English demo at https://english.da05znjm47ziu.amplifyapp.com/ uses the same tool interface.
+
+The page automatically registers eight WebMCP tools against its live ProjectStore: `get_state`, `edit`, `set_view`, `get_results`, `undo`, `describe_model`, `evaluate`, and `compare_candidates`. No query parameter is required. The screen shows **WebMCP ready** after registration. This works on the HTTPS-hosted page without a local Cooling Planner server or a WebSocket relay. The AI controls the tab connected to its browser MCP; the remote Lambda MCP remains a separate, stateless calculation service.
+
+WebMCP is experimental. Use a Chrome version supported by the installed Chrome DevTools MCP (its current configuration documentation requires Chrome 150+) and enable `--enable-features=WebMCP`. Enable the MCP's `--categoryExperimentalWebmcp` category. See the [Chrome DevTools MCP configuration](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/configuration.md) and [WebMCP debugging guide](https://developer.chrome.com/docs/devtools/agents/webmcp-debugging).
+
+For Codex, add a distinct entry to your MCP configuration, or update your existing Chrome DevTools entry rather than launching two MCPs against the same browser:
+
+```toml
+[mcp_servers.cooling_webmcp_browser]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest", "--categoryExperimentalWebmcp", "--chromeArg=--enable-features=WebMCP"]
+```
+
+This configuration launches a visible Chrome. If connecting to an existing Chrome instead, use the MCP's `--browserUrl` option and enable WebMCP when launching that browser; `--chromeArg` only applies to a browser launched by the MCP. The Codex process and visible browser must have a working connection, including when using WSL. See [Codex MCP configuration](https://developers.openai.com/codex/mcp/).
+
+Restart the Codex session after updating its MCP configuration. Ask it to open the deployed URL above, list the page's WebMCP tools, and execute `get_state` first. Then execute `edit` using IDs from that response and `set_view` with `{"sheet":"compare"}`. Inspect `get_results` after calculation; `calculating` or null is not zero. `describe_model` explains the model assumptions. `evaluate` and `compare_candidates` run on clones and do not change the screen.
+
+`set_view` also controls the 3D camera, using the same All/Top/Side framing as the screen buttons:
+
+| Action | `set_view` arguments |
+| --- | --- |
+| Standard 3D, All | `{"mode":"3d","realistic":false,"cameraPreset":"all"}` |
+| Realistic 3D, Top | `{"mode":"3d","realistic":true,"cameraPreset":"top"}` |
+| Side | `{"cameraPreset":"side"}` |
+| Rotate by 30° and tilt up 10° | `{"orbit":{"azimuthDeg":30,"elevationDeg":10}}` |
+| Pan along the barn length/width | `{"pan":{"xM":2,"zM":-1}}` |
+| Zoom in / out | `{"zoomFactor":0.8}` / `{"zoomFactor":1.25}` |
+| Set an absolute camera distance | `{"camera":{"distance":30}}` |
+| 2D | `{"mode":"2d"}` |
+
+Camera operations require 3D; include `"mode":"3d"` in the same call when switching from 2D. Both Standard and Realistic 3D support them. Combined arguments apply in order: preset, absolute `camera`, relative `orbit`, `pan`, then `zoomFactor`. Relative gestures clamp to the screen limits. Absolute camera angles (`azimuth`, `elevation`) are in **radians**, while relative orbit angles are in **degrees**; distance and target `[x,height,z]` are in metres. `get_state().view.camera` reports the applied camera. These operations redraw the view without changing model inputs or Undo history. Repeated orbit calls move the camera in steps; no continuous-animation tool is provided.
+
+Unsupported browsers show **WebMCP unavailable** and continue to support normal manual interaction without an error toast. `?webmcp=1` remains a diagnostic alias that also shows a toast on failure; `?webmcp=0` explicitly disables tool registration and its status badge. Registration supports the current `document.modelContext` API and the earlier `navigator.modelContext` API. The generated offline distribution and standalone HTML include the adapter, but the intended browser setup is the HTTPS deployed site.
+
+Implementation details, validation results, and the manual acceptance checklist: [WebMCP implementation report](docs/WEBMCP_IMPLEMENTATION_REPORT.md).
+
 ## Deploying to AWS
 
 Implementation plan: `docs/AWS_DEPLOY_PLAN.md`. Amplify Hosting (static site; GitHub-connected, auto-deploys on push to `main`/`english`) + Lambda Function URL (REST and remote MCP). The remote MCP is a stateless, browserless variant; its tools are `get_default_project` / `evaluate` / `compare_candidates` / `describe_model` / `get_doc` (same operation vocabulary as the local version).

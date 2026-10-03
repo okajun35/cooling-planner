@@ -21,6 +21,7 @@ import {buildLayout} from './template/layout.js';
 import {createCommands} from './mcp/commands.js';
 import type {EvalJob} from './mcp/commands.js';
 import {startMcpBridge} from './mcp/bridge.js';
+import {findModelContext,isWebMcpEnabled,startWebMcp} from './mcp/webmcp.js';
 import {openProjectImport} from './ui/projectImport.js';
 
 declare global {interface Window {__DCS_WORKER_SOURCE__?:string;__DCS__?:unknown}}
@@ -142,7 +143,7 @@ store.subscribe((p,kind)=>{
  previousFull=p;
  if(kind==='draft'){syncScene();status();return}
  if(timeOnly){updateTime(p,currentResult());syncScene();return}
- if(cameraOnly){updateGhost();return}
+ if(cameraOnly){if(p.view.camera)scene?.setCamera?.(p.view.camera);updateGhost();return}
  if(kind==='project'){pending=false;invalid=false;pendingInput=null;stopPlayback();try{localStorage.setItem(ROOT_KEY,store.serialize())}catch{}recalculate()}
  render();
 });
@@ -273,7 +274,14 @@ function evaluateProject(project:Project,opts:{daily:boolean}):Promise<EvalJob>{
   w.postMessage({jobId:1,inputHash:inputHash(project),project});
  });
 }
-if(location.protocol==='http:'&&new URLSearchParams(location.search).get('mcp')==='1'){
- const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback,evaluate:evaluateProject});
- startMcpBridge({url:`ws://${location.host}/bridge`,commands,notify:toast});
+const query=new URLSearchParams(location.search);
+const localMcp=location.protocol==='http:'&&query.get('mcp')==='1';
+const webMcp=isWebMcpEnabled(location.search);
+if(localMcp||webMcp){
+ const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback,evaluate:evaluateProject,cameraAspectRatio:()=>Math.max(1,el('scene').clientWidth)/Math.max(1,el('scene').clientHeight),openSheet:tab=>{tab?openSheet(ws,tab):closeSheet(ws);render()}});
+ if(localMcp)startMcpBridge({url:`ws://${location.host}/bridge`,commands,notify:toast});
+ if(webMcp){
+  const badge=document.createElement('div');badge.id='webmcp-status';badge.className='webmcp-status';badge.setAttribute('role','status');badge.textContent='Starting WebMCP…';document.body.append(badge);
+  void startWebMcp({context:findModelContext(document,navigator),commands,notify:(status,message)=>{badge.dataset.state=status;badge.textContent=status==='unavailable'?'WebMCP unavailable':message;badge.title=message;if(status!=='ready'&&query.get('webmcp')==='1')toast(message)}});
+ }
 }

@@ -10,6 +10,7 @@ import {matrix,project,planeAt} from './math3d.js';
 import type {Camera} from './math3d.js';
 import {buildFaces} from '../template/faces.js';
 import {buildLayout} from '../template/layout.js';
+import {presetCamera} from './camera.js';
 export class Viewport3D implements SceneView{
  private canvas:HTMLCanvasElement;private backend:RenderBackend;private p:Project|null=null;private result:SimulationResult|null=null;private batch:Batch|null=null;private observer:ResizeObserver;private abort=new AbortController();private camera:Camera={azimuth:-.28,elevation:.6,distance:42,target:[18.2,0,11.75]};
  private pointer:{x:number;y:number;lastX:number;lastY:number;id:number;deviceId:string|null;height:number;offset:Vec3;started:boolean;pan:boolean;startCamera:Camera}|null=null;
@@ -64,6 +65,8 @@ export class Viewport3D implements SceneView{
  private up=()=>{const a=this.pointer;this.pointer=null;if(!a)return;if(a.started&&a.deviceId)this.cb.commit();else if(a.started)this.cb.camera(structuredClone(this.camera));if(this.canvas.hasPointerCapture(a.id))this.canvas.releasePointerCapture(a.id)};
  private cancel=()=>{const a=this.pointer;this.pointer=null;if(!a)return;if(a.deviceId&&a.started)this.cb.cancel();else{this.camera=a.startCamera;this.draw()}if(this.canvas.hasPointerCapture(a.id))this.canvas.releasePointerCapture(a.id)};
  private wheel=(e:WheelEvent)=>{e.preventDefault();this.camera.distance=Math.max(8,Math.min(160,this.camera.distance*Math.exp(e.deltaY*.001)));this.draw();this.cb.camera(structuredClone(this.camera))};
- preset(name:'overview'|'top'|'side'){this.camera={azimuth:name==='side'?Math.PI/2:-.28,elevation:name==='top'?1.55:name==='side'?.2:.6,distance:(name==='top'?48:42)*Math.max(1,1.7/(this.size().w/this.size().h)),target:[this.p!.template.lengthM/2,0,this.p!.template.widthM/2]};this.draw();this.cb.camera(structuredClone(this.camera))}
+ /** Redraw camera-only changes without rebuilding scene geometry. */
+ setCamera(camera:Camera){this.camera=structuredClone(camera);this.draw()}
+ preset(name:'overview'|'top'|'side'){this.setCamera(presetCamera(name==='overview'?'all':name,this.p!.template,this.size().w/this.size().h));this.cb.camera(structuredClone(this.camera))}
  dispose(){this.abort.abort();this.observer.disconnect();this.backend.dispose();this.canvas.remove()}
 }
