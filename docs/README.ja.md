@@ -80,11 +80,40 @@ Python参照実装の確認：
 
 `node scripts/make-examples.mjs` で、検証済みの入力例と統合計算結果を再生成できます。先に `npm run build` を実行してください。
 
-## MCP PoC（外部AIクライアント連携）
+## MCP / WebMCP（外部AIクライアント連携）
 
-`docs/MCP_POC_IMPLEMENTATION_PLAN.md` のPoC実装です。外部のMCP対応AIクライアントが、開いている画面そのものを読み取り・操作します。状態の正本はブラウザのProjectStoreで、サーバー側は計算・保存のコピーを持ちません。
+目的に応じて、次の接続方法を選べます。
 
-### 起動と接続
+| 接続方法 | できること | 接続先 |
+| --- | --- | --- |
+| **WebMCP** | 公開画面の条件変更・表示モード切り替え・全体／上／横・回転・移動・ズーム | Codexなどのブラウザ操作対応AI → Chrome DevTools MCP → 開いている公開サイト |
+| **ローカルMCP** | ローカル配信した1画面を操作 | stdioサーバー＋`http://127.0.0.1:4174/?mcp=1` |
+| **リモートMCP** | ブラウザ画面を操作せずに案を計算・比較 | LambdaのMCP。接続設定は下の「リモートMCPへの接続」参照 |
+
+WebMCPとローカルMCPは、画面と同じProjectStore・Undo履歴を使います。リモートMCPは独立したステートレス計算サービスです。実装の詳細は[ローカルMCP計画](MCP_POC_IMPLEMENTATION_PLAN.md)と[WebMCP実装報告](WEBMCP_IMPLEMENTATION_REPORT.md)にあります。
+
+### WebMCP：公開画面を操作する
+
+[日本語版](https://main.da05znjm47ziu.amplifyapp.com/)・[英語版](https://english.da05znjm47ziu.amplifyapp.com/)のどちらでも、通常のURLを開くとWebMCPの8ツールが登録されます。`?webmcp=1`やローカルのCooling Plannerサーバーは不要です。
+
+対応ChromeでWebMCPを有効化し、Chrome DevTools MCPの`--categoryExperimentalWebmcp`を有効にして、表示中のタブへAIを接続します。設定例は[英語READMEのWebMCP接続手順](../README.md#webmcp-operate-the-deployed-screen)を参照してください。画面の **WebMCP ready** はツール登録の成功を示します。**WebMCP unavailable** の場合はブラウザの対応・有効化設定を確認してください。未対応でも手動操作は利用できます。`?webmcp=0`で登録を無効にできます。
+
+AIから `get_state` → `edit` → `set_view`（`{"sheet":"compare"}`）の順で呼ぶと、公開画面の条件変更から比較表示まで操作できます。計算結果は`get_results`で確認し、未計算・nullをゼロとして扱わないでください。数値の説明前には`describe_model`でモデルの仮定と限界を確認します。
+
+`set_view`には次の引数も渡せます。
+
+| 操作 | 引数の例 |
+| --- | --- |
+| 標準3D・全体 | `{"mode":"3d","realistic":false,"cameraPreset":"all"}` |
+| リアル3D・上 | `{"mode":"3d","realistic":true,"cameraPreset":"top"}` |
+| 横 | `{"cameraPreset":"side"}` |
+| 回転・平行移動 | `{"orbit":{"azimuthDeg":30},"pan":{"xM":2,"zM":-1}}` |
+| 拡大・縮小 | `{"zoomFactor":0.8}`・`{"zoomFactor":1.25}` |
+| 2D | `{"mode":"2d"}` |
+
+カメラ操作は両方の3Dモードで利用できます。2Dからは`"mode":"3d"`を同時に指定してください。相対回転は度、移動はmで指定し、`zoomFactor`はカメラ距離の倍率です。表示だけの変更なので、モデル計算の入力やUndo履歴は変わりません。`evaluate`・`compare_candidates`は複製上の評価で、画面を変更しません。
+
+### ローカルMCP：起動と接続
 
 1. リポジトリ内で `npm ci && npm run build`。
 2. AIクライアントへ下記のstdioサーバーを登録して接続する（パスはリポジトリの実位置に合わせる。`npm run mcp` と同等）。
@@ -109,15 +138,16 @@ devin mcp add cooling-planner -- node <absolute-path-to-repo>/scripts/mcp-server
 3. `http://127.0.0.1:4174/?mcp=1` を1タブで開く。このモードでは `npm start` は不要です。MCPプロセスが `dist-offline` の静的配信も担当します。
 4. AIから `get_state` を呼ぶ。
 
-ツールは `get_state` / `edit` / `evaluate` / `describe_model` / `set_view` / `get_results` / `undo` の7つです。編集は現在の案へ適用され、画面へ即時反映・既存経路で自動再計算されます。人の画面操作とMCPの操作は同じUndo履歴を共有します。
+ツールは `get_state` / `edit` / `evaluate` / `compare_candidates` / `describe_model` / `set_view` / `get_results` / `undo` の8つです。WebMCPも同じツール名・引数で操作できます。編集は現在の案へ適用され、画面へ即時反映・既存経路で自動再計算されます。人の画面操作とMCPの操作は同じUndo履歴を共有します。
 
 - `evaluate`：画面を変えずに仮説を評価します。`edit` と同じ操作を配列で渡すと、現在の確定状態の複製へ順に適用して計算し、その案の区画別集計・resources・roof・（`includeDaily`指定時）日乳量と基準案の比較集計を返します。画面の案・設備・Undo履歴・再計算には一切影響しないため、「この対策ならどうなるか」「どこまで不足を減らせるか」の探索は `edit→undo` ではなくこちらを使います。
+- `compare_candidates`：1〜3候補を同じ確定状態の複製で個別に評価し、日集計の不足・水・電力・制約判定・順位を返します。候補には設備や屋根の運転条件の変更を指定し、係数・気象の変更や設備追加・削除は指定できません。順位はその呼び出し内の比較です。
 - `edit`/`evaluate` の `add_device` は `x`・`y`（両方指定）で任意座標へ直接配置できます。範囲外・立体ゾーンはエラーになります。
 - `describe_model`：計算モデルの構造・入力/出力フィールドの意味・主な仮定定数・限界・検証状態を返します。数値を解釈・説明する前に呼ぶことを想定しています（サーバーinstructionsにも記載）。
 - モデルの係数もMCPで変更できます。`update_model`（物理モデル：噴流拡散・減衰、対流熱伝達、放射オフセット、屋根モデル係数、`profiles`の感度仮定セットなど）、`update_milk`（乳量仮説：Qref・beta・遅れ重みなど）、`update_references`（基準乳量・受胎参照）。モデル式とバージョン識別子は変更できず、値域は既存の検証が拒否します。`evaluate` と組み合わせると、係数を変えた場合の結果を画面を汚さず比較できます。
 
 - MCP SDKは `@modelcontextprotocol/server` 2.1.0（v2系）を使用し、lockfileで固定しています。
-- 通常の `npm start`（ポート4173）や単体HTMLでは従来どおり利用でき、`?mcp=1` なしではMCP接続を開始しません。
+- `?mcp=1`なしではローカルWebSocketのMCP接続を開始しません。対応ブラウザではWebMCPのツール登録が自動で行われ、`?webmcp=0`で無効にできます。
 - 配信とWebSocketは `127.0.0.1` 固定です。2タブ目の接続は拒否されます。認証・遠隔接続・複数ユーザー・アプリ内チャットはPoC対象外です。
 - ポート4174が使用中だとサーバーは起動時メッセージを出して終了します。手動起動の `npm run mcp` とAIクライアント起動の両方を同時に立ち上げないでください。環境変数 `COOLING_PLANNER_PORT` でポートを変えられます（ブラウザ側は開いたページのポートへ自動で接続します）。stdioクライアントが切断されるとサーバーは自動終了します。
 - 計算式・係数・保存スキーマは変更していません。
@@ -126,7 +156,7 @@ devin mcp add cooling-planner -- node <absolute-path-to-repo>/scripts/mcp-server
 
 ## AWS へのデプロイ
 
-実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト、GitHub連携で `main` への push で自動デプロイ）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `describe_model` / `get_doc`（操作語彙はローカル版と同一）。
+実装計画は `docs/AWS_DEPLOY_PLAN.md`。Amplify Hosting（静的サイト、GitHub連携で `main`・`english` への push で自動デプロイ）＋ Lambda Function URL（REST と リモートMCP）構成です。リモートMCPはブラウザを持たないステートレス版で、ツールは `get_default_project` / `evaluate` / `compare_candidates` / `describe_model` / `get_doc` の5つ（操作語彙はローカル版と同一）。WebMCPによる公開画面の操作は上の「WebMCP：公開画面を操作する」を参照してください。
 
 ### リモートMCP への接続
 
