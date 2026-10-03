@@ -134,6 +134,32 @@ The tools are `get_state` / `edit` / `evaluate` / `compare_candidates` / `descri
 
 Browser integration check: `CHROMIUM_PATH` set + `python3 -m pytest tests/e2e/test_mcp.py` (drives a real MCP stdio session and verifies the screen changes).
 
+## WebMCP on the deployed English site
+
+After deploying the updated `english` branch, open:
+
+https://english.da05znjm47ziu.amplifyapp.com/?webmcp=1
+
+The page registers eight WebMCP tools against its live ProjectStore: `get_state`, `edit`, `set_view`, `get_results`, `undo`, `describe_model`, `evaluate`, and `compare_candidates`. The screen shows **WebMCP ready** after registration. This works on the HTTPS-hosted page without a local Cooling Planner server or a WebSocket relay. The AI controls the tab connected to its browser MCP; the remote Lambda MCP remains a separate, stateless calculation service.
+
+WebMCP is experimental. Use a Chrome version supported by the installed Chrome DevTools MCP (its current configuration documentation requires Chrome 150+) and enable `--enable-features=WebMCP`. Enable the MCP's `--categoryExperimentalWebmcp` category. See the [Chrome DevTools MCP configuration](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/configuration.md) and [WebMCP debugging guide](https://developer.chrome.com/docs/devtools/agents/webmcp-debugging).
+
+For Codex, add a distinct entry to your MCP configuration, or update your existing Chrome DevTools entry rather than launching two MCPs against the same browser:
+
+```toml
+[mcp_servers.cooling_webmcp_browser]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest", "--categoryExperimentalWebmcp", "--chromeArg=--enable-features=WebMCP"]
+```
+
+This configuration launches a visible Chrome. If connecting to an existing Chrome instead, use the MCP's `--browserUrl` option and enable WebMCP when launching that browser; `--chromeArg` only applies to a browser launched by the MCP. The Codex process and visible browser must have a working connection, including when using WSL. See [Codex MCP configuration](https://developers.openai.com/codex/mcp/).
+
+Restart the Codex session after updating its MCP configuration. Ask it to open the deployed URL above, list the page's WebMCP tools, and execute `get_state` first. Then execute `edit` using IDs from that response and `set_view` with `{"sheet":"compare"}`. Inspect `get_results` after calculation; `calculating` or null is not zero. `describe_model` explains the model assumptions. `evaluate` and `compare_candidates` run on clones and do not change the screen.
+
+Without `?webmcp=1` no WebMCP tools are registered. Unsupported browsers show **WebMCP unavailable** in this mode and continue to support normal manual interaction. Registration supports the current `document.modelContext` API and the earlier `navigator.modelContext` API. The generated offline distribution and standalone HTML include the adapter, but the intended browser setup is the HTTPS deployed site.
+
+Implementation details, validation results, and the manual acceptance checklist: [WebMCP implementation report](docs/WEBMCP_IMPLEMENTATION_REPORT.md).
+
 ## Deploying to AWS
 
 Implementation plan: `docs/AWS_DEPLOY_PLAN.md`. Amplify Hosting (static site; GitHub-connected, auto-deploys on push to `main`/`english`) + Lambda Function URL (REST and remote MCP). The remote MCP is a stateless, browserless variant; its tools are `get_default_project` / `evaluate` / `compare_candidates` / `describe_model` / `get_doc` (same operation vocabulary as the local version).
