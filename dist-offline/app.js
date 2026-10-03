@@ -864,7 +864,7 @@ function evaluateProject(project, opts) {
 }
 const query = new URLSearchParams(location.search);
 const localMcp = location.protocol === 'http:' && query.get('mcp') === '1';
-const webMcp = query.get('webmcp') === '1';
+const webMcp = (0, webmcp_js_1.isWebMcpEnabled)(location.search);
 if (localMcp || webMcp) {
     const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject, openSheet: tab => { tab ? (0, workspaceState_js_1.openSheet)(ws, tab) : (0, workspaceState_js_1.closeSheet)(ws); render(); } });
     if (localMcp)
@@ -878,9 +878,9 @@ if (localMcp || webMcp) {
         document.body.append(badge);
         void (0, webmcp_js_1.startWebMcp)({ context: (0, webmcp_js_1.findModelContext)(document, navigator), commands, notify: (status, message) => {
                 badge.dataset.state = status;
-                badge.textContent = status === 'error' ? 'WebMCP error' : status === 'unavailable' ? 'WebMCP unavailable' : message;
+                badge.textContent = status === 'unavailable' ? 'WebMCP unavailable' : message;
                 badge.title = message;
-                if (status !== 'ready')
+                if (status !== 'ready' && query.get('webmcp') === '1')
                     toast(message);
             } });
     }
@@ -13498,6 +13498,7 @@ function startMcpBridge(opts) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WEBMCP_TOOLS = void 0;
 exports.findModelContext = findModelContext;
+exports.isWebMcpEnabled = isWebMcpEnabled;
 exports.startWebMcp = startWebMcp;
 const number = { type: 'number' }, string = { type: 'string' }, boolean = { type: 'boolean' };
 const choices = (...values) => ({ type: 'string', enum: values });
@@ -13595,6 +13596,10 @@ function findModelContext(doc, nav) {
         if (typeof context?.registerTool === 'function')
             return context;
     }
+}
+/** Like the Star Lab demo, ordinary URLs expose tools; an explicit 0 opts out. */
+function isWebMcpEnabled(search) {
+    return new URLSearchParams(search).get('webmcp') !== '0';
 }
 async function startWebMcp(opts) {
     if (!opts.context) {

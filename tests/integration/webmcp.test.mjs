@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {startWebMcp,findModelContext,WEBMCP_TOOLS} from '../../.compiled/mcp/webmcp.js';
+import {startWebMcp,findModelContext,isWebMcpEnabled,WEBMCP_TOOLS} from '../../.compiled/mcp/webmcp.js';
 import {createCommands} from '../../.compiled/mcp/commands.js';
 import {ProjectStore} from '../../.compiled/state/store.js';
 
@@ -10,6 +10,14 @@ async function setup(overrides={}){
  await startWebMcp({context:{registerTool:async tool=>tools.set(tool.name,tool)},commands,notify:(...args)=>statuses.push(args)});
  return{store,tools,statuses,sheets,call:async(name,args)=>JSON.parse(await tools.get(name).execute(args))};
 }
+
+test('ordinary deployed URLs enable WebMCP without a query parameter; only explicit 0 disables it',()=>{
+ assert.equal(isWebMcpEnabled(''),true);
+ assert.equal(isWebMcpEnabled('?unrelated=1'),true);
+ assert.equal(isWebMcpEnabled('?webmcp=1'),true);
+ assert.equal(isWebMcpEnabled('?mcp=1'),true);
+ assert.equal(isWebMcpEnabled('?webmcp=0'),false);
+});
 
 test('document API is preferred, navigator API is supported, unsupported browsers are detected',()=>{
  const modern={registerTool(){}},legacy={registerTool(){}};

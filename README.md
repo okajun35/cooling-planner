@@ -138,9 +138,9 @@ Browser integration check: `CHROMIUM_PATH` set + `python3 -m pytest tests/e2e/te
 
 After deploying the updated `english` branch, open:
 
-https://english.da05znjm47ziu.amplifyapp.com/?webmcp=1
+https://english.da05znjm47ziu.amplifyapp.com/
 
-The page registers eight WebMCP tools against its live ProjectStore: `get_state`, `edit`, `set_view`, `get_results`, `undo`, `describe_model`, `evaluate`, and `compare_candidates`. The screen shows **WebMCP ready** after registration. This works on the HTTPS-hosted page without a local Cooling Planner server or a WebSocket relay. The AI controls the tab connected to its browser MCP; the remote Lambda MCP remains a separate, stateless calculation service.
+The page automatically registers eight WebMCP tools against its live ProjectStore: `get_state`, `edit`, `set_view`, `get_results`, `undo`, `describe_model`, `evaluate`, and `compare_candidates`. No query parameter is required. The screen shows **WebMCP ready** after registration. This works on the HTTPS-hosted page without a local Cooling Planner server or a WebSocket relay. The AI controls the tab connected to its browser MCP; the remote Lambda MCP remains a separate, stateless calculation service.
 
 WebMCP is experimental. Use a Chrome version supported by the installed Chrome DevTools MCP (its current configuration documentation requires Chrome 150+) and enable `--enable-features=WebMCP`. Enable the MCP's `--categoryExperimentalWebmcp` category. See the [Chrome DevTools MCP configuration](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/configuration.md) and [WebMCP debugging guide](https://developer.chrome.com/docs/devtools/agents/webmcp-debugging).
 
@@ -156,7 +156,7 @@ This configuration launches a visible Chrome. If connecting to an existing Chrom
 
 Restart the Codex session after updating its MCP configuration. Ask it to open the deployed URL above, list the page's WebMCP tools, and execute `get_state` first. Then execute `edit` using IDs from that response and `set_view` with `{"sheet":"compare"}`. Inspect `get_results` after calculation; `calculating` or null is not zero. `describe_model` explains the model assumptions. `evaluate` and `compare_candidates` run on clones and do not change the screen.
 
-Without `?webmcp=1` no WebMCP tools are registered. Unsupported browsers show **WebMCP unavailable** in this mode and continue to support normal manual interaction. Registration supports the current `document.modelContext` API and the earlier `navigator.modelContext` API. The generated offline distribution and standalone HTML include the adapter, but the intended browser setup is the HTTPS deployed site.
+Unsupported browsers show **WebMCP unavailable** and continue to support normal manual interaction without an error toast. `?webmcp=1` remains a diagnostic alias that also shows a toast on failure; `?webmcp=0` explicitly disables tool registration and its status badge. Registration supports the current `document.modelContext` API and the earlier `navigator.modelContext` API. The generated offline distribution and standalone HTML include the adapter, but the intended browser setup is the HTTPS deployed site.
 
 Implementation details, validation results, and the manual acceptance checklist: [WebMCP implementation report](docs/WEBMCP_IMPLEMENTATION_REPORT.md).
 

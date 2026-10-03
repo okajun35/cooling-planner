@@ -101,6 +101,10 @@ export function findModelContext(doc:unknown,nav:unknown):ModelContext|undefined
   if(typeof context?.registerTool==='function')return context;
  }
 }
+/** Like the Star Lab demo, ordinary URLs expose tools; an explicit 0 opts out. */
+export function isWebMcpEnabled(search:string):boolean {
+ return new URLSearchParams(search).get('webmcp')!=='0';
+}
 export type WebMcpStatus='ready'|'unavailable'|'error';
 export async function startWebMcp(opts:{context?:ModelContext;commands:CommandMap;notify:(status:WebMcpStatus,message:string)=>void}):Promise<void>{
  if(!opts.context){opts.notify('unavailable','WebMCP unavailable — enable WebMCP in a supported Chrome browser');return}

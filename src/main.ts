@@ -21,7 +21,7 @@ import {buildLayout} from './template/layout.js';
 import {createCommands} from './mcp/commands.js';
 import type {EvalJob} from './mcp/commands.js';
 import {startMcpBridge} from './mcp/bridge.js';
-import {findModelContext,startWebMcp} from './mcp/webmcp.js';
+import {findModelContext,isWebMcpEnabled,startWebMcp} from './mcp/webmcp.js';
 import {openProjectImport} from './ui/projectImport.js';
 
 declare global {interface Window {__DCS_WORKER_SOURCE__?:string;__DCS__?:unknown}}
@@ -276,12 +276,12 @@ function evaluateProject(project:Project,opts:{daily:boolean}):Promise<EvalJob>{
 }
 const query=new URLSearchParams(location.search);
 const localMcp=location.protocol==='http:'&&query.get('mcp')==='1';
-const webMcp=query.get('webmcp')==='1';
+const webMcp=isWebMcpEnabled(location.search);
 if(localMcp||webMcp){
  const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback,evaluate:evaluateProject,openSheet:tab=>{tab?openSheet(ws,tab):closeSheet(ws);render()}});
  if(localMcp)startMcpBridge({url:`ws://${location.host}/bridge`,commands,notify:toast});
  if(webMcp){
   const badge=document.createElement('div');badge.id='webmcp-status';badge.className='webmcp-status';badge.setAttribute('role','status');badge.textContent='Starting WebMCP…';document.body.append(badge);
-  void startWebMcp({context:findModelContext(document,navigator),commands,notify:(status,message)=>{badge.dataset.state=status;badge.textContent=status==='error'?'WebMCP error':status==='unavailable'?'WebMCP unavailable':message;badge.title=message;if(status!=='ready')toast(message)}});
+  void startWebMcp({context:findModelContext(document,navigator),commands,notify:(status,message)=>{badge.dataset.state=status;badge.textContent=status==='unavailable'?'WebMCP unavailable':message;badge.title=message;if(status!=='ready'&&query.get('webmcp')==='1')toast(message)}});
  }
 }
