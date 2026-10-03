@@ -9,6 +9,8 @@ import {mergeDaily} from '../model/dailySimulation.js';
 import {describeModel} from '../model/modelInfo.js';
 import {summarizeDay,worsenedCount,checkConstraints,improvesPriorityArea,rankCandidates} from '../model/candidateComparison.js';
 import type {CandidateConstraints,RankingMode} from '../model/candidateComparison.js';
+import {controlledCamera} from '../views/camera.js';
+import type {CameraControls} from '../views/camera.js';
 
 /** Runtime UI/worker state owned by main.ts; injected so commands stay testable. */
 export interface CommandStatus{pendingInput:boolean;invalidInput:boolean;calculating:boolean;workerError:string|null}
@@ -22,6 +24,8 @@ export interface CommandDeps{
  stopPlayback:()=>void;
  /** Opens or closes (null) the bottom results sheet. Optional; absent in non-browser contexts. */
  openSheet?:(tab:'compare'|'areas'|'timeline'|'reference'|null)=>void;
+ /** Current scene width/height for the same framing as the All/Top/Side buttons. */
+ cameraAspectRatio?:()=>number;
  /** Runs the same worker simulation on a cloned project. Must not touch live state. */
  evaluate:(project:Project,opts:{daily:boolean})=>Promise<EvalJob>;
 }
@@ -29,7 +33,7 @@ export interface CommandDeps{
 export type ResultStatus='editing'|'calculating'|'thermal_ready'|'ready'|'error';
 export interface EditArgs{operation:string;scenarioId?:string;deviceId?:string;systemId?:string;kind?:string;x?:number;y?:number;patch?:Record<string,unknown>}
 export interface EvaluateArgs{operations:EditArgs[];scenarioId?:string;includeDaily?:boolean}
-export interface SetViewArgs{mode?:View['mode'];metric?:View['metric'];selectedProbeId?:string;selectedDeviceId?:string|null;selectedAreaId?:string|null;analysis?:boolean;realistic?:boolean;heatmap?:boolean;roof?:boolean;flow?:boolean;particles?:boolean;timeSec?:number;sheet?:'compare'|'areas'|'timeline'|'reference'|null}
+export interface SetViewArgs extends CameraControls{mode?:View['mode'];metric?:View['metric'];selectedProbeId?:string;selectedDeviceId?:string|null;selectedAreaId?:string|null;analysis?:boolean;realistic?:boolean;heatmap?:boolean;roof?:boolean;flow?:boolean;particles?:boolean;timeSec?:number;sheet?:'compare'|'areas'|'timeline'|'reference'|null}
 export interface GetResultsArgs{scenarioId?:string;probeId?:string}
 export interface CompareArgs{scenarioId?:string;candidates:{id:string;operations:EditArgs[]}[];constraints?:Partial<CandidateConstraints>;ranking?:RankingMode}
 
@@ -341,6 +345,10 @@ export function createCommands(d:CommandDeps){
   if(args.roof!==undefined)patch.roof=args.roof;
   if(args.flow!==undefined)patch.flow=args.flow;
   if(args.particles!==undefined)patch.particles=args.particles;
+  if(args.cameraPreset!==undefined||args.camera!==undefined||args.orbit!==undefined||args.pan!==undefined||args.zoomFactor!==undefined){
+   if((args.mode??p.view.mode)!=='3d')throw Error('Camera controls require 3D mode. Set mode:"3d" in the same call');
+   patch.camera=controlledCamera(p.view.camera,args,p.template,d.cameraAspectRatio?.()??1.7);
+  }
   if(args.selectedAreaId!==undefined){
    if(args.selectedAreaId!==null&&!buildAreas(l).some(a=>a.id===args.selectedAreaId))throw Error(`area not found: ${args.selectedAreaId}`);
    patch.selectedAreaId=args.selectedAreaId;

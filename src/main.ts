@@ -143,7 +143,7 @@ store.subscribe((p,kind)=>{
  previousFull=p;
  if(kind==='draft'){syncScene();status();return}
  if(timeOnly){updateTime(p,currentResult());syncScene();return}
- if(cameraOnly){updateGhost();return}
+ if(cameraOnly){if(p.view.camera)scene?.setCamera?.(p.view.camera);updateGhost();return}
  if(kind==='project'){pending=false;invalid=false;pendingInput=null;stopPlayback();try{localStorage.setItem(ROOT_KEY,store.serialize())}catch{}recalculate()}
  render();
 });
@@ -278,7 +278,7 @@ const query=new URLSearchParams(location.search);
 const localMcp=location.protocol==='http:'&&query.get('mcp')==='1';
 const webMcp=isWebMcpEnabled(location.search);
 if(localMcp||webMcp){
- const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback,evaluate:evaluateProject,openSheet:tab=>{tab?openSheet(ws,tab):closeSheet(ws);render()}});
+ const commands=createCommands({store,currentResult,status:()=>({pendingInput:pending,invalidInput:invalid,calculating,workerError}),stopPlayback,evaluate:evaluateProject,cameraAspectRatio:()=>Math.max(1,el('scene').clientWidth)/Math.max(1,el('scene').clientHeight),openSheet:tab=>{tab?openSheet(ws,tab):closeSheet(ws);render()}});
  if(localMcp)startMcpBridge({url:`ws://${location.host}/bridge`,commands,notify:toast});
  if(webMcp){
   const badge=document.createElement('div');badge.id='webmcp-status';badge.className='webmcp-status';badge.setAttribute('role','status');badge.textContent='Starting WebMCP…';document.body.append(badge);

@@ -22,7 +22,8 @@ Tools: `get_state`, `edit`, `set_view`, `get_results`, `undo`, `describe_model`,
 ## Validation
 
 - `npm run typecheck`: passed.
-- `npx tsc` and `node --test tests/integration/webmcp.test.mjs tests/integration/mcpCommands.test.mjs`: 28 passed (8 WebMCP adapter tests and 20 existing command tests), including ordinary-URL registration policy.
+- `npx tsc` and `node --test tests/integration/mcpCamera.test.mjs tests/integration/webmcp.test.mjs tests/integration/mcpCommands.test.mjs`: 35 passed (7 camera tests, 8 WebMCP adapter tests and 20 existing command tests), including ordinary-URL registration policy.
+- `node --check scripts/mcp-server.mjs`: passed.
 - `npm run build`: passed; portable distribution and generated single-file HTML updated.
 - `git diff --check`: passed.
 - Real Chrome, Codex-to-browser, and deployed Amplify behavior require the manual acceptance check below. They have not been tested by the agent. Per `AGENTS.md`, browser/E2E checks are left to humans and CI unless explicitly requested.
@@ -37,7 +38,17 @@ Tools: `get_state`, `edit`, `set_view`, `get_results`, `undo`, `describe_model`,
 6. Call `set_view` with `{"sheet":"compare"}`. Confirm the comparison sheet opens. Call `get_results` with at least one second between attempts until the relevant calculation stage is ready; do not interpret pending/null results as zero.
 7. Call `undo`. Confirm the roof setting returns to its previous value through the normal UI Undo history. View changes do not undo.
 8. Verify an invalid metric or an out-of-range `timeSec` returns an error without changing the screen. Confirm edits to the baseline remain blocked.
-9. On an unsupported browser, the ordinary URL should show **WebMCP unavailable** and manual operations should still work without an error toast. Open the same site with `?webmcp=0` and confirm ordinary operation without the badge. Check the original local `?mcp=1` route separately if used.
+9. In each 3D render mode, call `set_view` with `cameraPreset:"all"`, `"top"`, and `"side"`; compare with the screen buttons. Try `orbit:{azimuthDeg:30,elevationDeg:10}`, `pan:{xM:2,zM:-1}`, `zoomFactor:0.8`, and `camera:{distance:30}`. Confirm visible camera changes, unchanged input hash and Undo count, and updated `get_state().view.camera`.
+10. Switch to 2D and confirm a camera-only call returns an error without changing the view. Then call `set_view` with `mode:"3d",realistic:true,cameraPreset:"top"` and confirm the combined change. Verify manual camera dragging, panning, wheel zoom and All/Top/Side still work after agent camera changes.
+11. On an unsupported browser, the ordinary URL should show **WebMCP unavailable** and manual operations should still work without an error toast. Open the same site with `?webmcp=0` and confirm ordinary operation without the badge. Check the original local `?mcp=1` route separately if used.
+
+## Camera controls
+
+`set_view` now accepts `cameraPreset` (`all`, `top`, `side`), partial absolute `camera` settings, relative `orbit` (degrees), `pan` (ground-plane metres), and positive `zoomFactor` (distance multiplier). Absolute camera angles are in radians; distance and target `[x,height,z]` are in metres. Controls apply in the order listed, work in both 3D render modes, and require an effective `mode:"3d"`. Relative elevation/distance/pan are clamped to the same limits as manual gestures; absolute values follow existing saved-camera validation. Rotations are discrete updates, not a continuous animation.
+
+`src/views/camera.ts` shares preset framing between the manual buttons and the command adapter. `CommandDeps.cameraAspectRatio` supplies the actual scene proportions so framing matches the responsive page. Camera-only Store updates now call `Viewport3D.setCamera()` through the existing subscription, which draws immediately without rebuilding scene geometry or triggering physics calculation. The shared command accepts these controls through both WebMCP and the local stdio MCP; the local tool schema in `scripts/mcp-server.mjs` was updated too.
+
+The 7 camera integration tests cover both 3D modes and presets, combined and repeated camera controls, immutability/hash/Undo preservation, relative limits, 2D rejection and combined switching, malformed-input rejection before side effects, live WebMCP invocation, and camera-only renderer drawing with a backend stub. This is deterministic verification without a browser or WebGL; real-screen operation remains on the manual checklist.
 
 ## Limits and sources
 

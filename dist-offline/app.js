@@ -360,6 +360,8 @@ store.subscribe((p, kind) => {
         return;
     }
     if (cameraOnly) {
+        if (p.view.camera)
+            scene?.setCamera?.(p.view.camera);
         updateGhost();
         return;
     }
@@ -866,7 +868,7 @@ const query = new URLSearchParams(location.search);
 const localMcp = location.protocol === 'http:' && query.get('mcp') === '1';
 const webMcp = (0, webmcp_js_1.isWebMcpEnabled)(location.search);
 if (localMcp || webMcp) {
-    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject, openSheet: tab => { tab ? (0, workspaceState_js_1.openSheet)(ws, tab) : (0, workspaceState_js_1.closeSheet)(ws); render(); } });
+    const commands = (0, commands_js_1.createCommands)({ store, currentResult, status: () => ({ pendingInput: pending, invalidInput: invalid, calculating, workerError }), stopPlayback, evaluate: evaluateProject, cameraAspectRatio: () => Math.max(1, (0, dom_js_1.el)('scene').clientWidth) / Math.max(1, (0, dom_js_1.el)('scene').clientHeight), openSheet: tab => { tab ? (0, workspaceState_js_1.openSheet)(ws, tab) : (0, workspaceState_js_1.closeSheet)(ws); render(); } });
     if (localMcp)
         (0, bridge_js_1.startMcpBridge)({ url: `ws://${location.host}/bridge`, commands, notify: toast });
     if (webMcp) {
@@ -2776,6 +2778,7 @@ const realistic3d_js_1 = require("./realistic3d.js");
 const math3d_js_1 = require("./math3d.js");
 const faces_js_1 = require("../template/faces.js");
 const layout_js_1 = require("../template/layout.js");
+const camera_js_1 = require("./camera.js");
 class Viewport3D {
     container;
     cb;
@@ -2969,7 +2972,9 @@ class Viewport3D {
             this.canvas.releasePointerCapture(a.id);
     };
     wheel = (e) => { e.preventDefault(); this.camera.distance = Math.max(8, Math.min(160, this.camera.distance * Math.exp(e.deltaY * .001))); this.draw(); this.cb.camera(structuredClone(this.camera)); };
-    preset(name) { this.camera = { azimuth: name === 'side' ? Math.PI / 2 : -.28, elevation: name === 'top' ? 1.55 : name === 'side' ? .2 : .6, distance: (name === 'top' ? 48 : 42) * Math.max(1, 1.7 / (this.size().w / this.size().h)), target: [this.p.template.lengthM / 2, 0, this.p.template.widthM / 2] }; this.draw(); this.cb.camera(structuredClone(this.camera)); }
+    /** Camera-only updates redraw without rebuilding scene geometry or calculating physics. */
+    setCamera(camera) { this.camera = structuredClone(camera); this.draw(); }
+    preset(name) { this.setCamera((0, camera_js_1.presetCamera)(name === 'overview' ? 'all' : name, this.p.template, this.size().w / this.size().h)); this.cb.camera(structuredClone(this.camera)); }
     dispose() { this.abort.abort(); this.observer.disconnect(); this.backend.dispose(); this.canvas.remove(); }
 }
 exports.Viewport3D = Viewport3D;
@@ -12026,6 +12031,78 @@ function holsteinBody() {
 }
 
 },
+"views/camera.js":function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.presetCamera = presetCamera;
+exports.controlledCamera = controlledCamera;
+const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+function presetCamera(name, template, aspect = 1.7) {
+    if (!['all', 'top', 'side'].includes(name))
+        throw Error('cameraPreset must be all, top or side');
+    if (!Number.isFinite(aspect) || aspect <= 0)
+        throw Error('Camera aspect ratio must be positive and finite');
+    return { azimuth: name === 'side' ? Math.PI / 2 : -.28, elevation: name === 'top' ? 1.55 : name === 'side' ? .2 : .6, distance: clamp((name === 'top' ? 48 : 42) * Math.max(1, 1.7 / aspect), 8, 160), target: [template.lengthM / 2, 0, template.widthM / 2] };
+}
+function finite(value, label) {
+    if (typeof value !== 'number' || !Number.isFinite(value))
+        throw Error(`${label} must be a finite number`);
+    return value;
+}
+function fields(value, allowed, label) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw Error(`${label} must be an object`);
+    const record = value;
+    if (!Object.keys(record).length)
+        throw Error(`${label} needs at least one field`);
+    for (const key of Object.keys(record))
+        if (!allowed.includes(key))
+            throw Error(`${label}.${key} is not allowed`);
+    return record;
+}
+/** Validate the whole request before any store, sheet or playback side effect. */
+function controlledCamera(current, controls, template, aspect = 1.7) {
+    const c = controls.cameraPreset !== undefined ? presetCamera(controls.cameraPreset, template, aspect) : structuredClone(current ?? presetCamera('all', template, aspect));
+    if (controls.camera !== undefined) {
+        const patch = fields(controls.camera, ['azimuth', 'elevation', 'distance', 'target'], 'camera');
+        for (const key of ['azimuth', 'elevation', 'distance'])
+            if (patch[key] !== undefined)
+                c[key] = finite(patch[key], `camera.${key}`);
+        if (patch.target !== undefined) {
+            if (!Array.isArray(patch.target) || patch.target.length !== 3)
+                throw Error('camera.target needs three coordinates');
+            c.target = patch.target.map((n, i) => finite(n, `camera.target[${i}]`));
+        }
+    }
+    // Match saved-camera limits before applying relative gestures.
+    if (c.azimuth < -100 || c.azimuth > 100 || c.elevation < .1 || c.elevation > 1.56 || c.distance < 8 || c.distance > 160 || c.target.some(n => n < -100 || n > 200))
+        throw Error('camera values are outside the allowed range');
+    if (controls.orbit !== undefined) {
+        const orbit = fields(controls.orbit, ['azimuthDeg', 'elevationDeg'], 'orbit');
+        if (orbit.azimuthDeg !== undefined) {
+            const angle = c.azimuth + (finite(orbit.azimuthDeg, 'orbit.azimuthDeg') % 360) * (Math.PI / 180);
+            c.azimuth = Math.atan2(Math.sin(angle), Math.cos(angle));
+        }
+        if (orbit.elevationDeg !== undefined)
+            c.elevation = clamp(c.elevation + finite(orbit.elevationDeg, 'orbit.elevationDeg') * (Math.PI / 180), .14, 1.55);
+    }
+    if (controls.pan !== undefined) {
+        const pan = fields(controls.pan, ['xM', 'zM'], 'pan');
+        if (pan.xM !== undefined)
+            c.target[0] = clamp(c.target[0] + finite(pan.xM, 'pan.xM'), -50, 100);
+        if (pan.zM !== undefined)
+            c.target[2] = clamp(c.target[2] + finite(pan.zM, 'pan.zM'), -50, 100);
+    }
+    if (controls.zoomFactor !== undefined) {
+        const factor = finite(controls.zoomFactor, 'zoomFactor');
+        if (factor <= 0)
+            throw Error('zoomFactor must be positive');
+        c.distance = clamp(c.distance * factor, 8, 160);
+    }
+    return c;
+}
+
+},
 "views/svg2d.js":function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -12848,6 +12925,7 @@ const simulation_js_1 = require("../model/simulation.js");
 const dailySimulation_js_1 = require("../model/dailySimulation.js");
 const modelInfo_js_1 = require("../model/modelInfo.js");
 const candidateComparison_js_1 = require("../model/candidateComparison.js");
+const camera_js_1 = require("../views/camera.js");
 const CONFIRM_INPUT = 'Confirm the on-screen input first';
 /** Short guidance also embedded in the MCP server instructions and tool descriptions. */
 exports.MODEL_NOTES = [
@@ -13199,6 +13277,11 @@ function createCommands(d) {
             patch.flow = args.flow;
         if (args.particles !== undefined)
             patch.particles = args.particles;
+        if (args.cameraPreset !== undefined || args.camera !== undefined || args.orbit !== undefined || args.pan !== undefined || args.zoomFactor !== undefined) {
+            if ((args.mode ?? p.view.mode) !== '3d')
+                throw Error('Camera controls require 3D mode. Set mode:"3d" in the same call');
+            patch.camera = (0, camera_js_1.controlledCamera)(p.view.camera, args, p.template, d.cameraAspectRatio?.() ?? 1.7);
+        }
         if (args.selectedAreaId !== undefined) {
             if (args.selectedAreaId !== null && !(0, faces_js_1.buildAreas)(l).some(a => a.id === args.selectedAreaId))
                 throw Error(`area not found: ${args.selectedAreaId}`);
@@ -13535,10 +13618,17 @@ const editSchema = { type: 'object', oneOf: [
         operation('remove_device', { deviceId: string }, ['deviceId']),
     ] };
 const operations = { type: 'array', items: editSchema };
+const cameraViewProperties = {
+    cameraPreset: { ...choices('all', 'top', 'side'), description: 'Same framing as the All, Top and Side buttons. 3D only.' },
+    camera: object({ azimuth: { type: 'number', minimum: -100, maximum: 100, description: 'Absolute orbit angle in radians' }, elevation: { type: 'number', minimum: .1, maximum: 1.56, description: 'Absolute elevation in radians' }, distance: { type: 'number', minimum: 8, maximum: 160, description: 'Camera distance in metres' }, target: { type: 'array', items: { type: 'number', minimum: -100, maximum: 200 }, minItems: 3, maxItems: 3, description: 'Target [barn length x, vertical height, barn width z], in metres' } }),
+    orbit: object({ ...numbers('azimuthDeg elevationDeg') }),
+    pan: object({ ...numbers('xM zM') }),
+    zoomFactor: { type: 'number', description: 'Positive distance multiplier: <1 zooms in; >1 zooms out' },
+};
 exports.WEBMCP_TOOLS = [
     { name: 'get_state', description: 'Read the committed Cooling Planner screen state, scenario/device/point/area IDs, selection, calculation status and model notes. Call first. The baseline is read-only.', inputSchema: object(), readOnly: true },
     { name: 'edit', description: 'Apply one operation to the current screen scenario or shared settings, with automatic recalculation. Use IDs from get_state. copy_to_other overwrites the other editable scenario. Success does not mean calculation is finished.', inputSchema: editSchema, readOnly: false },
-    { name: 'set_view', description: 'Change the displayed mode, metric, selection or overlays, or open a results sheet (compare/areas/timeline/reference; null closes it). View changes do not change physics and are not undoable.', inputSchema: object({ mode: choices('3d', '2d'), metric: choices('delta', 'deficit', 'speed', 'temperature'), selectedProbeId: string, selectedDeviceId: nullable(string), selectedAreaId: nullable(string), analysis: boolean, realistic: boolean, heatmap: boolean, roof: boolean, flow: boolean, particles: boolean, timeSec: { type: 'number', minimum: 0, maximum: 3600 }, sheet: nullable(choices('compare', 'areas', 'timeline', 'reference')) }), readOnly: false },
+    { name: 'set_view', description: 'Control the screen: Standard 3D = mode:"3d",realistic:false; Realistic 3D = mode:"3d",realistic:true; 2D = mode:"2d". In 3D use cameraPreset all/top/side, camera for absolute radians/metres, orbit for relative degrees, pan for ground-plane metres, zoomFactor for zoom. Applied in that order. Camera gestures clamp to screen limits; add mode:"3d" when switching from 2D. Also change metric/selection/overlays or open a results sheet. View changes do not change physics and are not undoable.', inputSchema: object({ mode: choices('3d', '2d'), metric: choices('delta', 'deficit', 'speed', 'temperature'), selectedProbeId: string, selectedDeviceId: nullable(string), selectedAreaId: nullable(string), analysis: boolean, realistic: boolean, heatmap: boolean, roof: boolean, flow: boolean, particles: boolean, timeSec: { type: 'number', minimum: 0, maximum: 3600 }, sheet: nullable(choices('compare', 'areas', 'timeline', 'reference')), ...cameraViewProperties }), readOnly: false },
     { name: 'get_results', description: 'Read current calculation results and per-area comparisons. ready means daily results are complete; thermal_ready means daily results are pending. Other statuses have no result. Never treat null as zero. Leave at least 1 second between calls.', inputSchema: object({ scenarioId: string, probeId: string }), readOnly: true },
     { name: 'undo', description: 'Undo the last screen edit using the same history as the Undo button. View changes cannot be undone.', inputSchema: object(), readOnly: false },
     { name: 'describe_model', description: 'Read the model structure, assumptions and limits. Call before interpreting results. Daily milk is a hypothesis reference, not a guaranteed real-farm effect.', inputSchema: object(), readOnly: true },

@@ -180,7 +180,7 @@ function createServer(){
  },args=>relay('edit',args));
 
  server.registerTool('set_view',{
-  description:'View-only changes (no physics, not undoable). Partial update of mode/metric/selected point, device and area/display flags/timeSec, and open/close of the bottom results sheet. Selecting a point also selects its area. timeSec stops playback.',
+  description:'View-only changes (no physics, not undoable). Standard 3D: mode:"3d",realistic:false; Realistic 3D: mode:"3d",realistic:true; 2D: mode:"2d". Camera controls require 3D (add mode:"3d" when switching from 2D): cameraPreset all/top/side, camera absolute radians/metres, orbit relative degrees, pan ground-plane metres, zoomFactor distance multiplier (<1 zooms in). Applied in that order; relative gestures clamp to screen limits. Also update metric/selection/display flags/timeSec and open/close the bottom results sheet. Selecting a point also selects its area. timeSec stops playback.',
   inputSchema:z.strictObject({
    mode:z.enum(['3d','2d']).optional(),
    metric:z.enum(['delta','deficit','speed','temperature']).optional(),
@@ -190,6 +190,11 @@ function createServer(){
    analysis:z.boolean().optional(),realistic:z.boolean().optional(),heatmap:z.boolean().optional(),roof:z.boolean().optional(),flow:z.boolean().optional(),particles:z.boolean().optional(),
    timeSec:z.number().min(0).max(3600).optional(),
    sheet:z.enum(['compare','areas','timeline','reference']).nullable().optional().describe('Open the bottom results sheet on the given tab, or null to close it'),
+   cameraPreset:z.enum(['all','top','side']).optional().describe('Same framing as the All/Top/Side buttons'),
+   camera:z.strictObject({azimuth:z.number().min(-100).max(100).optional(),elevation:z.number().min(.1).max(1.56).optional(),distance:z.number().min(8).max(160).optional(),target:z.tuple([z.number().min(-100).max(200),z.number().min(-100).max(200),z.number().min(-100).max(200)]).optional()}).optional().describe('Absolute partial camera settings: azimuth/elevation in radians; distance and target [x,height,z] in metres'),
+   orbit:z.strictObject({azimuthDeg:z.number().optional(),elevationDeg:z.number().optional()}).optional().describe('Relative camera rotation in degrees'),
+   pan:z.strictObject({xM:z.number().optional(),zM:z.number().optional()}).optional().describe('Relative translation along the barn length x / width z [m]'),
+   zoomFactor:z.number().positive().optional().describe('Distance multiplier: <1 zooms in; >1 zooms out'),
   }),
  },args=>relay('set_view',args));
 

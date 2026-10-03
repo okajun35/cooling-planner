@@ -7,7 +7,7 @@ export interface ViewCallbacks {selectDevice:(id:string|null)=>void;selectProbe:
  placeMove?:(pos:[number,number]|null)=>void;
  /** Left-click confirm during ghost placement (mouse only; touch confirms via the UI button). */
  placeCommit?:()=>void}
-export interface SceneView {sync:(p:Project,r:SimulationResult|null)=>void;dispose:()=>void;preset?:(name:'overview'|'top'|'side')=>void;screenPoint?:(v:Vec3)=>{x:number;y:number;visible:boolean};setPlacement?:(mode:{heightM:number}|null)=>void;readonly rendererName:string;diagnostics?:()=>Record<string,unknown>}
+export interface SceneView {sync:(p:Project,r:SimulationResult|null)=>void;dispose:()=>void;preset?:(name:'overview'|'top'|'side')=>void;setCamera?:(camera:NonNullable<View['camera']>)=>void;screenPoint?:(v:Vec3)=>{x:number;y:number;visible:boolean};setPlacement?:(mode:{heightM:number}|null)=>void;readonly rendererName:string;diagnostics?:()=>Record<string,unknown>}
 export const escapeHtml=(s:unknown)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export const zoneColor:Record<string,string>={feed:'#ddd6c1',feeding:'#e6eee8',stall:'#d8e3ee',aisle:'#ecf0f5',robot:'#8cbed3',utility:'#b9c7d5',waiting:'#e1e9f1',isolation:'#d2dce9'};
 /** Metric shown on faces/probes. 'deficit' = per-second mean of max(0, Qref − Q) [W]. */
