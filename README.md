@@ -89,11 +89,19 @@ Python reference implementations:
 
 `node scripts/make-examples.mjs` regenerates the verified input examples and integrated calculation results. Run `npm run build` first.
 
-## MCP PoC (external AI client integration)
+## MCP and WebMCP (external AI client integration)
 
-PoC implementation from `docs/MCP_POC_IMPLEMENTATION_PLAN.md`. An external MCP-capable AI client reads and operates the actual open screen. The source of truth is the browser-side ProjectStore; the server keeps no copy of calculations or saves.
+Choose the integration for your demo:
 
-### Launch and connect
+| Integration | Purpose | Connection |
+| --- | --- | --- |
+| **WebMCP** | Operate the displayed English or Japanese public site, including view modes, All/Top/Side, rotation, pan and zoom | A browser-capable AI client such as Codex → Chrome DevTools MCP → the open site; see [WebMCP setup](#webmcp-operate-the-deployed-screen) |
+| **Local MCP** | Operate one locally served screen | stdio server + `http://127.0.0.1:4174/?mcp=1`; instructions below |
+| **Remote MCP** | Evaluate scenarios without controlling a browser screen | Hosted Lambda MCP; see [remote MCP connection](#connecting-to-the-remote-mcp) |
+
+WebMCP and local MCP use the live browser-side ProjectStore and share the screen's Undo history. The remote MCP is a separate, stateless calculation service. Implementation details: [local MCP plan](docs/MCP_POC_IMPLEMENTATION_PLAN.md) and [WebMCP report](docs/WEBMCP_IMPLEMENTATION_REPORT.md).
+
+### Local MCP: launch and connect
 
 1. Inside the repository, run `npm ci && npm run build`.
 2. Register the following stdio server in your AI client (adjust the path to the real repository location; equivalent to `npm run mcp`):
@@ -127,20 +135,16 @@ The tools are `get_state` / `edit` / `evaluate` / `compare_candidates` / `descri
 - Model coefficients can also be changed via MCP: `update_model` (physics: jet diffusion/decay, convective heat transfer, radiation offsets, roof model coefficients, `profiles` sensitivity assumption sets, etc.), `update_milk` (milk hypothesis: Qref, beta, lag weights, etc.), `update_references` (baseline milk and conception references). Model formulas and version identifiers cannot change, and out-of-range values are rejected by existing validation. Combined with `evaluate`, you can compare results under different coefficients without touching the screen.
 
 - The MCP SDK is `@modelcontextprotocol/server` 2.1.0 (v2 line), pinned by the lockfile.
-- Plain `npm start` (port 4173) and the standalone HTML work as before; without `?mcp=1` no MCP connection is started.
+- Without `?mcp=1` no local WebSocket MCP connection is started. WebMCP tools are registered automatically when supported; `?webmcp=0` disables them.
 - Serving and WebSocket are fixed to `127.0.0.1`; a second tab connection is refused. Authentication, remote access, multi-user and in-app chat are out of PoC scope.
 - If port 4174 is busy, the server prints a startup message and exits. Do not run a manual `npm run mcp` and an AI-client-launched server at the same time. `COOLING_PLANNER_PORT` changes the port (the browser auto-connects to the port of the opened page). The server exits automatically when the stdio client disconnects.
 - Formulas, coefficients and the save schema are unchanged.
 
 Browser integration check: `CHROMIUM_PATH` set + `python3 -m pytest tests/e2e/test_mcp.py` (drives a real MCP stdio session and verifies the screen changes).
 
-## WebMCP on the deployed site
+### WebMCP: operate the deployed screen
 
-The Japanese `main` branch exposes the same WebMCP tools as the English branch. Open:
-
-https://main.da05znjm47ziu.amplifyapp.com/
-
-The English demo at https://english.da05znjm47ziu.amplifyapp.com/ uses the same tool interface.
+Both deployed branches expose the same WebMCP tools: [English demo](https://english.da05znjm47ziu.amplifyapp.com/) and [Japanese demo](https://main.da05znjm47ziu.amplifyapp.com/).
 
 The page automatically registers eight WebMCP tools against its live ProjectStore: `get_state`, `edit`, `set_view`, `get_results`, `undo`, `describe_model`, `evaluate`, and `compare_candidates`. No query parameter is required. The screen shows **WebMCP ready** after registration. This works on the HTTPS-hosted page without a local Cooling Planner server or a WebSocket relay. The AI controls the tab connected to its browser MCP; the remote Lambda MCP remains a separate, stateless calculation service.
 
